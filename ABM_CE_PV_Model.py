@@ -7,6 +7,75 @@ Created on Wed Nov 21 09:33 2019
 Model - agent-based simulations of the circular economy (ABSiCE)
 """
 
+# ! Goals of the NSF development project:
+# 1) Revamp the PV ABM code (format, efficiency)
+# 2) Improve the accuracy of waste predictions
+# 3) Improve the model's resolution (at least state)
+# 4) Improve cost modeling, including transportation & logistics
+# 5) Improve end markets' resolution
+# 6) Start thinking and implementing environmental justice capabilities(e.g.,
+#    estimation of job created by recycling activities etc.)
+# ! TODO list:
+# 1) Revamp the PV ABM code (format, efficiency):
+#   i) Clean code: solve basic typo errors etc. - high priority
+#   ii) Replace basic functions with functions from CEWAM and the TPB_ABM -
+#       high priority:
+#     a) Check regularly that the model still works and provides same results
+#        as before
+#     b) Change the Python environment to use the latest version of Mesa (clone
+#        the environment from the TPB_ABM)
+#   iii) Refactor variable and file names to make them general (as a general
+#        CE ABM framework rather than a CE PV ABM) - low priority, if times
+#        allows
+# 2) Improve the accuracy of waste predictions:
+#   i) Use PV ICE as a pip install library or the data inputs from PV ICE -
+#      high priority:
+#     a) Justification: that would speed up extending the number of materials
+#        and accuracy of PV panels vintages in the ABM
+#     b) If needed, discuss with Silvana and the PV ICE team
+#   ii) Use PV ICE baseline scenario and validate that waste generation
+#       is the same than in PV ICE publications - high priority
+# 3) Improve the model's resolution (at least state):
+#   i) Use PV ICE to improve the resolution of the capacity and waste
+#      projections by states - high priority
+#   ii) Modify the agent as an entity - moderate priority:
+#     a) Number - find a compromise between a high number of agents and low
+#        computational requirements (keep below 40-50 seconds per state)
+#     b) Creation and destruction of agents: use the functions from CEWAM
+#     c) Refine the agent types: utility, commercial or residential PV
+# 4) Improve cost modeling, including transportation & logistics:
+#   i) Add the TCLP costs and other costs associated with assessing the module
+#      viability/performance (pre-transportation costs) - moderate priority:
+#   ii) Improve transportation modeling - high priority::
+#     a) Any better source than ATRI for the cost/mile?
+#     b) Use mock-up facility locations to develop the transportation model
+#        based on the OpenRoute service API (from the API, use one time live
+#        calls (one per origin-destination) or call o the origin-destination
+#        matrix - get the distance and other information if easy and
+#        potentially relevant)
+#     c) Replace the mock-ups by real values from Texas A&M once they have
+#        their model
+#   iii) Any other additions? For instance, could the regulator agents from
+#        CEWAM be added, are they relevant? What would be their behavioral
+#        rules? What about landfill agents? - low priority, if times allows
+# 5) Improve end markets' resolution:
+#   i) Find more accurate price data for different recovered materials -
+#      moderate priority
+#   ii) Expand the number of materials and their end markets; for instance have
+#       the aluminum recycler and the automotive market as a low grade silicon
+#       application (i.e., Silumin) or another type of recycler and the
+#       electronic or PV markets as a high grade silicon application (of course
+#       it would depend on the quality of the silicon obtained with a
+#       particular recycling process) - high priority
+#   iii) Add market constraints (e.g., limited demand for a certain material
+#        which would require finding other markets if supply from PV is too
+#        high) - moderate priority
+#   iv) Anything else we can think of or gather from the working groups and
+#       stakeholders? - low priority, if times allows
+# 6) Start thinking and implementing environmental justice capabilities(e.g.,
+#    estimation of job created by recycling activities etc.) - low priority,
+#    if times allows
+
 from mesa import Model
 from ABM_CE_PV_ConsumerAgents import Consumers
 from ABM_CE_PV_RecyclerAgents import Recyclers
