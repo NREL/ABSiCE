@@ -63,10 +63,10 @@ class Refurbishers(Agent):
         self.repairing_cost = self.original_repairing_cost
         self.refurbished_volume = 0
         self.repairing_shape_factor = repairing_learning_shape_factor
-        #self.scndhand_mkt_pric_rate = \
-         #   np.random.triangular(scndhand_mkt_pric_rate[0],
-          #                       scndhand_mkt_pric_rate[2],
-           #                      scndhand_mkt_pric_rate[1])
+        # self.scndhand_mkt_pric_rate = \
+        #   np.random.triangular(scndhand_mkt_pric_rate[0],
+        #                       scndhand_mkt_pric_rate[2],
+        #                      scndhand_mkt_pric_rate[1])
         self.scndhand_mkt_pric_rate = \
             float(truncnorm((0.11 - scndhand_mkt_pric_rate[0]) /
                             scndhand_mkt_pric_rate[1],
@@ -110,16 +110,16 @@ class Refurbishers(Agent):
         Compute amount of waste that can be repaired (and thus sold).
         """
         self.refurbished_volume = 0
-        total_volume_recyler = 0
+        total_volume_recycler = 0
         for agent in self.model.schedule.agents:
             if self.model.num_consumers <= agent.unique_id < \
                     self.model.num_consumers + self.model.num_recyclers:
-                total_volume_recyler += agent.repairable_volume
+                total_volume_recycler += agent.repairable_volume
             if agent.unique_id < self.model.num_consumers:
                 if agent.refurbisher_id == self.unique_id and \
                         agent.EoL_pathway == "repair":
                     self.refurbished_volume += agent.number_product_EoL
-        self.refurbished_volume += total_volume_recyler / \
+        self.refurbished_volume += total_volume_recycler / \
             self.model.num_refurbishers
         self.refurbished_volume_n_sold = self.refurbished_volume + \
             self.repaired_then_sold
@@ -293,9 +293,9 @@ class Refurbishers(Agent):
         to the landfill, storage, and recycle pathways.
         """
         self.sold_waste_recycler = self.model.yearly_repaired_waste / \
-                                   self.model.num_consumers
+            self.model.num_consumers
         mass_volume_recycler = self.sold_waste_recycler * \
-                               self.model.dynamic_product_average_wght
+            self.model.dynamic_product_average_wght
         for agent in self.model.schedule.agents:
             if agent.unique_id < self.model.num_consumers:
                 if agent.refurbisher_id == self.unique_id:

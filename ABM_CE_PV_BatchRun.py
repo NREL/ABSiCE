@@ -38,7 +38,8 @@ if __name__ == '__main__':
         "init_eol_rate": {
             "repair": 0.005, "sell": 0.01, "recycle": 0.1, "landfill": 0.4425,
             "hoard": 0.4425},
-        "init_purchase_choice": {"new": 0.9995, "used": 0.0005, "certified": 0},
+        "init_purchase_choice": {"new": 0.9995, "used": 0.0005,
+                                 "certified": 0},
         "total_number_product": [38, 38, 38, 38, 38, 38, 38, 139, 251,
                                  378, 739, 1670, 2935, 4146, 5432, 6525,
                                  3609, 4207, 4905, 5719],
@@ -81,13 +82,6 @@ if __name__ == '__main__':
         "fsthand_mkt_pric_reg_param": [1, 0.04],
         "refurbisher_margin": [0.4, 0.6, 0.5],
         "purchase_choices": {"new": True, "used": True, "certified": False},
-        "init_trust_boundaries": [-1, 1],
-        "social_event_boundaries": [-1, 1],
-        "social_influencability_boundaries": [0, 1],
-        "trust_threshold": 0.5,
-        "knowledge_threshold": 0.5,
-        "willingness_threshold": 0.5,
-        "self_confidence_boundaries": [0, 1],
         "product_mass_fractions": {
             "Product": 1, "Aluminum": 0.08, "Glass": 0.76, "Copper": 0.01,
             "Insulated cable": 0.012, "Silicon": 0.036, "Silver": 0.00032},
@@ -95,13 +89,15 @@ if __name__ == '__main__':
             "Product": True, "Aluminum": True, "Glass": True, "Copper": True,
             "Insulated cable": True, "Silicon": False, "Silver": False},
         "scd_mat_prices": {
-            "Product": [np.nan, np.nan, np.nan], "Aluminum": [0.66, 1.98, 1.32],
-            "Glass": [0.01, 0.06, 0.035], "Copper": [3.77, 6.75, 5.75],
+            "Product": [np.nan, np.nan, np.nan],
+            "Aluminum": [0.66, 1.98, 1.32], "Glass": [0.01, 0.06, 0.035],
+            "Copper": [3.77, 6.75, 5.75],
             "Insulated cable": [3.22, 3.44, 3.33], "Silicon":
                 [2.20, 3.18, 2.69], "Silver": [453, 653, 582]},
         "virgin_mat_prices": {
-            "Product": [np.nan, np.nan, np.nan], "Aluminum": [1.76, 2.51, 2.14],
-            "Glass": [0.04, 0.07, 0.055], "Copper": [4.19, 7.50, 6.39],
+            "Product": [np.nan, np.nan, np.nan],
+            "Aluminum": [1.76, 2.51, 2.14], "Glass": [0.04, 0.07, 0.055],
+            "Copper": [4.19, 7.50, 6.39],
             "Insulated cable": [3.22, 3.44, 3.33], "Silicon":
                 [2.20, 3.18, 2.69], "Silver": [453, 653, 582]},
         "material_waste_ratio": {
@@ -113,7 +109,8 @@ if __name__ == '__main__':
         "product_average_wght": 0.1,
         "mass_to_function_reg_coeff": 0.03,
         "recycling_states": ['Texas', 'Arizona', 'Oregon', 'Oklahoma',
-                             'Wisconsin', 'Ohio', 'Kentucky', 'South Carolina'],
+                             'Wisconsin', 'Ohio', 'Kentucky',
+                             'South Carolina'],
         "transportation_cost": 0.0314,
         "used_product_substitution_rate": [0.6, 1, 0.8],
         "imperfect_substitution": 0,
@@ -143,14 +140,14 @@ if __name__ == '__main__':
                     if i == 0:
                         variable_params = {
                             "seed": list(range(30)),
-                            #"w_a_eol": [0.140, 0.481],
-                            #"w_sn_eol": [0.000, 0.700],
-                            #"w_pbc_eol": [0.100, 0.500]
-                            #"calibration_n_sensitivity":
+                            # "w_a_eol": [0.140, 0.481],
+                            # "w_sn_eol": [0.000, 0.700],
+                            # "w_pbc_eol": [0.100, 0.500]
+                            # "calibration_n_sensitivity":
                             #    [0.544],
                             "calibration_n_sensitivity":
                                 [0, 0.2, 0.4, 0.544, 0.6, 0.8, 1],
-                            #"calibration_n_sensitivity_2":
+                            # "calibration_n_sensitivity_2":
                             #    [0, 0.2, 0.223, 0.4, 0.6, 0.8, 1]
                             "calibration_n_sensitivity_2":
                                 [0.223]
@@ -248,7 +245,8 @@ if __name__ == '__main__':
                         "Average repairing cost": lambda c:
                         ABM_CE_PV.report_output(c, "average_repairing_cost"),
                         "Average selling cost": lambda c:
-                        ABM_CE_PV.report_output(c, "average_second_hand_price"),
+                        ABM_CE_PV.report_output(
+                            c, "average_second_hand_price"),
                         "Recycled material volume": lambda c:
                         ABM_CE_PV.report_output(c, "recycled_mat_volume"),
                         "Recycled material value": lambda c:
@@ -301,7 +299,7 @@ if __name__ == '__main__':
                     for key in fixed_params[variable_to_change].keys():
                         fixed_params[variable_to_change][key] += (
                                 1 - fixed_params[variable_to_change][key]) * \
-                                                                 value_to_change
+                                    value_to_change
                 elif j < 2:
                     fixed_params[variable_to_change] = int(value_to_change)
                     model_instance = ABM_CE_PV()

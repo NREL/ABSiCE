@@ -4,7 +4,10 @@ Created on Wed Nov 21 09:33 2019
 
 @author Julien Walzberg - Julien.Walzberg@nrel.gov
 
-Model - agent-based simulations of the circular economy (ABSiCE)
+Model - Circular Economy Agent-based Model (CE ABM)
+This module contains the model class that creates and activates agents. The
+module also defines inputs (default values can be changed by user) and collect
+outputs.
 """
 
 # ! Goals of the NSF development project:
@@ -18,6 +21,8 @@ Model - agent-based simulations of the circular economy (ABSiCE)
 # ! TODO list:
 # 1) Revamp the PV ABM code (format, efficiency):
 #   i) Clean code: solve basic typo errors etc. - high priority
+#     a) Find out how to keep Flake8 from showing an error when importing all
+#        with "*"
 #   ii) Replace basic functions with functions from CEWAM and the TPB_ABM -
 #       high priority:
 #     a) Check regularly that the model still works and provides same results
@@ -86,193 +91,12 @@ from mesa.space import NetworkGrid
 from mesa.datacollection import DataCollector
 import networkx as nx
 import numpy as np
-from math import *
-import matplotlib.pyplot as plt
+from math import e
 import pandas as pd
 import random
 
 
 class ABM_CE_PV(Model):
-    """
-    Intro:
-    The agent-based simulations of the circular economy (ABSiCE) model is an
-    agent-based model based on various work (e.g., Tong et al. 2018
-    and Ghali et al. 2017, IRENA-IEA 2016...). This instance of the model
-    simulate the implementation of circular economy (CE) strategies.
-
-    Purpose:
-    ABSiCE aims at simulating the adoption of various various CE strategies.
-    More specifically, the model enables exploring the effect of various policy
-    or techno-economic factors on the adoption of the CE strategies by a
-    system's actors. (Default values are for the case study of the photovoltaic
-    (PV) industry, functional unit = Wp).
-
-    How to use it:
-    Change the model's attributes' values if needed in the ABM_CE_PV_BatchRun
-    or ABM_CE_PV_MultipleRun files and run the model from either of those
-    files.
-
-    Attributes:
-        seed (to fix random numbers), (default=None). Modeler's choice.
-        calibration_n_sensitivity1 (use to vary list parameters or
-            dictionnaries), (default=1). Modeler's choice.
-        calibration_n_sensitivity_2 (use to vary list parameters or
-            dictionnaries), (default=1). Modeler's choice.
-        num_consumers, (default=1000). Simplifying assumption
-        consumers_node_degree, (default=5). From Small-World literature.
-        consumers_network_type=("small-world", "complete graph", "random"
-            "cycle graph", "scale-free graph"), (default="small-world").
-            From Small-World literature (e.g., Byrka et al. 2016).
-        num_recyclers, (default=16). 16 From SEIA, 2019.
-        num_producers, (default=60). Simplifying assumption.
-        prod_n_recyc_node_degree, (default=5). From Small-World literature.
-        prod_n_recyc_network_type, (default="small-world"). From Small-World
-            and industrial symbiosis literature (e.g., Doménech & Davies,
-            2011).
-        num_refurbishers, (default=15). From Wood Mackenzie, 2019.
-        consumers_distribution (allocation of different types of consumers),
-            (default={"residential": 1, "commercial": 0., "utility": 0.}).
-            (Other possible values based on EIA, 2019 and SBE council, 2019:
-            residential=0.75, commercial=0.2 and utility=0.05).
-        init_eol_rate (dictionary with initial end-of-life (EOL) ratios),
-            (default={"repair": 0.005, "sell": 0.02, "recycle": 0.1,
-            "landfill": 0.4375, "hoard": 0.4375}). From Monteiro Lunardi
-            et al 2018 and European Commission (2015).
-        init_purchase_choice (dictionary with initial purchase ratios),
-            (default={"new": 0.98, "used": 0.02, "certified": 0}). From
-            European Commission (2015).
-        total_number_product (a list for the whole population e.g.
-            (time series of product quantity)) (in unit of functional
-            unit (fu), examples of fu: Wp for PV, Bit for hard drive), (
-            default=[38, 38, 38, 38, 38, 38, 38, 139, 251, 378, 739, 1670,
-            2935, 4146, 5432, 6525, 3609, 4207, 4905, 5719]). From IRENA-IEA
-            2016 (assuming that 87% of the PV market is c-Si).
-        product_distribution (ratios of product among consumer types), (default
-            ={"residential": 1, "commercial": 0., "utility": 0.}). (Other
-            possible values based on Bolinger et al. 2018: residential=0.21,
-            commercial=0.18 and utility=0.61).
-        product_growth (a list for a piecewise function) (ratio), (default=
-            [0.166, 0.045]). From IRENA-IEA 2016
-        growth_threshold, (default=10). From IRENA-IEA 2016
-        failure_rate_alpha (a list for a triangular distribution), (default=
-            [2.4928, 5.3759, 3.93495]). From IRENA-IEA 2016.
-        hoarding_cost (a list for a triangular distribution) ($/fu), (default=
-            [0, 0.001, 0.0005]). From www.cisco-eagle.com (accessed 12/2019).
-        landfill_cost (a list for a triangular distribution) ($/fu), (default=
-            [0.0089, 0.0074, 0.0071, 0.0069, 0.0056, 0.0043,
-                     0.0067, 0.0110, 0.0085, 0.0082, 0.0079, 0.0074, 0.0069,
-                     0.0068, 0.0068, 0.0052, 0.0052, 0.0051, 0.0074, 0.0062,
-                     0.0049, 0.0049, 0.0047, 0.0032, 0.0049, 0.0065, 0.0064,
-                     0.0062, 0.0052, 0.0048, 0.0048, 0.0044, 0.0042, 0.0039,
-                     0.0039, 0.0045, 0.0055, 0.0050, 0.0049, 0.0044, 0.0044,
-                     0.0039, 0.0033, 0.0030, 0.0041, 0.0050, 0.0040, 0.0040,
-                     0.0038, 0.0033]). From EREF 2019.
-        w_sn_eol (the weight of subjective norm in the agents' decisions as
-            modeled with the theory of planned behavior), (default=0.33). From
-            Geiger et al. 2019.
-        w_pbc_eol (the weight of perceived behavioral control in the agents'
-            decisions as modeled with the theory of planned behavior), (
-            default=0.39). From Geiger et al. 2019.
-        w_a_eol (the weight of attitude in the agents' decisions as modeled
-            with the theory of planned behavior), (default=0.34). From
-            Geiger et al. 2019.
-        w_sn_reuse (same as above but for remanufactured product purchase
-            decision), (default=0.497). From Singhal et al. 2019.
-        w_pbc_reuse (same as above but for remanufactured product purchase
-            decision), (default=0.382). From Singhal et al. 2019.
-        w_a_reuse (same as above but for remanufactured product purchase
-            decision), (default=0.464). From Singhal et al. 2019.
-        product_lifetime (years), (default=30). From IRENA-IEA 2016.
-        all_EoL_pathways (dictionary of booleans for EOL pathways), (default=
-            {"repair": True, "sell": False, "recycle": True, "landfill": False,
-            "hoard": True}). Modeler's choice.
-        max_storage (a list for a triangular distribution) (years), (default=
-            [1, 8, 4]). From Wilson et al. 2017.
-        att_distrib_param_eol (a list for a bounded normal distribution), (
-            default=[0.53, 0.12]). From model's calibration step (mean),
-            Saphores 2012 (standard deviation).
-        att_distrib_param_eol (a list for a bounded normal distribution), (
-            default=[0.35, 0.2]). From model's calibration step (mean),
-            Abbey et al. 2016 (standard deviation).
-        original_recycling_cost (a list for a triangular distribution) ($/fu) (
-            default=[0.106, 0.128, 0.117]). From EPRI 2018.
-        recycling_learning_shape_factor, (default=-0.39). From Qiu & Suh 2019.
-        repairability (ratio), (default=0.55). From Tsanakas et al. 2019.
-        original_repairing_cost (a list for a triangular distribution) ($/fu),
-            (default=[0.1, 0.45, 0.28]). From Tsanakas et al. 2019.
-        repairing_learning_shape_factor, (default=-0.31). Estimated with data
-            on repairing costs at different scales from JRC 2019.
-        scndhand_mkt_pric_rate (a list for a triangular distribution) (ratio),
-            (default=[0.4, 1, 0.7]). From unpublished study Wang et al.
-        fsthand_mkt_pric ($/fu), (default=0.3). From Wood Mackenzie, 2019.
-        refurbisher_margin (ratio), (default=[0.03, 0.45, 0.24]). From Duvan
-            & Aykaç 2008 and www.investopedia.com (accessed 03/2020).
-        purchase_choices (dictionary of booleans for purchase choice), (default
-            ={"new": True, "used": True, "certified": False}).
-            Modeler's choice.
-        init_trust_boundaries (from Ghali et al. 2017)
-        social_event_boundaries (from Ghali et al. 2017)
-        social_influencability_boundaries (from Ghali et al. 2017)
-        trust_threshold (from Ghali et al. 2017)
-        knowledge_threshold (from Ghali et al. 2017)
-        willingness_threshold (from Ghali et al. 2017)
-        self_confidence_boundaries (from Ghali et al. 2017)
-        product_mass_fractions (dictionary containing mass fractions of
-            materials composing the product), (default={"Product": 1,
-            "Aluminum": 0.08, "Glass": 0.76, "Copper": 0.01, "Insulated cable"
-            : 0.012, "Silicon": 0.036, "Silver": 0.00032}). From ITRPV, 2015,
-            2018.
-        established_scd_mkt (dictionary containing booleans regarding the
-            availability of an industrial pathway for the recovered material),
-            (default={"Product": True, "Aluminum": True, "Glass": True,
-            "Copper": True, "Insulated cable": True, "Silicon": False,
-            "Silver": False}). Modeler's choice.
-        scd_mat_prices (dictionary containing lists for triangular
-            distributions of secondary materials prices) ($/fu), (default={
-            "Product": [np.nan, np.nan, np.nan], "Aluminum": [0.66, 1.98,
-            1.32], "Glass": [0.01, 0.06, 0.035], "Copper": [3.77, 6.75, 5.75],
-            "Insulated cable": [3.22, 3.44, 3.33], "Silicon": [2.20, 3.18,
-            2.69], "Silver": [453, 653, 582]}). From www.Infomine.com (2019),
-            copper.org (2019), USGS (2017), Bureau of Labor Statistics (2018),
-            www.recyclingproductnews.com (all websites accessed 03/2020).
-        virgin_mat_prices (dictionary containing lists for triangular
-            distributions of virgin materials prices) ($/fu), (default={
-            "Product": [np.nan, np.nan, np.nan], "Aluminum": [1.76, 2.51,
-            2.14], "Glass": [0.04, 0.07, 0.055], "Copper": [4.19, 7.50, 6.39],
-            "Insulated cable": [3.22, 3.44, 3.33], "Silicon": [2.20, 3.18,
-            2.69], "Silver": [453, 653, 582]}). From Butler et al. (2005),
-            Newlove  (2017), USGS (2017), www.infomine.com (2019), expert
-            opinions (for insulated cables) (all websites accessed 03/2020).
-        material_waste_ratio (dictionary containing industrial waste ratios),
-            (default={"Product": 0., "Aluminum": 0., "Glass": 0., "Copper": 0.,
-            "Insulated cable": 0., "Silicon": 0.4, "Silver": 0.}). From
-            Hachichi 2018.
-        recovery_fractions (dictionary containing recovery fractions of
-            materials composing the product when recycled), (default={
-            "Product": np.nan, "Aluminum": 0.92, "Glass": 0.85, "Copper": 0.72,
-            "Insulated cable": 1, "Silicon": 0,
-            "Silver": 0}). From Ardente et al. 2019 and IEA-PVPS task-12 2018.
-        product_average_wght (kg/fu), (default=0.1). From IRENA-IEA 2016.
-        mass_to_function_reg_coeff, (default=0.03). Estimated with data from
-            IRENA-IEA 2016.
-        recycling_states (a list of states owning at least one recycling
-            facility), (default=['Texas', 'Arizona', 'Oregon', 'Oklahoma',
-            'Wisconsin', 'Ohio', 'Kentucky', 'South Carolina']. From SEIA 2019.
-        transportation_cost ($/t.km), (default=0.021761). From ecoinvent 2020.
-        used_product_substitution_rate (a list for a triangular distribution)
-            (ratio), (default=[0.6, 1, 0.8]). From unpublished study Wang et
-            al.
-        imperfect_substitution (model rebound effect) (ratio), (default=0).
-            Modeler's choice.
-        epr_business_model (boolean) (assume that enhanced producer
-            responsibility means that product are recycled at the end of life
-            as well as industrial waste), (default=False). Modeler's choice.
-        recycling_process (dictionary of booleans), (default={"frelp": False,
-            "asu": False, "hybrid": False}). Modeler's choice.
-        industrial_symbiosis (boolean), (default=False). Modeler's choice.
-
-    """
-
     def __init__(self,
                  seed=None,
                  calibration_n_sensitivity=1,
@@ -292,15 +116,15 @@ class ABM_CE_PV(Model):
                  consumers_distribution={"residential": 1,
                                          "commercial": 0., "utility": 0.},
                  init_eol_rate={"repair": 0.005, "sell": 0.01,
-                                   "recycle": 0.1, "landfill": 0.4425,
-                                   "hoard": 0.4425},
+                                "recycle": 0.1, "landfill": 0.4425,
+                                "hoard": 0.4425},
                  init_purchase_choice={"new": 0.9995, "used": 0.0005,
                                        "certified": 0},
                  total_number_product=[38, 38, 38, 38, 38, 38, 38, 139, 251,
                                        378, 739, 1670, 2935, 4146, 5432, 6525,
                                        3609, 4207, 4905, 5719],
                  product_distribution={"residential": 1,
-                                         "commercial": 0., "utility": 0.},
+                                       "commercial": 0., "utility": 0.},
                  product_growth=[0.166, 0.045],
                  growth_threshold=10,
                  failure_rate_alpha=[2.4928, 5.3759, 3.93495],
@@ -332,29 +156,14 @@ class ABM_CE_PV(Model):
                  original_recycling_cost=[0.106, 0.128, 0.117],
                  recycling_learning_shape_factor=-0.39,
                  repairability=0.55,
-                 # some modules don't need repair
                  original_repairing_cost=[0.1, 0.45, 0.23],
-                 # HERE
                  repairing_learning_shape_factor=-0.31,
                  scndhand_mkt_pric_rate=[0.4, 0.2],
-                 # from https://www.ise.fraunhofer.de/content/dam/ise/de/
-                 # documents/publications/studies/AgoraEnergiewende_Current_and_
-                 # Future_Cost_of_PV_Feb2015_web.pdf
-                 # a=6.5, b=0.078, y=a*exp(b*-t)
                  fsthand_mkt_pric=0.45,
-                 #0.04
                  fsthand_mkt_pric_reg_param=[1, 0.04],
-                 # HERE
                  refurbisher_margin=[0.4, 0.6, 0.5],
                  purchase_choices={"new": True, "used": True,
                                    "certified": False},
-                 init_trust_boundaries=[-1, 1],
-                 social_event_boundaries=[-1, 1],
-                 social_influencability_boundaries=[0, 1],
-                 trust_threshold=0.5,
-                 knowledge_threshold=0.5,
-                 willingness_threshold=0.5,
-                 self_confidence_boundaries=[0, 1],
                  product_mass_fractions={"Product": 1, "Aluminum": 0.08,
                                          "Glass": 0.76, "Copper": 0.01,
                                          "Insulated cable": 0.012,
@@ -371,55 +180,242 @@ class ABM_CE_PV(Model):
                                  "Silicon": [2.20, 3.18, 2.69],
                                  "Silver": [453, 653, 582]},
                  virgin_mat_prices={"Product": [np.nan, np.nan, np.nan],
-                                 "Aluminum": [1.76, 2.51, 2.14],
-                                 "Glass": [0.04, 0.07, 0.055],
-                                 "Copper": [4.19, 7.50, 6.39],
-                                 "Insulated cable": [3.22, 3.44, 3.33],
-                                 "Silicon": [2.20, 3.18, 2.69],
-                                 "Silver": [453, 653, 582]},
+                                    "Aluminum": [1.76, 2.51, 2.14],
+                                    "Glass": [0.04, 0.07, 0.055],
+                                    "Copper": [4.19, 7.50, 6.39],
+                                    "Insulated cable": [3.22, 3.44, 3.33],
+                                    "Silicon": [2.20, 3.18, 2.69],
+                                    "Silver": [453, 653, 582]},
                  material_waste_ratio={"Product": 0., "Aluminum": 0.,
                                        "Glass": 0., "Copper": 0.,
                                        "Insulated cable": 0., "Silicon": 0.4,
                                        "Silver": 0.},
                  recovery_fractions={"Product": np.nan, "Aluminum": 0.92,
-                                       "Glass": 0.85, "Copper": 0.72,
-                                       "Insulated cable": 1, "Silicon": 0,
-                                       "Silver": 0},
+                                     "Glass": 0.85, "Copper": 0.72,
+                                     "Insulated cable": 1, "Silicon": 0,
+                                     "Silver": 0},
                  product_average_wght=0.1,
                  mass_to_function_reg_coeff=0.03,
                  recycling_states=[
                      'Texas', 'Arizona', 'Oregon', 'Oklahoma',
-                         'Wisconsin', 'Ohio', 'Kentucky', 'South Carolina'],
+                     'Wisconsin', 'Ohio', 'Kentucky', 'South Carolina'],
                  transportation_cost=0.0314,
                  used_product_substitution_rate=[0.6, 1, 0.8],
                  imperfect_substitution=0,
                  epr_business_model=False,
                  recycling_process={"frelp": False, "asu": False,
                                     "hybrid": False},
-                 industrial_symbiosis=False,
                  dynamic_lifetime_model={"Dynamic lifetime": False,
                                          "d_lifetime_intercept": 15.9,
                                          "d_lifetime_reg_coeff": 0.87,
                                          "Seed": False, "Year": 5,
                                          "avg_lifetime": 50},
                  extended_tpb={"Extended tpb": False,
-                 "w_convenience": 0.28, "w_knowledge": -0.51,
-                 "knowledge_distrib": [0.5, 0.49]},
+                               "w_convenience": 0.28, "w_knowledge": -0.51,
+                               "knowledge_distrib": [0.5, 0.49]},
                  seeding={"Seeding": False,
                           "Year": 10, "number_seed": 50},
                  seeding_recyc={"Seeding": False,
-                          "Year": 10, "number_seed": 50, "discount": 0.35}):
-        """
-        Initiate model
+                                "Year": 10, "number_seed": 50,
+                                "discount": 0.35}
+                 ):
+        """Initiate model.
+
+        Args:
+            seed (int, optional): number used to initialize the random
+                generator. Defaults to None.
+            calibration_n_sensitivity (int, optional): enable varying
+                different type of input parameters . Defaults to 1.
+            calibration_n_sensitivity_2 (int, optional): enable varying
+                different type of input parameters . Defaults to 1.
+            calibration_n_sensitivity_3 (int, optional): enable varying
+                different type of input parameters . Defaults to 1.
+            calibration_n_sensitivity_4 (int, optional): enable varying
+                different type of input parameters . Defaults to 1.
+            calibration_n_sensitivity_5 (int, optional): enable varying
+                different type of input parameters . Defaults to 1.
+            num_consumers (int, optional): number of consumers.
+                Defaults to 1000.
+            consumers_node_degree (int, optional): average node degree in the
+                network. Defaults to 10.
+            consumers_network_type (str, optional): network type.
+                Defaults to "small-world".
+            rewiring_prob (float, optional): probability of rewiring an edge in
+                the network. Defaults to 0.1.
+            num_recyclers (int, optional): number of recyclers. Defaults to 16.
+            num_producers (int, optional): number of producers. Defaults to 60.
+            prod_n_recyc_node_degree (int, optional): average node degree in
+                the network. Defaults to 5.
+            prod_n_recyc_network_type (str, optional): network type.
+                Defaults to "small-world".
+            num_refurbishers (int, optional): number of refurbishers.
+                Defaults to 15.
+            consumers_distribution (dict, optional): type of consumers.
+                Defaults to {"residential": 1, "commercial": 0.,
+                "utility": 0.}.
+            init_eol_rate (dict, optional): initial distribution of end-of-life
+                (eol) pathways adoption in the consumer population. Defaults to
+                {"repair": 0.005, "sell": 0.01, "recycle": 0.1, "landfill":
+                0.4425, "hoard": 0.4425}.
+            init_purchase_choice (dict, optional): initial distribution of
+                purchase option adoption in the consumer population. Defaults
+                to {"new": 0.9995, "used": 0.0005, "certified": 0}.
+            total_number_product (list, optional): Total number of products
+                expressed in relevant units (e.g., kg or kW) for the first
+                initial years. Defaults to [38, 38, 38, 38, 38, 38, 38, 139,
+                251, 378, 739, 1670, 2935, 4146, 5432, 6525, 3609, 4207, 4905,
+                5719].
+            product_distribution (dict, optional): product shares among
+            consumer types. Defaults to {"residential": 1, "commercial": 0.,
+                "utility": 0.}.
+            product_growth (list, optional): compounded annual growth rate
+                (CAGR). Defaults to [0.166, 0.045].
+            growth_threshold (int, optional): threshold separating period of
+                different CAGR. Defaults to 10.
+            failure_rate_alpha (list, optional): alpha parameter of the Weibull
+                function that models waste generation. Defaults to [2.4928,
+                5.3759, 3.93495].
+            hoarding_cost (list, optional): storage costs. Defaults to
+                [0, 0.001, 0.0005].
+            landfill_cost (list, optional): landfill costs. Defaults to
+                [ 0.0089, 0.0074, 0.0071, 0.0069, 0.0056, 0.0043, 0.0067,
+                0.0110, 0.0085, 0.0082, 0.0079, 0.0074, 0.0069, 0.0068, 0.0068,
+                0.0052,
+                0.0052, 0.0051, 0.0074, 0.0062, 0.0049, 0.0049, 0.0047, 0.0032,
+                0.0049, 0.0065, 0.0064, 0.0062, 0.0052, 0.0048, 0.0048, 0.0044,
+                0.0042, 0.0039, 0.0039, 0.0045, 0.0055, 0.0050, 0.0049, 0.0044,
+                0.0044, 0.0039, 0.0033, 0.0030, 0.0041, 0.0050, 0.0040, 0.0040,
+                0.0038, 0.0033].
+            theory_of_planned_behavior (dict, optional): define how the
+                different population types make choices. Defaults to
+                { "residential": True, "commercial": True, "utility": True}.
+            w_sn_eol (float, optional): weight of the subjective norms variable
+                in the decision-making model (i.e., the theory of planned
+                behavior (TPB)) for the eol options. Defaults to 0.27.
+            w_pbc_eol (float, optional): weight of the perceived behavioral
+                control variable in the TPB for the eol options. Defaults to
+                0.44.
+            w_a_eol (float, optional): weight of the attitude  variable in the
+                TPB for the eol options. Defaults to 0.39.
+            w_sn_reuse (float, optional): weight of the subjective norms
+                variable in the TPB for the purchase options. Defaults to
+                0.497.
+            w_pbc_reuse (float, optional): weight of the perceived behavioral
+                control variable in the TPB for the purchase options. Defaults
+                to 0.382.
+            w_a_reuse (float, optional): weight of the attitude variable in the
+                TPB for the purchase options. Defaults to 0.464.
+            product_lifetime (int, optional): product lifetime, beta parameter
+                of the Weibull function that models waste generation. Defaults
+                to 30.
+            all_EoL_pathways (dict, optional): eol options that are available.
+                Defaults to {"repair": True, "sell": True, "recycle": True,
+                "landfill": True, "hoard": True}.
+            max_storage (list, optional): parameters defining the potential
+                storage time for the product. Defaults to [1, 8, 4].
+            att_distrib_param_eol (list, optional): parameters used to
+                distribute attitude values regarding eol options within the
+                population. Defaults to [0.544, 0.1].
+            att_distrib_param_reuse (list, optional): parameters used to
+                distribute attitude values regarding purchase options within
+                the population. Defaults to [0.223, 0.262].
+            original_recycling_cost (list, optional): parameters used to
+                distribute recycling costs at the start of the simulation.
+                Defaults to [0.106, 0.128, 0.117].
+            recycling_learning_shape_factor (float, optional): learning effect
+                parameter defining how recycling costs decrease as recycling
+                volumes increase. Defaults to -0.39.
+            repairability (float, optional): share of products that can be
+                repaired. Defaults to 0.55.
+            original_repairing_cost (list, optional): parameters used to
+                distribute repair costs at the start of the simulation.
+                Defaults to [0.1, 0.45, 0.23].
+            repairing_learning_shape_factor (float, optional): learning effect
+                parameter defining how repair costs decrease as repair volumes
+                increase. Defaults to -0.31.
+            scndhand_mkt_pric_rate (list, optional): parameters used to
+                distribute the ratio between used product price to new product
+                price. Defaults to [0.4, 0.2].
+            fsthand_mkt_pric (float, optional): new product price. Defaults to
+                0.45.
+            fsthand_mkt_pric_reg_param (list, optional):  parameters used to
+                model new product price decrease. Defaults to [1, 0.04].
+            refurbisher_margin (list, optional):  parameters used to
+                distribute refurbisher's margins. Defaults to [0.4, 0.6, 0.5].
+            purchase_choices (dict, optional): purchase options that are
+                available. Defaults to {"new": True, "used": True, "certified":
+                False}.
+            product_mass_fractions (dict, optional): product material
+                composition. Defaults to {"Product": 1, "Aluminum": 0.08,
+                "Glass": 0.76, "Copper": 0.01, "Insulated cable": 0.012,
+                "Silicon": 0.036, "Silver": 0.00032}.
+            established_scd_mkt (dict, optional): defines if materials can be
+                recycled in an established end market or not. Defaults to
+                {"Product": True, "Aluminum": True, "Glass": True, "Copper":
+                True, "Insulated cable": True, "Silicon": False, "Silver":
+                False}.
+            scd_mat_prices (dict, optional): parameters used to
+                distribute secondary (scrap) material prices. Defaults to
+                {"Product": [np.nan, np.nan, np.nan], "Aluminum":
+                [0.66, 1.98, 1.32], "Glass": [0.01, 0.06, 0.035], "Copper":
+                [3.77, 6.75, 5.75], "Insulated cable": [3.22, 3.44, 3.33],
+                "Silicon": [2.20, 3.18, 2.69], "Silver": [453, 653, 582]}.
+            virgin_mat_prices (dict, optional): parameters used to
+                distribute primary (raw) material prices. Defaults to
+                {"Product": [np.nan, np.nan, np.nan], "Aluminum":
+                [1.76, 2.51, 2.14], "Glass": [0.04, 0.07, 0.055], "Copper":
+                [4.19, 7.50, 6.39], "Insulated cable": [3.22, 3.44, 3.33],
+                "Silicon": [2.20, 3.18, 2.69], "Silver": [453, 653, 582]}.
+            material_waste_ratio (dict, optional): industrial material waste
+                ratios. Defaults to {"Product": 0., "Aluminum": 0., "Glass":
+                0., "Copper": 0., "Insulated cable": 0., "Silicon": 0.4,
+                "Silver": 0.}.
+            recovery_fractions (dict, optional): material recovery fractions
+                from the recycling process. Defaults to {"Product": np.nan,
+                "Aluminum": 0.92, "Glass": 0.85, "Copper": 0.72,
+                "Insulated cable": 1, "Silicon": 0, "Silver": 0}.
+            product_average_wght (float, optional): average weight of the
+                product. Defaults to 0.1.
+            mass_to_function_reg_coeff (float, optional): parameter used to
+                model the product weight decrease. Defaults to 0.03.
+            recycling_states (list, optional): states with recycling
+                facilities. Defaults to [ 'Texas', 'Arizona', 'Oregon',
+                'Oklahoma', 'Wisconsin', 'Ohio', 'Kentucky', 'South Carolina'].
+            transportation_cost (float, optional): cost of product
+                transportation. Defaults to 0.0314.
+            used_product_substitution_rate (list, optional): substitution rate
+                of used product to new product. Defaults to [0.6, 1, 0.8].
+            imperfect_substitution (int, optional): additional substitution
+                rate due to unintended consequences such as the rebound effect.
+                Defaults to 0.
+            epr_business_model (bool, optional): parameter to activate an
+                extended producer responsibility (EPR) scenario. Defaults to
+                False.
+            recycling_process (dict, optional): parameter to activate different
+                recycling process scenarios. Defaults to {"frelp": False,
+                "asu": False, "hybrid": False}.
+            dynamic_lifetime_model (dict, optional): parameter to activate
+                product lifetime scenarios. Defaults to {"Dynamic lifetime":
+                False, "d_lifetime_intercept": 15.9, "d_lifetime_reg_coeff":
+                0.87, "Seed": False, "Year": 5, "avg_lifetime": 50}.
+            extended_tpb (dict, optional): optional parameters for the
+                decision-making model. Defaults to {"Extended tpb": False,
+                "w_convenience": 0.28, "w_knowledge": -0.51,
+                "knowledge_distrib": [0.5, 0.49]}.
+            seeding (dict, optional): seeding scenario for used products.
+                Defaults to {"Seeding": False, "Year": 10, "number_seed": 50}.
+            seeding_recyc (dict, optional): seeding scenario for recycling
+                products. Defaults to {"Seeding": False, "Year": 10,
+                "number_seed": 50, "discount": 0.35}.
         """
         # Set up variables
         self.seed = seed
         att_distrib_param_eol[0] = calibration_n_sensitivity
         att_distrib_param_reuse[0] = calibration_n_sensitivity_2
-        #original_recycling_cost = [x * calibration_n_sensitivity_3 for x in
-         #                          original_recycling_cost]
-        #landfill_cost = [x * calibration_n_sensitivity_4 for x in
-         #                landfill_cost]
+        # original_recycling_cost = [x * calibration_n_sensitivity_3 for x in
+        #                          original_recycling_cost]
+        # landfill_cost = [x * calibration_n_sensitivity_4 for x in
+        #                landfill_cost]
         # att_distrib_param_eol[1] = att_distrib_param_eol[1] * \
         #   calibration_n_sensitivity_4
         # w_sn_eol = w_sn_eol * calibration_n_sensitivity_5
@@ -462,15 +458,6 @@ class ABM_CE_PV(Model):
         self.yearly_repaired_waste = 0
         self.imperfect_substitution = imperfect_substitution
         perceived_behavioral_control = [np.nan] * len(all_EoL_pathways)
-        # Adjacency matrix of trust network: trust of row index into column
-        self.trust_prod = np.asmatrix(np.random.uniform(
-            init_trust_boundaries[0], init_trust_boundaries[1],
-            (self.num_prod_n_recyc, self.num_prod_n_recyc)))
-        np.fill_diagonal(self.trust_prod, 0)
-        self.social_event_boundaries = social_event_boundaries
-        self.trust_threshold = trust_threshold
-        self.knowledge_threshold = knowledge_threshold
-        self.willingness_threshold = willingness_threshold
         self.willingness = np.asmatrix(np.zeros((self.num_prod_n_recyc,
                                                 self.num_prod_n_recyc)))
         self.product_mass_fractions = product_mass_fractions
@@ -483,12 +470,10 @@ class ABM_CE_PV(Model):
         self.transportation_cost = transportation_cost
         self.epr_business_model = epr_business_model
         self.average_landfill_cost = sum(landfill_cost) / len(landfill_cost)
-        self.industrial_symbiosis = industrial_symbiosis
         self.installer_recycled_amount = 0
         # Change eol_pathways depending on business model
         if self.epr_business_model:
             self.all_EoL_pathways["landfill"] = False
-            self.industrial_symbiosis = False
         # Dynamic lifetime model
         self.dynamic_lifetime_model = dynamic_lifetime_model
         self.extended_tpb = extended_tpb
@@ -511,11 +496,11 @@ class ABM_CE_PV(Model):
         self.growth_threshold = growth_threshold
         # Builds graph and defines scheduler
         self.H1 = self.init_network(self.consumers_network_type,
-                                   self.num_consumers,
-                                   self.consumers_node_degree, rewiring_prob)
+                                    self.num_consumers,
+                                    self.consumers_node_degree, rewiring_prob)
         self.H2 = self.init_network(self.prod_n_recyc_network_type,
-                                   self.num_prod_n_recyc,
-                                   self.prod_n_recyc_node_degree,
+                                    self.num_prod_n_recyc,
+                                    self.prod_n_recyc_node_degree,
                                     rewiring_prob)
         self.H3 = self.init_network("complete graph", self.num_refurbishers,
                                     "NaN", rewiring_prob)
@@ -531,18 +516,18 @@ class ABM_CE_PV(Model):
         # occurs on site and so there is no associated transportation.
         # (See consumer module for sales of old PV modules).
         self.all_states = ['Texas', 'California', 'Montana', 'New Mexico',
-                      'Arizona', 'Nevada', 'Colorado', 'Oregon', 'Wyoming',
-                      'Michigan', 'Minnesota', 'Utah', 'Idaho', 'Kansas',
-                      'Nebraska', 'South Dakota', 'Washington',
-                      'North Dakota', 'Oklahoma', 'Missouri', 'Florida',
-                      'Wisconsin', 'Georgia', 'Illinois', 'Iowa',
-                      'New York', 'North Carolina', 'Arkansas', 'Alabama',
-                      'Louisiana', 'Mississippi', 'Pennsylvania', 'Ohio',
-                      'Virginia', 'Tennessee', 'Kentucky', 'Indiana',
-                      'Maine', 'South Carolina', 'West Virginia',
-                      'Maryland', 'Massachusetts', 'Vermont',
-                      'New Hampshire', 'New Jersey', 'Connecticut',
-                      'Delaware', 'Rhode Island']
+                           'Arizona', 'Nevada', 'Colorado', 'Oregon',
+                           'Wyoming', 'Michigan', 'Minnesota', 'Utah', 'Idaho',
+                           'Kansas', 'Nebraska', 'South Dakota', 'Washington',
+                           'North Dakota', 'Oklahoma', 'Missouri', 'Florida',
+                           'Wisconsin', 'Georgia', 'Illinois', 'Iowa',
+                           'New York', 'North Carolina', 'Arkansas', 'Alabama',
+                           'Louisiana', 'Mississippi', 'Pennsylvania', 'Ohio',
+                           'Virginia', 'Tennessee', 'Kentucky', 'Indiana',
+                           'Maine', 'South Carolina', 'West Virginia',
+                           'Maryland', 'Massachusetts', 'Vermont',
+                           'New Hampshire', 'New Jersey', 'Connecticut',
+                           'Delaware', 'Rhode Island']
         self.states = pd.read_csv("StatesAdjacencyMatrix.csv").to_numpy()
         # Compute distances
         self.mean_distance_within_state = np.nanmean(
@@ -592,14 +577,11 @@ class ABM_CE_PV(Model):
             elif node < self.num_recyclers + self.num_consumers:
                 b = Recyclers(node, self, self.original_recycling_cost,
                               init_eol_rate,
-                              recycling_learning_shape_factor,
-                              social_influencability_boundaries)
+                              recycling_learning_shape_factor)
                 self.schedule.add(b)
                 self.grid.place_agent(b, node)
             elif node < self.num_prod_n_recyc + self.num_consumers:
-                c = Producers(node, self, scd_mat_prices, virgin_mat_prices,
-                              social_influencability_boundaries,
-                              self_confidence_boundaries)
+                c = Producers(node, self, scd_mat_prices, virgin_mat_prices)
                 self.schedule.add(c)
                 self.grid.place_agent(c, node)
             else:
@@ -815,21 +797,18 @@ class ABM_CE_PV(Model):
                 "Copper": 0.97, "Insulated cable": 1., "Silicon": 0.97,
                 "Silver": 0.94}
             self.original_recycling_cost = [0.068, 0.068, 0.068]
-            self.industrial_symbiosis = False
         elif self.recycling_process["asu"]:
             self.recovery_fractions = {
                 "Product": np.nan, "Aluminum": 0.94, "Glass": 0.99,
                 "Copper": 0.83, "Insulated cable": 1., "Silicon": 0.90,
                 "Silver": 0.74}
             self.original_recycling_cost = [0.153, 0.153, 0.153]
-            self.industrial_symbiosis = False
         elif self.recycling_process["hybrid"]:
             self.recovery_fractions = {
                 "Product": np.nan, "Aluminum": 0.994, "Glass": 0.98,
                 "Copper": 0.83, "Insulated cable": 1., "Silicon": 0.97,
                 "Silver": 0.74}
             self.original_recycling_cost = [0.055, 0.055, 0.055]
-            self.industrial_symbiosis = False
 
     def average_mass_per_function_model(self, product_as_function):
         """
@@ -1038,8 +1017,9 @@ class ABM_CE_PV(Model):
             elif condition == "refurbisher_costs" and model.num_consumers + \
                     model.num_prod_n_recyc <= agent.unique_id:
                 count += agent.refurbisher_costs
-            elif condition == "refurbisher_costs_w_margins" and model.num_consumers + \
-                    model.num_prod_n_recyc <= agent.unique_id:
+            elif condition == "refurbisher_costs_w_margins" and \
+                model.num_consumers + model.num_prod_n_recyc \
+                    <= agent.unique_id:
                 count += agent.refurbisher_costs_w_margins
         if condition == "product_sold":
             model.sold_repaired_waste += count2 - \

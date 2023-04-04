@@ -29,11 +29,13 @@ def run_model(number_run, number_steps):
                 seed=(j - 30), w_sn_eol=0)
         elif j < 90:
             model = ABM_CE_PV(
-                seed=(j - 60), seeding_recyc={"Seeding": True,
-                          "Year": 1, "number_seed": 100, "discount": 0.35})
+                seed=(j - 60), seeding_recyc={
+                    "Seeding": True, "Year": 1, "number_seed": 100,
+                    "discount": 0.35})
         elif j < 120:
-            model = ABM_CE_PV(seed=(j - 90), seeding_recyc={"Seeding": True,
-                          "Year": 1, "number_seed": 200, "discount": 0.35})
+            model = ABM_CE_PV(seed=(j - 90), seeding_recyc={
+                "Seeding": True, "Year": 1, "number_seed": 200,
+                "discount": 0.35})
         elif j < 150:
             model = ABM_CE_PV(seed=(j - 120),
                               calibration_n_sensitivity_4=2)
@@ -45,11 +47,12 @@ def run_model(number_run, number_steps):
                               recycling_learning_shape_factor=-1E-6)
         elif j < 240:
             model = ABM_CE_PV(seed=(j - 210),
-                              dynamic_lifetime_model={"Dynamic lifetime": True,
-                                                      "d_lifetime_intercept": 15.9,
-                                                      "d_lifetime_reg_coeff": 0.87,
-                                                      "Seed": False, "Year": 5,
-                                                      "avg_lifetime": 50})
+                              dynamic_lifetime_model={
+                                  "Dynamic lifetime": True,
+                                  "d_lifetime_intercept": 15.9,
+                                  "d_lifetime_reg_coeff": 0.87,
+                                  "Seed": False, "Year": 5,
+                                  "avg_lifetime": 50})
         elif j < 270:
             model = ABM_CE_PV(seed=(j - 240),
                               all_EoL_pathways={"repair": True, "sell": True,
@@ -139,6 +142,3 @@ def draw_graphs(network, figures, model, results_agents, results_model):
 
 
 run_model(30, 31)
-
-
-

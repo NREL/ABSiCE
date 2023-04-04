@@ -25,13 +25,11 @@ class Recyclers(Agent):
             "landfill": 0.4375, "hoard": 0.4375}). From Monteiro Lunardi
             et al 2018 and European Commission (2015).
         recycling_learning_shape_factor, (default=-0.39). From Qiu & Suh 2019.
-        social_influencability_boundaries (from Ghali et al. 2017)
 
     """
 
     def __init__(self, unique_id, model, original_recycling_cost,
-                 init_eol_rate, recycling_learning_shape_factor,
-                 social_influencability_boundaries):
+                 init_eol_rate, recycling_learning_shape_factor):
         """
         Creation of new recycler agent
         """
@@ -57,13 +55,6 @@ class Recyclers(Agent):
             sum(self.model.waste_generation(self.model.d_product_lifetimes,
                                             self.model.avg_failure_rate[2],
                                             original_recycled_volumes))
-        self.social_influencability = np.random.uniform(
-            social_influencability_boundaries[0],
-            social_influencability_boundaries[1])
-        self.knowledge = np.random.random()
-        self.social_interactions = np.random.random()
-        self.knowledge_learning = np.random.random()
-        self.knowledge_t = self.knowledge
         self.symbiosis = False
         self.agent_i = self.unique_id - self.model.num_consumers
         self.recycler_costs = 0
@@ -151,30 +142,6 @@ class Recyclers(Agent):
                 return original_cost
         return original_cost
 
-    def update_recyclers_knowledge(self):
-        """
-        Update knowledge of agents about industrial symbiosis. Mathematical
-        model adapted from Ghali et al. 2017.
-        """
-        self.knowledge_learning = np.random.random()
-        knowledge_neighbors = 0
-        neighbors_nodes = self.model.grid.get_neighbors(self.pos,
-                                                        include_center=False)
-        for agent in self.model.grid.get_cell_list_contents(neighbors_nodes):
-            self.social_interactions = np.random.random()
-            agent_j = agent.unique_id - self.model.num_consumers
-            if self.model.trust_prod[self.agent_i, agent_j] >= \
-                    self.model.trust_threshold:
-                knowledge_neighbors += self.social_interactions * (
-                        agent.knowledge - self.knowledge)
-        self.knowledge_t = self.knowledge
-        self.knowledge += self.social_influencability * knowledge_neighbors + \
-                          self.knowledge_learning
-        if self.knowledge < 0:
-            self.knowledge = 0
-        if self.knowledge > 1:
-            self.knowledge = 1
-
     def compute_recycler_costs(self):
         """
         Compute societal costs of recyclers. Only account for the material
@@ -206,4 +173,3 @@ class Recyclers(Agent):
             self.original_recycling_cost,
             self.recycling_learning_shape_factor)
         self.update_transport_recycling_costs()
-        self.update_recyclers_knowledge()

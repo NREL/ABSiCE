@@ -9,8 +9,6 @@ Agent - Producer
 
 from mesa import Agent
 import numpy as np
-import networkx as nx
-import random
 
 
 class Producers(Agent):
@@ -47,31 +45,15 @@ class Producers(Agent):
             2.69], "Silver": [453, 653, 582]}). From Butler et al. (2005),
             Newlove  (2017), USGS (2017), www.infomine.com (2019), expert
             opinions (for insulated cables) (all websites accessed 03/2020).
-        social_influencability_boundaries (from Ghali et al. 2017)
-        self_confidence_boundaries (from Ghali et al. 2017)
 
     """
 
-    def __init__(self, unique_id, model, scd_mat_prices, virgin_mat_prices,
-                 social_influencability_boundaries,
-                 self_confidence_boundaries):
+    def __init__(self, unique_id, model, scd_mat_prices, virgin_mat_prices):
         """
         Creation of new producer agent
         """
         super().__init__(unique_id, model)
-        self.trust_history = np.copy(self.model.trust_prod)
-        self.social_influencability = np.random.uniform(
-            social_influencability_boundaries[0],
-            social_influencability_boundaries[1])
         self.agent_i = self.unique_id - self.model.num_consumers
-        self.knowledge = np.random.random()
-        self.social_interactions = np.random.random()
-        self.knowledge_learning = np.random.random()
-        self.knowledge_t = self.knowledge
-        self.acceptance = 0
-        self.symbiosis = False
-        self.self_confidence = np.random.uniform(
-            self_confidence_boundaries[0], self_confidence_boundaries[1])
         self.material_produced = self.producer_type()
         self.recycled_material_volume = 0
         self.yearly_recycled_material_volume = 0
@@ -136,112 +118,9 @@ class Producers(Agent):
             self.industrial_waste_generated += ind_waste
             self.yearly_industrial_waste_generated = ind_waste
 
-    def update_trust(self):
-        """
-        Update trust of agents in one another within the industrial symbiosis
-        network. Mathematical model adapted from Ghali et al. 2017.
-        """
-        random_social_event = np.asmatrix(
-            np.random.uniform(self.model.social_event_boundaries[0],
-                              self.model.social_event_boundaries[1],
-                              (self.model.num_prod_n_recyc,
-                               self.model.num_prod_n_recyc)))
-        for agent in self.model.schedule.agents:
-            if self.model.num_consumers <= agent.unique_id < \
-                    self.model.num_consumers + self.model.num_prod_n_recyc:
-                agent_j = agent.unique_id - self.model.num_consumers
-                common_neighbors = list(
-                    nx.common_neighbors(self.model.G, self.unique_id,
-                                        agent.unique_id))
-                if common_neighbors:
-                    trust_neighbors = \
-                        [self.model.trust_prod[self.agent_i, i -
-                                               self.model.num_consumers]
-                         for i in common_neighbors]
-                    avg_trust_neighbors = self.social_influencability * (
-                            sum(trust_neighbors) / len(trust_neighbors) -
-                            self.trust_history[self.agent_i, agent_j])
-                # Slight modification from Ghali et al.: if no common contact
-                # there is no element for reputation
-                else:
-                    avg_trust_neighbors = 0
-                trust_ij = self.trust_history[self.agent_i, agent_j] + \
-                    avg_trust_neighbors + random_social_event[
-                               self.agent_i, agent_j]
-                if trust_ij < -1:
-                    trust_ij = -1
-                if trust_ij > 1:
-                    trust_ij = 1
-                self.model.trust_prod[self.agent_i, agent_j] = trust_ij
-        self.trust_history = ((self.trust_history * (self.model.clock + 1)) +
-                              self.model.trust_prod) / (self.model.clock + 2)
-
-    def update_knowledge(self):
-        """
-        Update knowledge of agents about industrial symbiosis. Mathematical
-        model adapted from Ghali et al. 2017.
-        """
-        self.knowledge_learning = np.random.random()
-        knowledge_neighbors = 0
-        neighbors_nodes = self.model.grid.get_neighbors(self.pos,
-                                                        include_center=False)
-        for agent in self.model.grid.get_cell_list_contents(neighbors_nodes):
-            self.social_interactions = np.random.random()
-            agent_j = agent.unique_id - self.model.num_consumers
-            if self.model.trust_prod[self.agent_i, agent_j] >= \
-                    self.model.trust_threshold:
-                knowledge_neighbors += self.social_interactions * (
-                        agent.knowledge - self.knowledge)
-        self.knowledge_t = self.knowledge
-        self.knowledge += self.social_influencability * knowledge_neighbors + \
-            self.knowledge_learning
-        if self.knowledge < 0:
-            self.knowledge = 0
-        if self.knowledge > 1:
-            self.knowledge = 1
-
-    def update_acceptance(self):
-        """
-        Update agents' acceptance of industrial symbiosis. Mathematical model
-        adapted from Ghali et al. 2017.
-        """
-        neighbors_nodes = self.model.grid.get_neighbors(self.pos,
-                                                        include_center=False)
-        neighbors_influence = \
-            len([agent for agent in self.model.grid.get_cell_list_contents(
-                neighbors_nodes) if agent.symbiosis]) / \
-            len([agent for agent in self.model.grid.get_cell_list_contents(
-                neighbors_nodes)])
-        self.acceptance += self.social_influencability * neighbors_influence \
-            + self.self_confidence * (self.knowledge - self.knowledge_t)
-        self.knowledge_t = self.knowledge
-        if self.acceptance < 0:
-            self.acceptance = 0
-        if self.acceptance > 1:
-            self.acceptance = 1
-
-    def update_willingness(self):
-        """
-        Update willingness to form an industrial synergy. Mathematical
-        model adapted from Ghali et al. 2017.
-        """
-        number_synergies = 0
-        neighbors_nodes = self.model.grid.get_neighbors(self.pos,
-                                                        include_center=False)
-        for agent in self.model.grid.get_cell_list_contents(neighbors_nodes):
-            agent_j = agent.unique_id - self.model.num_consumers
-            if self.model.trust_prod[self.agent_i, agent_j] >= \
-                    self.model.trust_threshold and self.knowledge > \
-                    self.model.knowledge_threshold:
-                self.model.willingness[self.agent_i, agent_j] = self.acceptance
-                number_synergies += 1
-        if number_synergies > 0:
-            self.symbiosis = True
-
     def add_installer_recycled_volumes(self):
         """
-        Update willingness to form an industrial synergy. Mathematical
-        model adapted from Ghali et al. 2017.
+        Account recycled.
         """
         tot_recycled = 0
         amount_recyclers = 0
@@ -261,59 +140,24 @@ class Producers(Agent):
         model adapted from Ghali et al. 2017.
         """
         self.yearly_recycled_material_volume = 0
-        if self.model.industrial_symbiosis:
-            neighbors_nodes = \
-                self.model.grid.get_neighbors(self.pos, include_center=False)
-            for agent in \
-                    self.model.grid.get_cell_list_contents(neighbors_nodes):
-                agent_j = agent.unique_id - self.model.num_consumers
-                num_neighbors_producer = 0
-                agent_neighbors = \
-                    agent.model.grid.get_neighbors(agent.pos,
-                                                   include_center=False)
-                for agent2 in self.model.grid.get_cell_list_contents(
-                        agent_neighbors):
-                    if agent2.unique_id >= self.model.num_recyclers + \
-                            self.model.num_consumers and \
-                            agent.recycling_volume > 0 and \
-                            agent2.material_produced == self.material_produced:
-                        num_neighbors_producer += 1
-                if num_neighbors_producer == 0:
-                    num_neighbors_producer = 1
-                recl_vol = \
-                    self.model.product_mass_fractions[self.material_produced]\
-                    * (agent.recycling_volume +
-                       self.model.installer_recycled_amount) / \
-                    num_neighbors_producer * \
-                    self.model.dynamic_product_average_wght \
-                    * self.model.recovery_fractions[self.material_produced]
-                if self.model.established_scd_mkt[self.material_produced]:
-                    self.recycled_material_volume += recl_vol
-                    self.yearly_recycled_material_volume += recl_vol
-                else:
-                    if self.model.willingness[self.agent_i, agent_j] >= \
-                            self.model.willingness_threshold:
-                        self.recycled_material_volume += recl_vol
-                        self.yearly_recycled_material_volume += recl_vol
-        else:
-            num_neighbors_producer = 0
-            tot_recycling_volume = 0
-            for agent in self.model.schedule.agents:
-                if self.model.num_consumers <= agent.unique_id < \
-                        self.model.num_consumers + self.model.num_prod_n_recyc:
-                    if agent.unique_id >= self.model.num_recyclers + \
-                            self.model.num_consumers and \
-                            agent.material_produced == self.material_produced:
-                        num_neighbors_producer += 1
-                    tot_recycling_volume += agent.recycling_volume + \
-                        self.model.installer_recycled_amount
-            recl_vol = \
-                self.model.product_mass_fractions[self.material_produced] \
-                * tot_recycling_volume / num_neighbors_producer * \
-                self.model.dynamic_product_average_wght \
-                * self.model.recovery_fractions[self.material_produced]
-            self.recycled_material_volume += recl_vol
-            self.yearly_recycled_material_volume = recl_vol
+        num_neighbors_producer = 0
+        tot_recycling_volume = 0
+        for agent in self.model.schedule.agents:
+            if self.model.num_consumers <= agent.unique_id < \
+                    self.model.num_consumers + self.model.num_prod_n_recyc:
+                if agent.unique_id >= self.model.num_recyclers + \
+                        self.model.num_consumers and \
+                        agent.material_produced == self.material_produced:
+                    num_neighbors_producer += 1
+                tot_recycling_volume += agent.recycling_volume + \
+                    self.model.installer_recycled_amount
+        recl_vol = \
+            self.model.product_mass_fractions[self.material_produced] \
+            * tot_recycling_volume / num_neighbors_producer * \
+            self.model.dynamic_product_average_wght \
+            * self.model.recovery_fractions[self.material_produced]
+        self.recycled_material_volume += recl_vol
+        self.yearly_recycled_material_volume = recl_vol
         self.recycled_material_value = self.recycled_mat_price * \
             self.recycled_material_volume
 
@@ -355,9 +199,3 @@ class Producers(Agent):
         Evolution of agent at each step
         """
         self.industrial_waste_generation()
-        if not all(self.model.established_scd_mkt.values()) or not \
-                self.model.industrial_symbiosis:
-            self.update_trust()
-            self.update_knowledge()
-            self.update_acceptance()
-            self.update_willingness()

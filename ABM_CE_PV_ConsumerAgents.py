@@ -13,7 +13,7 @@ import random
 from collections import OrderedDict
 from scipy.stats import truncnorm
 import operator
-from math import *
+from math import e
 
 
 class Consumers(Agent):
@@ -154,8 +154,8 @@ class Consumers(Agent):
         self.refurbisher_id = model.num_consumers + model.num_prod_n_recyc + \
             random.randrange(model.num_refurbishers)
         self.landfill_cost = random.choice(landfill_cost)
-        #self.landfill_cost = np.random.triangular(
-         #   landfill_cost[0], landfill_cost[2], landfill_cost[1])
+        # self.landfill_cost = np.random.triangular(
+        #   landfill_cost[0], landfill_cost[2], landfill_cost[1])
         self.init_landfill_cost = self.landfill_cost
 
         # HERE
@@ -163,7 +163,7 @@ class Consumers(Agent):
             hoarding_cost[0], hoarding_cost[2], hoarding_cost[1]) * \
             self.max_storage
 
-        #self.hoarding_cost = \
+        # self.hoarding_cost = \
         #    float(truncnorm((0 - hoarding_cost[0]) /
         #                    hoarding_cost[1],
         #                    (0.02 - hoarding_cost[0]) /
@@ -208,7 +208,6 @@ class Consumers(Agent):
         self.sold_waste = 0
         self.convenience = self.extended_tpb_convenience()
         self.knowledge = self.extended_tpb_knowledge()
-        #print("out func", self.knowledge)
 
     def update_transport_costs(self):
         """
@@ -438,7 +437,7 @@ class Consumers(Agent):
                      pbc_choice, weight_pbc, att_levels, att_level, weight_a):
         """
         Select the decision with highest behavioral intention following the
-        Theory of Planned Bahevior (TPB). Behavioral intention is a function
+        Theory of Planned Behavior (TPB). Behavioral intention is a function
         of the subjective norm, the perceived behavioral control and attitude.
         """
         sn_values = self.tpb_subjective_norm(
@@ -546,7 +545,8 @@ class Consumers(Agent):
             # HERE: self.number_product_EoL + self.product_storage_to_other
             self.update_eol_volumes(self.EoL_pathway, self.number_product_EoL +
                                     self.product_storage_to_other,
-                                    product_type, self.product_storage_to_other)
+                                    product_type,
+                                    self.product_storage_to_other)
         else:
             limited_paths["repair"] = False
             limited_paths["sell"] = False
