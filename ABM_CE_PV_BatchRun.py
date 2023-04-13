@@ -116,7 +116,6 @@ if __name__ == '__main__':
         "imperfect_substitution": 0,
         "epr_business_model": False,
         "recycling_process": {"frelp": False, "asu": False, "hybrid": False},
-        "industrial_symbiosis": False,
         "dynamic_lifetime_model": {
             "Dynamic lifetime": False, "d_lifetime_intercept": 15.9,
             "d_lifetime_reg_coeff": 0.87, "Seed": False, "Year": 5,
