@@ -218,6 +218,9 @@ class ABM_CE_PV(Model):
                  seeding_recyc={"Seeding": False,
                                 "Year": 10, "number_seed": 50,
                                 "discount": 0.35}
+
+                 # TODO: -placeholder- pvice_input_file=PV_ICE_output_file_name
+
                  ):
         """Initiate model.
 
@@ -421,6 +424,10 @@ class ABM_CE_PV(Model):
         # w_sn_eol = w_sn_eol * calibration_n_sensitivity_5
         np.random.seed(self.seed)
         random.seed(self.seed)
+
+        # TODO: -placeholder- self.pvice_inputs = pd.read_csv(
+        # TODO ctnd |                              PV_ICE_output_file_name)
+
         self.num_consumers = num_consumers
         self.consumers_node_degree = consumers_node_degree
         self.consumers_network_type = consumers_network_type
