@@ -94,6 +94,7 @@ import numpy as np
 from math import e
 import pandas as pd
 import random
+import PV_ICE
 
 
 class ABM_CE_PV(Model):
@@ -428,6 +429,55 @@ class ABM_CE_PV(Model):
         # TODO: -placeholder- self.pvice_inputs = pd.read_csv(
         # TODO ctnd |                              PV_ICE_output_file_name)
 
+
+        
+        # Start writing PV_ICE
+
+        import os
+        from pathlib import Path
+
+        testfolder = str(Path().resolve().parent.parent / 'Desktop'/ 'ABSICE'/'TEMP')
+
+        if not os.path.exists(testfolder):
+            os.makedirs(testfolder)
+
+        print ("\nYour simulation will be stored in %s" % testfolder)
+
+        r1 = PV_ICE.Simulation(name='Simulation1', path=testfolder)
+
+        r1.createScenario(name='standard', massmodulefile=r'../baselines/baseline_modules_mass_US.csv')
+        r1.scenario['standard'].addMaterial('glass', massmatfile=r'../baselines/baseline_material_mass_glass.csv' )
+        r1.scenario['standard'].addMaterial('silicon', massmatfile=r'../baselines/baseline_material_mass_silicon.csv' )
+        print("\nfirst check point")
+        print("\nVersion: ", PV_ICE.__version__)
+
+        print('\nFirst result mass flow', r1.calculateMassFlow())
+        df1 = r1.scenario['standard'].dataOut_m
+        print("Keys", df1.keys())
+        print("\nFirst df", df1.head())
+        df1.to_csv("df1_dataout.csv", index=False)
+
+        df2 = r1.scenario['standard'].material['silicon'].matdataOut_m
+        df2.to_csv("df2_matdataout.csv", index=False)
+
+        print("\nSecond ", df2.head())
+
+        print("\nKeys df2", df2.keys())
+
+
+
+
+
+        #print("\n2d result: ", r1.saveSimulation() )
+
+
+        # # what files are created, use created files
+        #self.pv_INPUTS = pd.read....
+        # # print(PV_INPUTS.head())
+        
+        # #
+
+        
         self.num_consumers = num_consumers
         self.consumers_node_degree = consumers_node_degree
         self.consumers_network_type = consumers_network_type
