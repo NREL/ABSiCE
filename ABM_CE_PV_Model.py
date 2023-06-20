@@ -95,7 +95,9 @@ from math import e
 import pandas as pd
 import random
 import PV_ICE
+import os
 
+# os.chdir('/Users/aharouna')
 
 class ABM_CE_PV(Model):
     def __init__(self,
@@ -221,6 +223,9 @@ class ABM_CE_PV(Model):
                                 "discount": 0.35}
 
                  # TODO: -placeholder- pvice_input_file=PV_ICE_output_file_name
+                #  gba_file_path = "Users/aharouna/gba_data.xlsx" ,
+                #  all_gba = pd.read_excel(gba_file_path)  #importing all grid balancing areas in an excel file
+
 
                  ):
         """Initiate model.
@@ -436,18 +441,23 @@ class ABM_CE_PV(Model):
         import os
         from pathlib import Path
 
+        print ("\nThis is the current path %s" % str(Path().resolve().parent.parent))
+
         testfolder = str(Path().resolve().parent.parent / 'Desktop'/ 'ABSICE'/'TEMP')
 
         if not os.path.exists(testfolder):
             os.makedirs(testfolder)
 
-        print ("\nYour simulation will be stored in %s" % testfolder)
+        print ("\nYour simulation will be stored 2 %s" % str(Path().resolve().parent.parent))
 
         r1 = PV_ICE.Simulation(name='Simulation1', path=testfolder)
 
+        print ("\nYour simulation will be stored 3 %s" % str(Path().resolve().parent.parent))
+        print ("\nYour simulation will be stored 4 %s" % testfolder)
+
         r1.createScenario(name='standard', massmodulefile=r'../baselines/baseline_modules_mass_US.csv')
         r1.scenario['standard'].addMaterial('glass', massmatfile=r'../baselines/baseline_material_mass_glass.csv' )
-        r1.scenario['standard'].addMaterial('silicon', massmatfile=r'../baselines/baseline_material_mass_silicon.csv' )
+        r1.scenario['standard'].addMaterial('silicon', massmatfile=r'../baselines/baseline_material_mass_silicon.csv')
         print("\nfirst check point")
         print("\nVersion: ", PV_ICE.__version__)
 
@@ -464,9 +474,13 @@ class ABM_CE_PV(Model):
 
         print("\nKeys df2", df2.keys())
 
+        os.chdir('Users/aharouna')
+        # print(os.path.abspath(os.curdir))
 
+        print ("\nThis is the current path")
 
-
+        # testfold = "/Users/aharouna"
+        # rX = PV_ICE.Simulation(name='Simulation1', path=testfold) #to temporarily change path
 
         #print("\n2d result: ", r1.saveSimulation() )
 
@@ -536,6 +550,10 @@ class ABM_CE_PV(Model):
         self.extended_tpb = extended_tpb
         self.seeding = seeding
         self.seeding_recyc = seeding_recyc
+
+        self.all_gba = pd.read_excel(gba_file_path)  #importing all grid balancing areas in an excel file
+
+
         self.cost_seeding = 0
         self.product_lifetime = product_lifetime
         self.d_product_lifetimes = []
