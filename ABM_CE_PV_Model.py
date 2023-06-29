@@ -95,6 +95,8 @@ from math import e
 import pandas as pd
 import random
 import PV_ICE
+import os
+from pathlib import Path
 
 
 class ABM_CE_PV(Model):
@@ -105,7 +107,7 @@ class ABM_CE_PV(Model):
                  calibration_n_sensitivity_3=1,
                  calibration_n_sensitivity_4=1,
                  calibration_n_sensitivity_5=1,
-                 num_consumers=1000,
+                 num_consumers=1000,  #1000 originally
                  consumers_node_degree=10,
                  consumers_network_type="small-world",
                  rewiring_prob=0.1,
@@ -218,11 +220,48 @@ class ABM_CE_PV(Model):
                           "Year": 10, "number_seed": 50},
                  seeding_recyc={"Seeding": False,
                                 "Year": 10, "number_seed": 50,
-                                "discount": 0.35}
+                                "discount": 0.35},
+                # self.pv_ice_yearly_waste = 0
 
                  # TODO: -placeholder- pvice_input_file=PV_ICE_output_file_name
 
-                 ):
+
+       
+
+
+                # self.gba_file = gba_file
+                # gba_file = "path"
+                # self.gba_data = pd.read.csv(gba_file)
+                # num_rows = len(gba_file)
+                # # Calculate the number of agents per row
+                # num_agents_per_row = num_consumers // num_rows
+        
+                # # Distribute agents evenly to each row
+                # agents_per_row = [num_agents_per_row] * num_rows
+        
+                # # Distribute remaining agents if any
+                # remaining_agents = num_consumers % num_rows
+                # for i in range(remaining_agents):
+                #     agents_per_row[i] += 1
+        
+                # # Create agents and assign them to rows
+                # start_index = 0
+                # for i, agents in enumerate(agents_per_row):
+                #     end_index = start_index + agents
+                #     row_agents = self.data.iloc[start_index:end_index]
+            
+                #     # Create agents for the row and assign them
+                #     for j, agent_row in row_agents.iterrows():
+                #     agent = {
+                #         'AgentID': j,
+                #         'PCA': agent_row['PCA'],
+                #         'State': agent_row['State']
+                #     }
+
+#have to use self.unique ID
+#get 
+
+                     ):
         """Initiate model.
 
         Args:
@@ -433,10 +472,10 @@ class ABM_CE_PV(Model):
         
         # Start writing PV_ICE
 
-        import os
-        from pathlib import Path
+        print("\nVersion: ", PV_ICE.__version__)
 
         testfolder = str(Path().resolve().parent.parent / 'Desktop'/ 'ABSICE'/'TEMP')
+        testfolder = "/Users/aharouna/Desktop/ABSICE/TEMP"
 
         if not os.path.exists(testfolder):
             os.makedirs(testfolder)
@@ -445,29 +484,36 @@ class ABM_CE_PV(Model):
 
         r1 = PV_ICE.Simulation(name='Simulation1', path=testfolder)
 
-        r1.createScenario(name='standard', massmodulefile=r'../baselines/baseline_modules_mass_US.csv')
-        r1.scenario['standard'].addMaterial('glass', massmatfile=r'../baselines/baseline_material_mass_glass.csv' )
-        r1.scenario['standard'].addMaterial('silicon', massmatfile=r'../baselines/baseline_material_mass_silicon.csv' )
+
+        # print('\n this is directx:', os.listdir())
+
+        r1.createScenario(name='standard', massmodulefile=r'/Users/aharouna/Desktop/ABSiCE/baselines/baseline_modules_mass_US.csv')
+
+        print("\nfirst check") #I moved the baseline folder into site paclages /Users/aharouna/anaconda3/lib/python3.10/site-packages/PV_ICE/baselines
+
+        r1.scenario['standard'].addMaterial('glass', massmatfile=r'/Users/aharouna/Desktop/ABSiCE/baselines/baseline_material_mass_glass.csv' )
+
+        print("\nsec check")
+
+        r1.scenario['standard'].addMaterial('silicon', massmatfile=r'/Users/aharouna/Desktop/ABSiCE//baselines/baseline_material_mass_silicon.csv' )
         print("\nfirst check point")
         print("\nVersion: ", PV_ICE.__version__)
 
-        print('\nFirst result mass flow', r1.calculateMassFlow())
-        df1 = r1.scenario['standard'].dataOut_m
-        print("Keys", df1.keys())
-        print("\nFirst df", df1.head())
-        df1.to_csv("df1_dataout.csv", index=False)
+        # print('\nFirst result mass flow', r1.calculateMassFlow())
+        r1.calculateMassFlow()
+        self.df1 = r1.scenario['standard'].dataOut_m
+        print("Keys", self.df1.keys())
+        print("\nFirst df", self.df1.head())
+        self.df1.to_csv("df1_dataout1.csv", index=False)
 
-        df2 = r1.scenario['standard'].material['silicon'].matdataOut_m
-        df2.to_csv("df2_matdataout.csv", index=False)
+        # self.df2 = r1.scenario['standard'].material['silicon'].matdataIn_m
+        self.df2 = r1.scenario['standard'].material['silicon'].matdataOut_m
+        self.df2.to_csv("df2_matdataout.csv", index=False)
 
-        print("\nSecond ", df2.head())
+        print("\nSecond ", self.df2.head())
 
-        print("\nKeys df2", df2.keys())
-
-
-
-
-
+        # print("\nKeys df2", self.df2.keys())
+    
         #print("\n2d result: ", r1.saveSimulation() )
 
 
@@ -477,7 +523,16 @@ class ABM_CE_PV(Model):
         
         # #
 
-        
+        print('\n this is directx:', os.listdir())
+        file_path = "../data_input/gba_data.xlsx"
+        self.data = pd.read_excel('/Users/aharouna/Desktop/ABSiCE/data_input/gba_data.xlsx')
+        print(self.data)
+        self.agents = self.create_agents(num_consumers)
+
+        #print(self.agents)
+
+        self.pv_ice_yearly_waste = 0  ###
+    
         self.num_consumers = num_consumers
         self.consumers_node_degree = consumers_node_degree
         self.consumers_network_type = consumers_network_type
@@ -585,14 +640,14 @@ class ABM_CE_PV(Model):
                            'Maryland', 'Massachusetts', 'Vermont',
                            'New Hampshire', 'New Jersey', 'Connecticut',
                            'Delaware', 'Rhode Island']
-        self.states = pd.read_csv("StatesAdjacencyMatrix.csv").to_numpy()
+        self.states = pd.read_csv("../StatesAdjacencyMatrix.csv").to_numpy()
         # Compute distances
         self.mean_distance_within_state = np.nanmean(
             np.where(self.states != 0, self.states, np.nan)) / 2
         self.states_graph = nx.from_numpy_matrix(self.states)
         nodes_states_dic = \
             dict(zip(list(self.states_graph.nodes),
-                     list(pd.read_csv("StatesAdjacencyMatrix.csv"))))
+                     list(pd.read_csv("../StatesAdjacencyMatrix.csv"))))
         self.states_graph = nx.relabel_nodes(self.states_graph,
                                              nodes_states_dic)
         self.recycling_states = recycling_states
@@ -774,6 +829,60 @@ class ABM_CE_PV(Model):
         self.datacollector = DataCollector(
             model_reporters=ABM_CE_PV_model_reporters,
             agent_reporters=ABM_CE_PV_agent_reporters)
+    
+
+    # ## New edits
+    def pv_ice_waste_calculation(self, clock, pv_ice_outputs):
+        self.clock = clock
+        mat_Total_EOL_Landfilled = pv_ice_outputs.at[self.clock, 'mat_Total_EOL_Landfilled']
+        mat_EOL_Recycled_HQ_into_MFG = pv_ice_outputs.at[self.clock, 'mat_EOL_Recycled_HQ_into_MFG']
+        mat_recycled_yield = pv_ice_outputs.at[self.clock, 'mat_recycled_yield']
+        mat_recycled_all = pv_ice_outputs.at[self.clock, 'mat_recycled_all']
+        mat_reMFG_2_recycle = pv_ice_outputs.at[self.clock, 'mat_reMFG_2_recycle']
+        mat_reMFG = pv_ice_outputs.at[self.clock, 'mat_reMFG']
+        mat_PG2_stored = pv_ice_outputs.at[self.clock, 'mat_PG2_stored']
+
+        self.pv_ice_yearly_waste = (
+            mat_Total_EOL_Landfilled +
+            mat_EOL_Recycled_HQ_into_MFG +
+            mat_recycled_yield +
+            mat_recycled_all +
+            mat_reMFG_2_recycle +
+            mat_reMFG +
+            mat_PG2_stored
+        )
+        print("\n\ntotal:", self.pv_ice_yearly_waste )
+        
+
+    def create_agents(self, num_consumers):
+        pca_column = self.data['PCA']
+        unique_pca = pca_column.unique()
+        total_unique_pca = len(unique_pca)
+       
+        # Calculate the number of agents per unique PCA value
+        agents_per_pca = num_consumers // total_unique_pca
+       
+        # Distribute agents evenly to each unique PCA value
+        agents_count_per_pca = [agents_per_pca] * total_unique_pca
+       
+        # Distribute remaining agents if any
+        remaining_agents = num_consumers % total_unique_pca
+        for i in range(remaining_agents):
+            agents_count_per_pca[i] += 1
+       
+        agents = {}
+        agent_id = 0
+        for i, pca_value in enumerate(unique_pca):
+            state_values = self.data.loc[self.data['PCA'] == pca_value, 'State']
+            agents_count = agents_count_per_pca[i]
+           
+            for j in range(agents_count):
+                # agent_id = self.unique_id()
+                state = state_values.sample().iloc[0]
+                agents[agent_id] = (pca_value, state)
+                agent_id +=1
+       
+        return agents
 
     def shortest_paths(self, target_states, distances_to_target):
         """
@@ -1102,3 +1211,7 @@ class ABM_CE_PV(Model):
         self.average_price_per_function_model()
         self.schedule.step()
         self.clock = self.clock + 1
+
+        # Calculate yearly waste using pv_ice_waste_calculation method - pass pv_output
+        self.pv_ice_yearly_waste = 0
+        self.pv_ice_waste_calculation(self.clock, self.df2)

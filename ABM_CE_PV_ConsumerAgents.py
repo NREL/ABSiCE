@@ -209,6 +209,10 @@ class Consumers(Agent):
         self.convenience = self.extended_tpb_convenience()
         self.knowledge = self.extended_tpb_knowledge()
 
+        ##TODO call funtion from m
+        self.pca = self.model.agents[self.unique_id][0]
+        self.state = self.model.agents[self.unique_id][1]
+
     def update_transport_costs(self):
         """
         Update transportation costs according to the (evolving) mass of waste.
