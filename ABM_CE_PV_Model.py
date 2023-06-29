@@ -99,6 +99,8 @@ import os
 from pathlib import Path
 
 
+# os.chdir('/Users/aharouna')
+
 class ABM_CE_PV(Model):
     def __init__(self,
                  seed=None,
@@ -224,6 +226,9 @@ class ABM_CE_PV(Model):
                 # self.pv_ice_yearly_waste = 0
 
                  # TODO: -placeholder- pvice_input_file=PV_ICE_output_file_name
+                #  gba_file_path = "Users/aharouna/gba_data.xlsx" ,
+                #  all_gba = pd.read_excel(gba_file_path)  #importing all grid balancing areas in an excel file
+
 
 
        
@@ -474,16 +479,17 @@ class ABM_CE_PV(Model):
 
         print("\nVersion: ", PV_ICE.__version__)
 
+        print ("\nThis is the current path %s" % str(Path().resolve().parent.parent))
+
         testfolder = str(Path().resolve().parent.parent / 'Desktop'/ 'ABSICE'/'TEMP')
         testfolder = "/Users/aharouna/Desktop/ABSICE/TEMP"
 
         if not os.path.exists(testfolder):
             os.makedirs(testfolder)
 
-        print ("\nYour simulation will be stored in %s" % testfolder)
+        print ("\nYour simulation will be stored 2 %s" % str(Path().resolve().parent.parent))
 
         r1 = PV_ICE.Simulation(name='Simulation1', path=testfolder)
-
 
         # print('\n this is directx:', os.listdir())
 
@@ -591,6 +597,10 @@ class ABM_CE_PV(Model):
         self.extended_tpb = extended_tpb
         self.seeding = seeding
         self.seeding_recyc = seeding_recyc
+
+        self.all_gba = pd.read_excel(gba_file_path)  #importing all grid balancing areas in an excel file
+
+
         self.cost_seeding = 0
         self.product_lifetime = product_lifetime
         self.d_product_lifetimes = []
