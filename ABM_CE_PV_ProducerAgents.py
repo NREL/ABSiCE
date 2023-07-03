@@ -151,11 +151,24 @@ class Producers(Agent):
                     num_neighbors_producer += 1
                 tot_recycling_volume += agent.recycling_volume + \
                     self.model.installer_recycled_amount
+
+        # ! TODO: replace code below with PV_ICE material waste value - START
+
+        # ! Multiply self.pv_ice_yearly_waste by the ratio of waste (in W)
+        # ! between what is recycled and the total amount of waste:
+        # ! tot_recycling_volume / self.model.total_waste
+        # ! use the material value from PV_ICE corresponding with the material
+        # ! type of the producer (self.material_produced). Replace recl_vol
+        # ! with this new value.
+
         recl_vol = \
             self.model.product_mass_fractions[self.material_produced] \
             * tot_recycling_volume / num_neighbors_producer * \
             self.model.dynamic_product_average_wght \
             * self.model.recovery_fractions[self.material_produced]
+
+        # ! TODO: replace code below with PV_ICE material waste value - STOP
+
         self.recycled_material_volume += recl_vol
         self.yearly_recycled_material_volume = recl_vol
         self.recycled_material_value = self.recycled_mat_price * \
