@@ -161,6 +161,19 @@ class Producers(Agent):
         # ! type of the producer (self.material_produced). Replace recl_vol
         # ! with this new value.
 
+        # we probably gonna need a dictionary created in the model file,
+        # for instance:
+        # yearly_material_waste = {'silicon': x, 'glass':y, ...}
+        # (for all pathways in PV_ICE, the total waste)
+        # assign a string value to self.material_produced corresponding to
+        # keys. (e.g, self.material_produced = 'silicon')
+        # (in kg) multiplied by the amount that's recycled:
+        # tot_recycling_volume / self.model.total_waste
+        # basically we gonna have:
+        # recl_vol = self.model.yearly_material_waste[
+        #             'self.material_produced'] * (tot_recycling_volume /
+        #                                          self.model.total_waste)
+
         recl_vol = \
             self.model.product_mass_fractions[self.material_produced] \
             * tot_recycling_volume / num_neighbors_producer * \
