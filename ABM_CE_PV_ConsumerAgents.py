@@ -319,6 +319,16 @@ class Consumers(Agent):
         # ! Create a new column in the data frame that has the cumulative
         # ! capacities (not subtracting waste)?
 
+        # at t=0
+        # previous_year = x
+        # current_year = Installed_Capacity_[W] [W] + \
+        #                   Yearly_Sum_Power_disposed [W]
+        # additional_cap = current_year - previous_year
+        # previous_year = current_year
+
+        #                              2000, 2001, 2002, ..., 2020
+        # self.model.initial_capacity = [5, 5, 5, 5, 52, 67, 45, 120] # MWp
+
         additional_capacity = sum(self.number_product_hard_copy) * \
             self.product_growth
         self.number_product_hard_copy.append(additional_capacity)
@@ -363,6 +373,10 @@ class Consumers(Agent):
         # ! self.used_waste proportional to the amount of used / new panels for
         # ! each year
 
+        # sel.waste = df1.subset(row_index_for_year0, row_index_for_year_now,
+        #                       column1, column1).to_list()
+        # sum the first five years for PV_ICE
+        
         self.waste = self.model.waste_generation(
             self.model.d_product_lifetimes, self.failure_rate_alpha,
             self.new_products)
@@ -625,6 +639,18 @@ class Consumers(Agent):
         # ! self.mass_per_function_model(self.waste) by a list comprehension
         # ! applying each kg/W from PV_ICE to each value in self.waste (and
         # ! used waste). Use the average of the list for storage
+
+        # yearly_converting_factor_list = [
+        #               pv_ice_waste_in_kg / pv_ice_waste_in_w, ..., year_n]
+        # average_converting_factor = \
+        # [yearly_pv_ice_waste_in_kg / pv_ice_waste_in_w, ..., year_n].mean()
+        # # in kg/W
+        # then instead of using:
+        # self.mass_per_function_model(self.waste) +
+        # self.weighted_average_mass_watt * storage we use:
+        # self.number_new_prod_repaired = sum([x * y for x in
+        # yearly_converting_factor_list and y in self.waste]) +
+        # average_converting_factor * storage
 
         if eol_pathway == "repair":
             self.number_product_repaired += managed_waste
