@@ -474,7 +474,7 @@ class ABM_CE_PV(Model):
         # TODO ctnd |                              PV_ICE_output_file_name)
 
 
-        
+
         # Start writing PV_ICE
 
         print("\nVersion: ", PV_ICE.__version__)
@@ -506,6 +506,9 @@ class ABM_CE_PV(Model):
         print("\nVersion: ", PV_ICE.__version__)
 
         # print('\nFirst result mass flow', r1.calculateMassFlow())
+  
+        self.df0 = r1.scenario['standard'].dataIn_m
+        self.df0.to_csv("df1_dataout.csv", index=False)
         r1.calculateMassFlow()
         self.df1 = r1.scenario['standard'].dataOut_m
         print("Keys", self.df1.keys())
@@ -519,14 +522,14 @@ class ABM_CE_PV(Model):
         print("\nSecond ", self.df2.head())
 
         # print("\nKeys df2", self.df2.keys())
-    
+
         #print("\n2d result: ", r1.saveSimulation() )
 
 
         # # what files are created, use created files
         #self.pv_INPUTS = pd.read....
         # # print(PV_INPUTS.head())
-        
+
         # #
 
         print('\n this is directx:', os.listdir())
@@ -538,7 +541,7 @@ class ABM_CE_PV(Model):
         #print(self.agents)
 
         self.pv_ice_yearly_waste = 0  ###
-    
+
         self.num_consumers = num_consumers
         self.consumers_node_degree = consumers_node_degree
         self.consumers_network_type = consumers_network_type
@@ -551,7 +554,14 @@ class ABM_CE_PV(Model):
         self.init_eol_rate = init_eol_rate
         self.init_purchase_choice = init_purchase_choice
         self.clock = 0
-        self.total_number_product = total_number_product
+
+        # ! Initialize model with PV_ICE historical installed cap
+        # self.total_number_product = total_number_product
+        subset_df_init_cap = self.df0[self.df0['year'] < 2020]
+        subset_df_init_cap = subset_df_init_cap[
+            'new_Installed_Capacity_[MW]'].tolist()
+        self.total_number_product = subset_df_init_cap
+
         self.copy_total_number_product = self.total_number_product.copy()
         self.mass_to_function_reg_coeff = mass_to_function_reg_coeff
         self.iteration = 0
@@ -561,7 +571,10 @@ class ABM_CE_PV(Model):
         self.all_EoL_pathways = all_EoL_pathways
         self.purchase_options = purchase_choices
         self.avg_failure_rate = failure_rate_alpha
-        self.original_num_prod = total_number_product
+
+        # ! Changed from total_number_product to the class value (which is
+        # ! PV_ICE based)
+        self.original_num_prod = self.total_number_product
         self.avg_lifetime = product_lifetime
         self.fsthand_mkt_pric = fsthand_mkt_pric
         self.fsthand_mkt_pric_reg_param = fsthand_mkt_pric_reg_param

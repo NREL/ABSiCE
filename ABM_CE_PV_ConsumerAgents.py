@@ -209,7 +209,7 @@ class Consumers(Agent):
         self.convenience = self.extended_tpb_convenience()
         self.knowledge = self.extended_tpb_knowledge()
 
-        # ! This increases model resolution
+        # ! This increases model resolution nothing to do here for now
         self.pca = self.model.agents[self.unique_id][0]
         self.state = self.model.agents[self.unique_id][1]
 
@@ -329,8 +329,15 @@ class Consumers(Agent):
         #                              2000, 2001, 2002, ..., 2020
         # self.model.initial_capacity = [5, 5, 5, 5, 52, 67, 45, 120] # MWp
 
-        additional_capacity = sum(self.number_product_hard_copy) * \
-            self.product_growth
+        # ! Scratch all above: the easiest is to use PV_ICE inputs:
+        subset_df_init_cap = self.model.df0[
+            self.model.df0['year'] == 2020 + self.model.clock]
+        additional_capacity = subset_df_init_cap[
+            'new_Installed_Capacity_[MW]'].iloc[0]
+        # ! Old code
+        # additional_capacity = sum(self.number_product_hard_copy) * \
+        #    self.product_growth
+
         self.number_product_hard_copy.append(additional_capacity)
         self.number_product.append(self.number_product_hard_copy[-1])
         self.new_products.append(self.number_product[-1])
@@ -377,9 +384,19 @@ class Consumers(Agent):
         #                       column1, column1).to_list()
         # sum the first five years for PV_ICE
         
-        self.waste = self.model.waste_generation(
-            self.model.d_product_lifetimes, self.failure_rate_alpha,
-            self.new_products)
+        # ! Implementation is below. Left to do: check with Silvana that
+        # ! Yearly_Sum_Power_atEOL is the total waste generated in a year
+        # ! expressed in W
+        subset_df_waste = self.model.df1[
+            self.model.df1['year'] < (2020 + self.model.clock)]
+        self.waste = subset_df_waste[
+            'Yearly_Sum_Power_atEOL'].tolist()
+        # ! Old code
+        # self.waste = self.model.waste_generation(
+        #    self.model.d_product_lifetimes, self.failure_rate_alpha,
+        #    self.new_products)
+        
+        # ! TODO: still left to do: modify self.used_waste
         self.used_waste = self.model.waste_generation(
             [x * self.used_product_substitution_rate for x in
              self.model.d_product_lifetimes],
