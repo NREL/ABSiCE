@@ -209,7 +209,7 @@ class Consumers(Agent):
         self.convenience = self.extended_tpb_convenience()
         self.knowledge = self.extended_tpb_knowledge()
 
-        ##TODO call funtion from m
+        # ! This increases model resolution nothing to do here for now
         self.pca = self.model.agents[self.unique_id][0]
         self.state = self.model.agents[self.unique_id][1]
 
@@ -304,14 +304,51 @@ class Consumers(Agent):
         Update stock according to product growth and product failure
         Product failure is modeled with the Weibull function
         """
-        additional_capacity = sum(self.number_product_hard_copy) * \
-            self.product_growth
+
+        # ! TODO: replace code below with PV_ICE installed cap value - START
+
+        # ! use the "Installed_Capacity_[W] [W] : float" output found in
+        # ! https://pv-ice.readthedocs.io/en/latest/data.html#pv-ice-outputs
+        # ! We should check what this variable means. Is it with or without
+        # ! waste? Looks like it should be minus the waste. If it is minus the
+        # ! waste we should add waste (Yearly_Sum_Power_disposed [W] : float)
+        # ! to get cumulative installed capacity. Then subtracting previous
+        # ! year should give you the value for additional_capacity.
+        # ! Only "additional_capacity" should be changed below.
+        # ! Should we just take the list from pv_ice data frame directly?
+        # ! Create a new column in the data frame that has the cumulative
+        # ! capacities (not subtracting waste)?
+
+        # at t=0
+        # previous_year = x
+        # current_year = Installed_Capacity_[W] [W] + \
+        #                   Yearly_Sum_Power_disposed [W]
+        # additional_cap = current_year - previous_year
+        # previous_year = current_year
+
+        #                              2000, 2001, 2002, ..., 2020
+        # self.model.initial_capacity = [5, 5, 5, 5, 52, 67, 45, 120] # MWp
+
+        # ! Scratch all above: the easiest is to use PV_ICE inputs:
+        subset_df_init_cap = self.model.df0[
+            self.model.df0['year'] == 2020 + self.model.clock]
+        additional_capacity = subset_df_init_cap[
+            'new_Installed_Capacity_[MW]'].iloc[0]
+        # ! Old code
+        # additional_capacity = sum(self.number_product_hard_copy) * \
+        #    self.product_growth
+
         self.number_product_hard_copy.append(additional_capacity)
         self.number_product.append(self.number_product_hard_copy[-1])
         self.new_products.append(self.number_product[-1])
         self.used_products.append(0)
         self.new_products_hard_copy.append(self.number_product[-1])
         self.used_products_hard_copy.append(0)
+
+        # ! TODO: how to deal with used capacity and new capacity?
+        # ! Nothing should be changed... The code below determines the share
+        # ! of used vs new product based on new capacity and agents' decisions
+
         if self.purchase_choice == "used":
             product_substituted = (1 - self.model.imperfect_substitution) * \
                                   self.model.sold_repaired_waste / \
@@ -326,13 +363,47 @@ class Consumers(Agent):
                 self.new_products[-1] = 0
                 self.new_products_hard_copy[-1] = 0
                 self.model.sold_repaired_waste -= product_substituted
-        self.waste = self.model.waste_generation(
-            self.model.d_product_lifetimes, self.failure_rate_alpha,
-            self.new_products)
+
+        # ! TODO: replace code below with PV_ICE installed cap value - STOP
+
+        # ! TODO: replace code below with PV_ICE waste value - START
+
+        # ! use the "Yearly_Sum_Power_disposed [W] : float" output found in
+        # ! https://pv-ice.readthedocs.io/en/latest/data.html#pv-ice-outputs
+        # ! self.waste and self.used_waste should be changed. A list the size
+        # ! of self.number_product should be created from the
+        # ! "Yearly_Sum_Power_disposed [W] : float" column in pv_ice output df
+        # ! if self.number_product is longer (goes back further in time than
+        # ! 1995) add zeros. If the list is shorter (does not go back as far)
+        # ! add the additional years to make a single first year that
+        # ! correspond to the first element (year) of self.number_product
+        # ! self.used_waste proportional to the amount of used / new panels for
+        # ! each year
+
+        # sel.waste = df1.subset(row_index_for_year0, row_index_for_year_now,
+        #                       column1, column1).to_list()
+        # sum the first five years for PV_ICE
+        
+        # ! Implementation is below. Left to do: check with Silvana that
+        # ! Yearly_Sum_Power_atEOL is the total waste generated in a year
+        # ! expressed in W
+        subset_df_waste = self.model.df1[
+            self.model.df1['year'] < (2020 + self.model.clock)]
+        self.waste = subset_df_waste[
+            'Yearly_Sum_Power_atEOL'].tolist()
+        # ! Old code
+        # self.waste = self.model.waste_generation(
+        #    self.model.d_product_lifetimes, self.failure_rate_alpha,
+        #    self.new_products)
+        
+        # ! TODO: still left to do: modify self.used_waste
         self.used_waste = self.model.waste_generation(
             [x * self.used_product_substitution_rate for x in
              self.model.d_product_lifetimes],
             self.model.avg_failure_rate[0], self.used_products)
+
+        # ! TODO: replace code below with PV_ICE waste value - STOP
+
         self.number_product_EoL = sum(self.waste)
         self.number_used_product_EoL = sum(self.used_waste)
         self.tot_prod_EoL = self.number_product_EoL + \
@@ -576,6 +647,28 @@ class Consumers(Agent):
         end-of-life costs do not decrease with the decrease in
         mass/functional_unit.
         """
+
+        # ! TODO: replace code below with PV_ICE waste value - START
+
+        # ! Use PV_ICE variables to come up with a kg / W number for each year
+        # ! for PV panels (if needed use PV_ICE inputs rather than outputs).
+        # ! put the numbers in a list of kg/W and replace
+        # ! self.mass_per_function_model(self.waste) by a list comprehension
+        # ! applying each kg/W from PV_ICE to each value in self.waste (and
+        # ! used waste). Use the average of the list for storage
+
+        # yearly_converting_factor_list = [
+        #               pv_ice_waste_in_kg / pv_ice_waste_in_w, ..., year_n]
+        # average_converting_factor = \
+        # [yearly_pv_ice_waste_in_kg / pv_ice_waste_in_w, ..., year_n].mean()
+        # # in kg/W
+        # then instead of using:
+        # self.mass_per_function_model(self.waste) +
+        # self.weighted_average_mass_watt * storage we use:
+        # self.number_new_prod_repaired = sum([x * y for x in
+        # yearly_converting_factor_list and y in self.waste]) +
+        # average_converting_factor * storage
+
         if eol_pathway == "repair":
             self.number_product_repaired += managed_waste
             self.consumer_costs += managed_waste * \
@@ -631,6 +724,8 @@ class Consumers(Agent):
             else:
                 self.number_used_prod_hoarded += \
                     self.mass_per_function_model(self.used_waste)
+
+        # ! TODO: replace code below with PV_ICE waste value - STOP
 
     def update_yearly_recycled_waste(self, installer):
         """

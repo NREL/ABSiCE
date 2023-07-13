@@ -100,6 +100,8 @@ import csv
 from pathlib import Path
 
 
+# os.chdir('/Users/aharouna')
+
 class ABM_CE_PV(Model):
     def __init__(self,
                  seed=None,
@@ -225,6 +227,9 @@ class ABM_CE_PV(Model):
                 # self.pv_ice_yearly_waste = 0
 
                  # TODO: -placeholder- pvice_input_file=PV_ICE_output_file_name
+                #  gba_file_path = "Users/aharouna/gba_data.xlsx" ,
+                #  all_gba = pd.read_excel(gba_file_path)  #importing all grid balancing areas in an excel file
+
 
 
        
@@ -469,8 +474,7 @@ class ABM_CE_PV(Model):
 
         # TODO: -placeholder- self.pvice_inputs = pd.read_csv(
         # TODO ctnd |                              PV_ICE_output_file_name)
-
-
+        
         
         # reedsFile = str(Path().resolve().parent.parent.parent.parent / 'December Core Scenarios ReEDS Outputs Solar Futures v3a.xlsx')
         # # print ("Input file is stored in %s" % reedsFile)
@@ -680,6 +684,9 @@ class ABM_CE_PV(Model):
         r1.createScenario(name='standard', massmodulefile=r'./baselines/baseline_modules_mass_US.csv')
         r1.scenario['standard'].addMaterial('glass', massmatfile=r'./baselines/baseline_material_mass_glass.csv' )
         r1.scenario['standard'].addMaterial('silicon', massmatfile=r'./baselines/baseline_material_mass_silicon.csv' )
+  
+#         self.df0 = r1.scenario['standard'].dataIn_m
+#         self.df0.to_csv("df1_dataout.csv", index=False)
 
         r1.calculateMassFlow()
         self.df1 = r1.scenario['standard'].dataOut_m
@@ -700,9 +707,10 @@ class ABM_CE_PV(Model):
         # print(PV_INPUTS.head())
         
         self.data = pd.read_excel(reedsFile) #this is the gba data , same used above for masscalculations
+
         self.agents = self.create_agents(num_consumers)
         self.pv_ice_yearly_waste = 0  ###
-    
+
         self.num_consumers = num_consumers
         self.consumers_node_degree = consumers_node_degree
         self.consumers_network_type = consumers_network_type
@@ -715,7 +723,14 @@ class ABM_CE_PV(Model):
         self.init_eol_rate = init_eol_rate
         self.init_purchase_choice = init_purchase_choice
         self.clock = 0
-        self.total_number_product = total_number_product
+
+        # ! Initialize model with PV_ICE historical installed cap
+        # self.total_number_product = total_number_product
+        subset_df_init_cap = self.df0[self.df0['year'] < 2020]
+        subset_df_init_cap = subset_df_init_cap[
+            'new_Installed_Capacity_[MW]'].tolist()
+        self.total_number_product = subset_df_init_cap
+
         self.copy_total_number_product = self.total_number_product.copy()
         self.mass_to_function_reg_coeff = mass_to_function_reg_coeff
         self.iteration = 0
@@ -725,7 +740,10 @@ class ABM_CE_PV(Model):
         self.all_EoL_pathways = all_EoL_pathways
         self.purchase_options = purchase_choices
         self.avg_failure_rate = failure_rate_alpha
-        self.original_num_prod = total_number_product
+
+        # ! Changed from total_number_product to the class value (which is
+        # ! PV_ICE based)
+        self.original_num_prod = self.total_number_product
         self.avg_lifetime = product_lifetime
         self.fsthand_mkt_pric = fsthand_mkt_pric
         self.fsthand_mkt_pric_reg_param = fsthand_mkt_pric_reg_param
@@ -761,6 +779,10 @@ class ABM_CE_PV(Model):
         self.extended_tpb = extended_tpb
         self.seeding = seeding
         self.seeding_recyc = seeding_recyc
+
+        self.all_gba = pd.read_excel(gba_file_path)  #importing all grid balancing areas in an excel file
+
+
         self.cost_seeding = 0
         self.product_lifetime = product_lifetime
         self.d_product_lifetimes = []
