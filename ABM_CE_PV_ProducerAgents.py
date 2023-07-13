@@ -151,11 +151,37 @@ class Producers(Agent):
                     num_neighbors_producer += 1
                 tot_recycling_volume += agent.recycling_volume + \
                     self.model.installer_recycled_amount
+
+        # ! TODO: replace code below with PV_ICE material waste value - START
+
+        # ! Multiply self.pv_ice_yearly_waste by the ratio of waste (in W)
+        # ! between what is recycled and the total amount of waste:
+        # ! tot_recycling_volume / self.model.total_waste
+        # ! use the material value from PV_ICE corresponding with the material
+        # ! type of the producer (self.material_produced). Replace recl_vol
+        # ! with this new value.
+
+        # we probably gonna need a dictionary created in the model file,
+        # for instance:
+        # yearly_material_waste = {'silicon': x, 'glass':y, ...}
+        # (for all pathways in PV_ICE, the total waste)
+        # assign a string value to self.material_produced corresponding to
+        # keys. (e.g, self.material_produced = 'silicon')
+        # (in kg) multiplied by the amount that's recycled:
+        # tot_recycling_volume / self.model.total_waste
+        # basically we gonna have:
+        # recl_vol = self.model.yearly_material_waste[
+        #             'self.material_produced'] * (tot_recycling_volume /
+        #                                          self.model.total_waste)
+
         recl_vol = \
             self.model.product_mass_fractions[self.material_produced] \
             * tot_recycling_volume / num_neighbors_producer * \
             self.model.dynamic_product_average_wght \
             * self.model.recovery_fractions[self.material_produced]
+
+        # ! TODO: replace code below with PV_ICE material waste value - STOP
+
         self.recycled_material_volume += recl_vol
         self.yearly_recycled_material_volume = recl_vol
         self.recycled_material_value = self.recycled_mat_price * \
