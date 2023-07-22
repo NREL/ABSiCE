@@ -685,17 +685,20 @@ class ABM_CE_PV(Model):
         r1.scenario['standard'].addMaterial('glass', massmatfile=r'./baselines/baseline_material_mass_glass.csv' )
         r1.scenario['standard'].addMaterial('silicon', massmatfile=r'./baselines/baseline_material_mass_silicon.csv' )
   
-#         self.df0 = r1.scenario['standard'].dataIn_m
-#         self.df0.to_csv("df1_dataout.csv", index=False)
+        self.df0 = r1.scenario['standard'].dataIn_m
+        self.df0.to_csv("df1_dataout.csv", index=False)
+        self.year_column = self.df0['year']
 
         r1.calculateMassFlow()
         self.df1 = r1.scenario['standard'].dataOut_m
+        self.df1 = self.df1.join(self.year_column)
         print("Keys", self.df1.keys())
         print("\nFirst df", self.df1.head())
         self.df1.to_csv("df1_dataout1.csv", index=False)
 
         # self.df2 = r1.scenario['standard'].material['silicon'].matdataIn_m
         self.df2 = r1.scenario['standard'].material['silicon'].matdataOut_m
+        self.df2 = self.df2.join(self.year_column)
         self.df2.to_csv("df2_matdataout.csv", index=False)
 
         print("\nSecond ", self.df2.head())
@@ -780,7 +783,7 @@ class ABM_CE_PV(Model):
         self.seeding = seeding
         self.seeding_recyc = seeding_recyc
 
-        self.all_gba = pd.read_excel(gba_file_path)  #importing all grid balancing areas in an excel file
+        #self.all_gba = pd.read_excel(gba_file_path)  #importing all grid balancing areas in an excel file
 
 
         self.cost_seeding = 0
@@ -1043,7 +1046,7 @@ class ABM_CE_PV(Model):
             mat_reMFG +
             mat_PG2_stored
         )
-        print("\n\ntotal:", self.pv_ice_yearly_waste )
+        # print("\n\ntotal:", self.pv_ice_yearly_waste )
         
 
     def create_agents(self, num_consumers):

@@ -10,7 +10,7 @@ Run - one or several simulations with all states of outputs
 from ABM_CE_PV_Model import *
 import matplotlib.pyplot as plt
 import time
-
+import os
 
 def run_model(number_run, number_steps):
     """
@@ -92,8 +92,10 @@ def run_model(number_run, number_steps):
         # Get results in a pandas DataFrame
         results_model = model.datacollector.get_model_vars_dataframe()
         results_agents = model.datacollector.get_agent_vars_dataframe()
-        results_model.to_csv("results\\Results_model_run%s.csv" % j)
-        results_agents.to_csv("results\\Results_agents.csv")
+        print(os.getcwd())
+        #results_model.to_csv(
+        #    "C:/Users/jwalzber/PycharmProjects/ABM_CE_PV_model/Results_model_run%s.csv" % j)
+        #results_agents.to_csv("results\\Results_agents.csv")
         # Draw figures
         draw_graphs(False, False, model, results_agents, results_model)
         print("Run", j+1, "out of", number_run)
@@ -141,4 +143,4 @@ def draw_graphs(network, figures, model, results_agents, results_model):
         plt.show()  # draw graph as desired and plot outputs
 
 
-run_model(30, 31)
+run_model(30, 3)
