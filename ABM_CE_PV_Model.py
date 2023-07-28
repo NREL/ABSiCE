@@ -224,15 +224,15 @@ class ABM_CE_PV(Model):
                  seeding_recyc={"Seeding": False,
                                 "Year": 10, "number_seed": 50,
                                 "discount": 0.35},
+                                pv_ice = False,
+                                pca = True,
+                                pca_scenario = True,
                 # self.pv_ice_yearly_waste = 0
 
                  # TODO: -placeholder- pvice_input_file=PV_ICE_output_file_name
                 #  gba_file_path = "Users/aharouna/gba_data.xlsx" ,
                 #  all_gba = pd.read_excel(gba_file_path)  #importing all grid balancing areas in an excel file
 
-
-
-       
 
 
                 # self.gba_file = gba_file
@@ -545,62 +545,76 @@ class ABM_CE_PV(Model):
         for x in row2[1:]:
             row22 = row22 + ',' + x 
 
-        # for ii in range (len(rawdf.unstack(level=1))):
-        #     PCA = rawdf.unstack(level=1).iloc[ii].name[1]
-        #     SCEN = rawdf.unstack(level=1).iloc[ii].name[0]
-        #     SCEN=SCEN.replace('+', '_')
-        #     filetitle = SCEN+'_'+PCA +'.csv'
-        #     subtestfolder = os.path.join(testfolder, 'PCAs')
-        #     if not os.path.exists(subtestfolder):
-        #         os.makedirs(subtestfolder)
-        #     filetitle = os.path.join(subtestfolder, filetitle)
-        #     A = rawdf.unstack(level=1).iloc[ii]
-        #     A = A.droplevel(level=0)
-        #     A.name = 'new_Installed_Capacity_[MW]'
-        #     A = pd.DataFrame(A)
-        #     A.index=pd.PeriodIndex(A.index, freq='A')
-        #     A = pd.DataFrame(A)
-        #     A['new_Installed_Capacity_[MW]'] = A['new_Installed_Capacity_[MW]'] * 0.85
-        #     A['new_Installed_Capacity_[MW]'] = A['new_Installed_Capacity_[MW]'] * 1000   # ReEDS file is in GW.
-        #     # Add other columns
-        #     A = pd.concat([A, baseline.reindex(A.index)], axis=1)
-        
-        #     header = row11 + '\n' + row22 + '\n'
+        if pca:
+            for ii in range (len(rawdf.unstack(level=1))):
+                PCA = rawdf.unstack(level=1).iloc[ii].name[1]
+                SCEN = rawdf.unstack(level=1).iloc[ii].name[0]
+                SCEN=SCEN.replace('+', '_')
+                filetitle = SCEN+'_'+PCA +'.csv'
+                subtestfolder = os.path.join(testfolder, 'PCAs')
+                if not os.path.exists(subtestfolder):
+                    os.makedirs(subtestfolder)
+                filetitle = os.path.join(subtestfolder, filetitle)
+                A = rawdf.unstack(level=1).iloc[ii]
+                A = A.droplevel(level=0)
+                A.name = 'new_Installed_Capacity_[MW]'
+                A = pd.DataFrame(A)
+                A.index=pd.PeriodIndex(A.index, freq='A')
+                A = pd.DataFrame(A)
+                A['new_Installed_Capacity_[MW]'] = A['new_Installed_Capacity_[MW]'] * 0.85
+                A['new_Installed_Capacity_[MW]'] = A['new_Installed_Capacity_[MW]'] * 1000   # ReEDS file is in GW.
+                # Add other columns
+                A = pd.concat([A, baseline.reindex(A.index)], axis=1)
             
-        #     with open(filetitle, 'w', newline='') as ict:
-        #     # Write the header lines, including the index variable for
-        #     # the last one if you're letting Pandas produce that for you.
-        #     # (see above).
-        #         for line in header:
-        #             ict.write(line)
+                header = row11 + '\n' + row22 + '\n'
+                
+                with open(filetitle, 'w', newline='') as ict:
+                # Write the header lines, including the index variable for
+                # the last one if you're letting Pandas produce that for you.
+                # (see above).
+                    for line in header:
+                        ict.write(line)
 
-        #         #    savedata.to_csv(ict, index=False)
-        #         A.to_csv(ict, header=False)
+                    #    savedata.to_csv(ict, index=False)
+                    A.to_csv(ict, header=False)
 
-        #     ### Create Scenarios in PV_ICE
-        #     #### Rename difficult characters from Scenarios Names
-        #     simulationname = scenarios
-        #     simulationname = [w.replace('+', '_') for w in simulationname]
-        #     SFscenarios = [simulationname[0], simulationname[4], simulationname[8]]
+                ### Create Scenarios in PV_ICE
+                #### Rename difficult characters from Scenarios Names
+                simulationname = scenarios
+                simulationname = [w.replace('+', '_') for w in simulationname]
+                SFscenarios = [simulationname[0], simulationname[4], simulationname[8]]
+
+                # print('\nSFscenarios:', SFscenarios)
 
         #     #### Create the 3 Scenarios and assign Baselines
+        if pca_scenario:
+            i = 0
+            r1 = PV_ICE.Simulation(name=SFscenarios[i], path=testfolder)
+            energymodulefilepath = os.path.join(Path().resolve().parent.parent.parent/ 'PV_ICE/baselines/baseline_modules_energy.csv')
+            baslinefolderpath = os.path.join(Path().resolve().parent.parent.parent/ 'PV_ICE/baselines')
 
-        #     i = 0
-        #     r1 = PV_ICE.Simulation(name=SFscenarios[i], path=testfolder)
-        #     energymodulefilepath = os.path.join(Path().resolve().parent.parent.parent/ 'PV_ICE/baselines/baseline_modules_energy.csv')
-        #     baslinefolderpath = os.path.join(Path().resolve().parent.parent.parent/ 'PV_ICE/baselines')
+            for jj in range (0, len(PCAs)): 
+                filetitle = SFscenarios[i]+'_'+PCAs[jj]+'.csv'
+                filetitle = os.path.join(testfolder, 'PCAs', filetitle)   
+                print("filetitle:", filetitle) 
+                r1.createScenario(name=PCAs[jj], massmodulefile=filetitle, energymodulefile=energymodulefilepath)
+                r1.scenario[PCAs[jj]].addMaterials(['glass', 'silicon', 'silver', 'copper', 'aluminium_frames'], baselinefolder=baslinefolderpath)
+                output_filename = f"df2_matdataout_{SFscenarios[i]}_{PCAs[jj]}_.csv"
+                output_filename0 = f"df0_dataOut_{SFscenarios[i]}_{PCAs[jj]}_.csv"
 
-        #     for jj in range (0, len(PCAs)): 
-        #         filetitle = SFscenarios[i]+'_'+PCAs[jj]+'.csv'
-        #         filetitle = os.path.join(testfolder, 'PCAs', filetitle)   
-        #         print("filetitle:", filetitle) 
-        #         r1.createScenario(name=PCAs[jj], massmodulefile=filetitle, energymodulefile=energymodulefilepath)
-        #         r1.scenario[PCAs[jj]].addMaterials(['glass', 'silicon', 'silver', 'copper', 'aluminium_frames'], baselinefolder=baslinefolderpath) 
-        #         r1.trim_Years(startYear=2010, endYear=2050)
-        #         # All -- but these where not included in the Reeds initial study as we didnt have encapsulant or backsheet
-        #         # r1.scenario[PCAs[jj]].addMaterials(['glass', 'silicon', 'silver', 'copper', 'aluminium_frames', 'encapsulant', 'backsheet'], baselinefolder=r'..\baselines')
-        #         r1.scenario[PCAs[jj]].latitude = GIS.loc[PCAs[jj]].lat
-        #         r1.scenario[PCAs[jj]].longitude = GIS.loc[PCAs[jj]].long
+                r1.trim_Years(startYear=2010, endYear=2050)
+                # All -- but these where not included in the Reeds initial study as we didnt have encapsulant or backsheet
+                # r1.scenario[PCAs[jj]].addMaterials(['glass', 'silicon', 'silver', 'copper', 'aluminium_frames', 'encapsulant', 'backsheet'], baselinefolder=r'..\baselines')
+                r1.scenario[PCAs[jj]].latitude = GIS.loc[PCAs[jj]].lat
+                r1.scenario[PCAs[jj]].longitude = GIS.loc[PCAs[jj]].long
+
+                r1.calculateMassFlow()
+                
+                self.df0 = r1.scenario[PCAs[jj]].dataOut_m
+                self.df0.to_csv(output_filename0, index=False)
+
+                self.df = r1.scenario[PCAs[jj]].material['silicon'].matdataOut_m
+                self.df.to_csv(output_filename, index=False)
 
             # i = 1
             # r2 = PV_ICE.Simulation(name=SFscenarios[i], path=testfolder)
@@ -659,7 +673,13 @@ class ABM_CE_PV(Model):
             #     title_Method = 'PVICE'
 
             #     #### Calculate Mass Flow
-            # r1.calculateMassFlow()
+            r1.calculateMassFlow()
+            print("\nThis is the df value: ", self.df)
+            print("\nThis is the df type:", type(self.df))
+            self.df.to_csv("all_mass_flow.csv", index=False)
+            # self.df0.to_csv(output_filename0, index=False)
+
+
             # r2.calculateMassFlow()
             # r3.calculateMassFlow()
 
@@ -675,32 +695,33 @@ class ABM_CE_PV(Model):
 
         # if not os.path.exists(testfolder):
         #     os.makedirs(testfolder)
-
+        if pv_ice:
         # print ("\nYour simulation will be stored in %s" % testfolder)
-        testfolder = str(Path().resolve().parent.parent)
-        print("\n Test path location", testfolder)
+            testfolder = str(Path().resolve().parent.parent)
+            print("\n Test path location", testfolder)
 
-        r1 = PV_ICE.Simulation(name='Simulation1', path=testfolder)
-        r1.createScenario(name='standard', massmodulefile=r'./baselines/baseline_modules_mass_US.csv')
-        r1.scenario['standard'].addMaterial('glass', massmatfile=r'./baselines/baseline_material_mass_glass.csv' )
-        r1.scenario['standard'].addMaterial('silicon', massmatfile=r'./baselines/baseline_material_mass_silicon.csv' )
-  
-#         self.df0 = r1.scenario['standard'].dataIn_m
-#         self.df0.to_csv("df1_dataout.csv", index=False)
+            r1 = PV_ICE.Simulation(name='Simulation1', path=testfolder)
+            r1.createScenario(name='standard', massmodulefile=r'./baselines/baseline_modules_mass_US.csv')
+            r1.scenario['standard'].addMaterial('glass', massmatfile=r'./baselines/baseline_material_mass_glass.csv' )
+            r1.scenario['standard'].addMaterial('silicon', massmatfile=r'./baselines/baseline_material_mass_silicon.csv' )
+    
+            self.df0 = r1.scenario['standard'].dataIn_m
+            self.df0.to_csv("df1_dataout.csv", index=False)
 
-        r1.calculateMassFlow()
-        self.df1 = r1.scenario['standard'].dataOut_m
-        print("Keys", self.df1.keys())
-        print("\nFirst df", self.df1.head())
-        self.df1.to_csv("df1_dataout1.csv", index=False)
+            self.df0 = r1.calculateMassFlow()
+            print("\n df0", self.df0)
+            self.df1 = r1.scenario['standard'].dataOut_m
+            print("Keys", self.df1.keys())
+            print("\nFirst df", self.df1.head())
+            self.df1.to_csv("df1_dataout1.csv", index=False)
 
-        # self.df2 = r1.scenario['standard'].material['silicon'].matdataIn_m
-        self.df2 = r1.scenario['standard'].material['silicon'].matdataOut_m
-        self.df2.to_csv("df2_matdataout.csv", index=False)
+            # self.df2 = r1.scenario['standard'].material['silicon'].matdataIn_m
+            self.df2 = r1.scenario['standard'].material['silicon'].matdataOut_m
+            self.df2.to_csv("df2_matdataout.csv", index=False)
 
-        print("\nSecond ", self.df2.head())
-        print("\nKeys df2", self.df2.keys())
-        print("\n2d result: ", r1.saveSimulation() )
+            print("\nSecond ", self.df2.head())
+            print("\nKeys df2", self.df2.keys())
+            print("\n2d result: ", r1.saveSimulation() )
 
         # what files are created, use created files
         # self.pv_INPUTS = pd.read....
@@ -780,7 +801,7 @@ class ABM_CE_PV(Model):
         self.seeding = seeding
         self.seeding_recyc = seeding_recyc
 
-        self.all_gba = pd.read_excel(gba_file_path)  #importing all grid balancing areas in an excel file
+        self.all_gba = pd.read_excel(reedsFile)  #importing all grid balancing areas in an excel file
 
 
         self.cost_seeding = 0
