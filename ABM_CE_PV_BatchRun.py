@@ -260,7 +260,7 @@ if __name__ == '__main__':
                         ABM_CE_PV.report_output(c, "refurbisher_costs")})
             batch_run.run_all()
             run_data = batch_run.get_model_vars_dataframe()
-            run_data.to_csv("results\\BatchRun%s.csv" % i)
+            #run_data.to_csv("results\\BatchRun%s.csv" % i)
     else:
         list_variables = \
             ["recovery_fractions", "num_recyclers",
@@ -450,7 +450,7 @@ if __name__ == '__main__':
              appended_data["Producer costs"])
         appended_data["Y6"] = appended_data["Used product"] / \
             appended_data["New product"]
-        appended_data.to_csv("results\\SobolBatchRun.csv")
+        #appended_data.to_csv("results\\SobolBatchRun.csv")
         data_out = appended_data.filter(["seed", "x_0", "x_1", "x_2", "x_3",
                                          "x_4", "x_5", "Y1", "Y2",
                                          "Y3", "Y4", "Y5", "Y6"], axis=1)
