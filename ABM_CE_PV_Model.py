@@ -673,10 +673,7 @@ class ABM_CE_PV(Model):
             #     title_Method = 'PVICE'
 
             #     #### Calculate Mass Flow
-            r1.calculateMassFlow()
-            print("\nThis is the df value: ", self.df)
-            print("\nThis is the df type:", type(self.df))
-            self.df.to_csv("all_mass_flow.csv", index=False)
+            # r1.calculateMassFlow()
             # self.df0.to_csv(output_filename0, index=False)
 
 
