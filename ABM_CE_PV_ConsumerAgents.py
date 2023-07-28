@@ -330,6 +330,7 @@ class Consumers(Agent):
         # self.model.initial_capacity = [5, 5, 5, 5, 52, 67, 45, 120] # MWp
 
         # ! Scratch all above: the easiest is to use PV_ICE inputs:
+        print("theu is test", len(self.model))
         subset_df_init_cap = self.model.df0[
             self.model.df0['year'] == 2020 + self.model.clock]
         additional_capacity = subset_df_init_cap[
@@ -388,7 +389,7 @@ class Consumers(Agent):
         # ! Yearly_Sum_Power_atEOL is the total waste generated in a year
         # ! expressed in W
         subset_df_waste = self.model.df1[
-            self.model.df1['year'] < (2020 + self.model.clock)]
+            self.model.df1['Year'] < (2020 + self.model.clock)]
         self.waste = subset_df_waste[
             'Yearly_Sum_Power_atEOL'].tolist()
         # ! Old code
