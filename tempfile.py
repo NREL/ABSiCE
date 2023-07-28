@@ -704,6 +704,7 @@ class ABM_CE_PV(Model):
         # print ("\nYour simulation will be stored in %s" % testfolder)
             testfolder = str(Path().resolve().parent.parent)
             print("\n Test path location", testfolder)
+
             r1 = PV_ICE.Simulation(name='Simulation1', path=testfolder)
             r1.createScenario(name='standard', massmodulefile=r'./baselines/baseline_modules_mass_US.csv')
             r1.scenario['standard'].addMaterial('glass', massmatfile=r'./baselines/baseline_material_mass_glass.csv' )
@@ -726,7 +727,6 @@ class ABM_CE_PV(Model):
             print("\nSecond ", self.df2.head())
             print("\nKeys df2", self.df2.keys())
             print("\n2d result: ", r1.saveSimulation() )
-
 
         # what files are created, use created files
         # self.pv_INPUTS = pd.read....
@@ -807,7 +807,8 @@ class ABM_CE_PV(Model):
         self.seeding_recyc = seeding_recyc
 
         self.all_gba = pd.read_excel(reedsFile)  #importing all grid balancing areas in an excel file
-        
+
+
         self.cost_seeding = 0
         self.product_lifetime = product_lifetime
         self.d_product_lifetimes = []
@@ -1068,7 +1069,7 @@ class ABM_CE_PV(Model):
             mat_reMFG +
             mat_PG2_stored
         )
-        # print("\n\ntotal:", self.pv_ice_yearly_waste )
+        print("\n\ntotal:", self.pv_ice_yearly_waste )
         
 
     def create_agents(self, num_consumers):
