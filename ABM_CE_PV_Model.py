@@ -599,8 +599,9 @@ class ABM_CE_PV(Model):
                 print("filetitle:", filetitle) 
                 r1.createScenario(name=PCAs[jj], massmodulefile=filetitle, energymodulefile=energymodulefilepath)
                 r1.scenario[PCAs[jj]].addMaterials(['glass', 'silicon', 'silver', 'copper', 'aluminium_frames'], baselinefolder=baslinefolderpath)
-                output_filename = f"df2_matdataout_{SFscenarios[i]}_{PCAs[jj]}_.csv"
-                output_filename0 = f"df0_dataOut_{SFscenarios[i]}_{PCAs[jj]}_.csv"
+                output_filename = f"matdataout_{SFscenarios[i]}_{PCAs[jj]}_.csv"
+                output_filename0 = f"dataOut_{SFscenarios[i]}_{PCAs[jj]}_.csv"
+                output_filename_in = f"datain_{SFscenarios[i]}_{PCAs[jj]}_.csv"
 
                 r1.trim_Years(startYear=2010, endYear=2050)
                 # All -- but these where not included in the Reeds initial study as we didnt have encapsulant or backsheet
@@ -608,12 +609,19 @@ class ABM_CE_PV(Model):
                 r1.scenario[PCAs[jj]].latitude = GIS.loc[PCAs[jj]].lat
                 r1.scenario[PCAs[jj]].longitude = GIS.loc[PCAs[jj]].long
 
+                self.df_in = r1.scenario[PCAs[jj]].dataIn_m
+                self.df_in.to_csv(output_filename_in, index=False)
+                self.year_column = self.df_in['year']
+                
+
                 r1.calculateMassFlow()
                 
                 self.df0 = r1.scenario[PCAs[jj]].dataOut_m
+                self.df0 = self.df0.join(self.year_column)
                 self.df0.to_csv(output_filename0, index=False)
 
                 self.df = r1.scenario[PCAs[jj]].material['silicon'].matdataOut_m
+                self.df = self.df.join(self.year_column)
                 self.df.to_csv(output_filename, index=False)
 
             # i = 1
