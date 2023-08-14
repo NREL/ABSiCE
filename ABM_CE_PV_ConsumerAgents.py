@@ -9,11 +9,13 @@ Agent - Consumer
 
 from mesa import Agent
 import numpy as np
+import pandas as pd
 import random
 from collections import OrderedDict
 from scipy.stats import truncnorm
 import operator
 from math import e
+
 
 
 class Consumers(Agent):
@@ -330,9 +332,12 @@ class Consumers(Agent):
         # self.model.initial_capacity = [5, 5, 5, 5, 52, 67, 45, 120] # MWp
 
         # ! Scratch all above: the easiest is to use PV_ICE inputs:
-        print("theu is test", len(self.model))
-        subset_df_init_cap = self.model.df0[
-            self.model.df0['year'] == 2020 + self.model.clock]
+        
+        # subset_df_init_cap = self.model.df0[
+        #     self.model.df0['year'] == 2020 + self.model.clock]
+
+        
+        subset_df_init_cap = pd.read_csv("datain_95-by-35.Adv_" + self.pca + "_.csv")
         additional_capacity = subset_df_init_cap[
             'new_Installed_Capacity_[MW]'].iloc[0]
         # ! Old code
@@ -388,8 +393,11 @@ class Consumers(Agent):
         # ! Implementation is below. Left to do: check with Silvana that
         # ! Yearly_Sum_Power_atEOL is the total waste generated in a year
         # ! expressed in W
-        subset_df_waste = self.model.df1[
-            self.model.df1['Year'] < (2020 + self.model.clock)]
+        # subset_df_waste = self.model.df1[
+        #     self.model.df1['Year'] < (2020 + self.model.clock)]
+
+        subset_df_waste = pd.read_csv("dataOut_95-by-35.Adv_" + self.pca + "_.csv")
+
         self.waste = subset_df_waste[
             'Yearly_Sum_Power_atEOL'].tolist()
         # ! Old code
