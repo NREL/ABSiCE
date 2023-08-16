@@ -223,8 +223,8 @@ class ABM_CE_PV(Model):
                                 "Year": 10, "number_seed": 50,
                                 "discount": 0.35},
                                 pv_ice = False,
-                                pca = True,
-                                pca_scenario = True,
+                                pca = False,
+                                pca_scenario = False,
 
                      ):
         
@@ -533,13 +533,14 @@ class ABM_CE_PV(Model):
                 SFscenarios = [simulationname[0], simulationname[4], simulationname[8]]
 
         #     #### Create the 3 Scenarios and assign Baselines
+
         if pca_scenario:
             i = 0
             r1 = PV_ICE.Simulation(name=SFscenarios[i], path=testfolder)
             energymodulefilepath = os.path.join(Path().resolve().parent.parent.parent/ 'PV_ICE/baselines/baseline_modules_energy.csv')
             baslinefolderpath = os.path.join(Path().resolve().parent.parent.parent/ 'PV_ICE/baselines')
 
-            for jj in range (0, 1): 
+            for jj in range (0, len(PCAs)): 
                 filetitle = SFscenarios[i]+'_'+PCAs[jj]+'.csv'
                 filetitle = os.path.join(testfolder, 'PCAs', filetitle)   
                 print("filetitle:", filetitle) 
@@ -683,7 +684,8 @@ class ABM_CE_PV(Model):
         # ! Initialize model with PV_ICE historical installed cap
         # self.total_number_product = total_number_product
         # subset_df_init_cap = self.df0[self.df0['year'] < 2020]
-
+        
+        # self.pca = self.create_agents(num_consumers)[self.unique_id][0]
         subset_df_init_cap = pd.read_csv("datain_95-by-35.Adv_" + 'p1' + "_.csv")  # need 
 
         subset_df_init_cap = subset_df_init_cap[
@@ -1366,4 +1368,4 @@ class ABM_CE_PV(Model):
 
         # Calculate yearly waste using pv_ice_waste_calculation method - pass pv_output
         self.pv_ice_yearly_waste = 0
-        self.pv_ice_waste_calculation(self.clock, self.df2)
+        # self.pv_ice_waste_calculation(self.clock, self.df2)
