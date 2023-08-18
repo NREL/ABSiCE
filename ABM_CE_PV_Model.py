@@ -620,13 +620,14 @@ class ABM_CE_PV(Model):
         # self.pca = self.create_agents(num_consumers)[self.unique_id][0]
         all_pca_df = pd.DataFrame()
         for pca in PCAs:
-            print(pca, PCAs)
             subset_df_init_cap = pd.read_csv(
                 "datain_95-by-35.Adv_" + pca + "_.csv")
             subset_df_init_cap['pca'] = pca
-            pd.concat([all_pca_df, subset_df_init_cap])
+            all_pca_df = pd.concat([all_pca_df, subset_df_init_cap])
         all_pca_df.to_csv('all_pca_datain_95-by-35.Adv.csv')
-
+        all_pca_df = all_pca_df.groupby('year', as_index=False).sum()
+        
+        subset_df_init_cap = all_pca_df[all_pca_df['year'] < 2020]
         subset_df_init_cap = subset_df_init_cap[
             'new_Installed_Capacity_[MW]'].tolist()
         self.total_number_product = subset_df_init_cap
@@ -643,6 +644,7 @@ class ABM_CE_PV(Model):
 
         # ! Changed from total_number_product to the class value (which is
         # ! PV_ICE based)
+        self.original_num_prod = self.total_number_product
         self.avg_lifetime = product_lifetime
         self.fsthand_mkt_pric = fsthand_mkt_pric
         self.fsthand_mkt_pric_reg_param = fsthand_mkt_pric_reg_param

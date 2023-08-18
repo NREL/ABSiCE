@@ -405,6 +405,7 @@ class Consumers(Agent):
 
         self.waste = subset_df_waste[
             'Yearly_Sum_Power_atEOL'].tolist()
+        print(len(self.waste))
         # ! Old code
         # self.waste = self.model.waste_generation(
         #    self.model.d_product_lifetimes, self.failure_rate_alpha,
