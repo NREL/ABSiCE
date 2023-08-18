@@ -100,8 +100,6 @@ import csv
 from pathlib import Path
 
 
-# os.chdir('/Users/aharouna')
-
 class ABM_CE_PV(Model):
     def __init__(self,
                  seed=None,
@@ -110,7 +108,7 @@ class ABM_CE_PV(Model):
                  calibration_n_sensitivity_3=1,
                  calibration_n_sensitivity_4=1,
                  calibration_n_sensitivity_5=1,
-                 num_consumers=1000,  #1000 originally
+                 num_consumers=1000,  
                  consumers_node_degree=10,
                  consumers_network_type="small-world",
                  rewiring_prob=0.1,
@@ -225,49 +223,12 @@ class ABM_CE_PV(Model):
                                 "Year": 10, "number_seed": 50,
                                 "discount": 0.35},
                                 pv_ice = False,
-                                pca = True,
-                                pca_scenario = True,
-                # self.pv_ice_yearly_waste = 0
-
-                 # TODO: -placeholder- pvice_input_file=PV_ICE_output_file_name
-                #  gba_file_path = "Users/aharouna/gba_data.xlsx" ,
-                #  all_gba = pd.read_excel(gba_file_path)  #importing all grid balancing areas in an excel file
-
-
-
-                # self.gba_file = gba_file
-                # gba_file = "path"
-                # self.gba_data = pd.read.csv(gba_file)
-                # num_rows = len(gba_file)
-                # # Calculate the number of agents per row
-                # num_agents_per_row = num_consumers // num_rows
-        
-                # # Distribute agents evenly to each row
-                # agents_per_row = [num_agents_per_row] * num_rows
-        
-                # # Distribute remaining agents if any
-                # remaining_agents = num_consumers % num_rows
-                # for i in range(remaining_agents):
-                #     agents_per_row[i] += 1
-        
-                # # Create agents and assign them to rows
-                # start_index = 0
-                # for i, agents in enumerate(agents_per_row):
-                #     end_index = start_index + agents
-                #     row_agents = self.data.iloc[start_index:end_index]
-            
-                #     # Create agents for the row and assign them
-                #     for j, agent_row in row_agents.iterrows():
-                #     agent = {
-                #         'AgentID': j,
-                #         'PCA': agent_row['PCA'],
-                #         'State': agent_row['State']
-                #     }
-
-#have to use self.unique ID
-#get 
+                                pca = False,
+                                pca_scenario = False,
 
                      ):
+        
+
         """Initiate model.
 
         Args:
@@ -472,18 +433,7 @@ class ABM_CE_PV(Model):
         np.random.seed(self.seed)
         random.seed(self.seed)
 
-        # TODO: -placeholder- self.pvice_inputs = pd.read_csv(
-        # TODO ctnd |                              PV_ICE_output_file_name)
-        
-        
-        # reedsFile = str(Path().resolve().parent.parent.parent.parent / 'December Core Scenarios ReEDS Outputs Solar Futures v3a.xlsx')
-        # # print ("Input file is stored in %s" % reedsFile)
-        # print("\nThis is path", os.listdir())
-        # rawdf = pd.read_excel("/Users/aharouna/Desktop/ABSiCE/data_input/all_gba_data.xlsx")
-                                #index_col=[0,2,3]) #this casts scenario, PCA and State as levels
-        #now set year as an index in place
-        #rawdf.drop(columns=['State'], inplace=True)
-
+        #Set path for data saving
         testfolder = str(Path().resolve() / 'PV_ICE' / 'TEMP' / 'PCA')
 
         if not os.path.exists(testfolder):
@@ -499,9 +449,7 @@ class ABM_CE_PV(Model):
 
         rawdf = pd.read_excel(reedsFile,
                         sheet_name="new installs PV")
-                        #index_col=[0,2,3]) #this casts scenario, PCA and State as levels
-        # #now set year as an index in place
-        # rawdf.drop(columns=['State'], inplace=True)
+
         rawdf.drop(columns=['Tech'], inplace=True)
         rawdf.set_index(['Scenario','Year','PCA', 'State'], inplace=True)
 
@@ -584,9 +532,8 @@ class ABM_CE_PV(Model):
                 simulationname = [w.replace('+', '_') for w in simulationname]
                 SFscenarios = [simulationname[0], simulationname[4], simulationname[8]]
 
-                # print('\nSFscenarios:', SFscenarios)
-
         #     #### Create the 3 Scenarios and assign Baselines
+
         if pca_scenario:
             i = 0
             r1 = PV_ICE.Simulation(name=SFscenarios[i], path=testfolder)
@@ -613,9 +560,8 @@ class ABM_CE_PV(Model):
                 self.df_in.to_csv(output_filename_in, index=False)
                 self.year_column = self.df_in['year']
                 
-
                 r1.calculateMassFlow()
-                
+            
                 self.df0 = r1.scenario[PCAs[jj]].dataOut_m
                 self.df0 = self.df0.join(self.year_column)
                 self.df0.to_csv(output_filename0, index=False)
@@ -624,84 +570,11 @@ class ABM_CE_PV(Model):
                 self.df = self.df.join(self.year_column)
                 self.df.to_csv(output_filename, index=False)
 
-            # i = 1
-            # r2 = PV_ICE.Simulation(name=SFscenarios[i], path=testfolder)
-
-            # for jj in range (0, len(PCAs)): 
-            #     filetitle = SFscenarios[i]+'_'+PCAs[jj]+'.csv'
-            #     filetitle = os.path.join(testfolder, 'PCAs', filetitle)        
-            #     r2.createScenario(name=PCAs[jj], massmodulefile=filetitle, energymodulefile=energymodulefilepath)
-            #     r2.scenario[PCAs[jj]].addMaterials(['glass', 'silicon', 'silver', 'copper', 'aluminium_frames'], baselinefolder=baslinefolderpath) 
-            #     r2.trim_Years(startYear=2010, endYear=2050)
-            #     # All -- but these where not included in the Reeds initial study as we didnt have encapsulant or backsheet
-            #     # r2.scenario[PCAs[jj]].addMaterials(['glass', 'silicon', 'silver', 'copper', 'aluminium_frames', 'encapsulant', 'backsheet'], baselinefolder=r'..\baselines')
-            #     r2.scenario[PCAs[jj]].latitude = GIS.loc[PCAs[jj]].lat
-            #     r2.scenario[PCAs[jj]].longitude = GIS.loc[PCAs[jj]].long
-
-            # i = 2
-            # r3 = PV_ICE.Simulation(name=SFscenarios[i], path=testfolder)
-            # for jj in range (0, len(PCAs)): 
-            #     filetitle = SFscenarios[i]+'_'+PCAs[jj]+'.csv'
-            #     filetitle = os.path.join(testfolder, 'PCAs', filetitle)        
-            #     r3.createScenario(name=PCAs[jj], massmodulefile=filetitle, energymodulefile=energymodulefilepath)
-            #     r3.scenario[PCAs[jj]].addMaterials(['glass', 'silicon', 'silver', 'copper', 'aluminium_frames'], baselinefolder=baslinefolderpath) #
-            #     r3.trim_Years(startYear=2010, endYear=2050)
-            #     # All -- but these where not included in the Reeds initial study as we didnt have encapsulant or backsheet
-            #     # r3.scenario[PCAs[jj]].addMaterials(['glass', 'silicon', 'silver', 'copper', 'aluminium_frames', 'encapsulant', 'backsheet'], baselinefolder=r'..\baselines')
-            #     r3.scenario[PCAs[jj]].latitude = GIS.loc[PCAs[jj]].lat
-            #     r3.scenario[PCAs[jj]].longitude = GIS.loc[PCAs[jj]].long
-
-            # # 2 Set characteristics of Recycling to SF values.
-
-            # IRENA= False
-            # PERFECTMFG = True
-
-            # mats = ['glass', 'silicon','silver','copper','aluminum']
-
-            # ELorRL = 'EL'
-            # if IRENA:
-            #     if ELorRL == 'RL':
-            #         r1.scenMod_IRENIFY(ELorRL='RL')
-            #         r2.scenMod_IRENIFY(ELorRL='RL')
-            #         r3.scenMod_IRENIFY(ELorRL='RL')
-
-            #     if ELorRL == 'EL':
-            #         r1.scenMod_IRENIFY(ELorRL='EL')
-            #         r2.scenMod_IRENIFY(ELorRL='EL')
-            #         r3.scenMod_IRENIFY(ELorRL='EL')
-                
-                
-            #     if PERFECTMFG:
-            #         r1.scenMod_PerfectManufacturing()
-            #         r2.scenMod_PerfectManufacturing()
-            #         r3.scenMod_PerfectManufacturing()
-
-            #     title_Method = 'Irena_'+ELorRL
-            # else:
-            #     title_Method = 'PVICE'
-
-            #     #### Calculate Mass Flow
-            # r1.calculateMassFlow()
-            # self.df0.to_csv(output_filename0, index=False)
-
-
-            # r2.calculateMassFlow()
-            # r3.calculateMassFlow()
-
-
-
-
-        # Start writing PV_ICE
-
         print("\nVersion: ", PV_ICE.__version__)
 
-        # testfolder = str(Path().resolve().parent.parent / 'Desktop'/ 'ABSICE'/'TEMP')
-        # # testfolder = "/Users/aharouna/Desktop/ABSICE/TEMP"
-
-        # if not os.path.exists(testfolder):
-        #     os.makedirs(testfolder)
+ 
         if pv_ice:
-        # print ("\nYour simulation will be stored in %s" % testfolder)
+ 
             testfolder = str(Path().resolve().parent.parent)
             print("\n Test path location", testfolder)
             r1 = PV_ICE.Simulation(name='Simulation1', path=testfolder)
@@ -719,23 +592,13 @@ class ABM_CE_PV(Model):
             print("\nFirst df", self.df1.head())
             self.df1.to_csv("df1_dataout1.csv", index=False)
 
-            # self.df2 = r1.scenario['standard'].material['silicon'].matdataIn_m
             self.df2 = r1.scenario['standard'].material['silicon'].matdataOut_m
             self.df2.to_csv("df2_matdataout.csv", index=False)
-
-            print("\nSecond ", self.df2.head())
-            print("\nKeys df2", self.df2.keys())
-            print("\n2d result: ", r1.saveSimulation() )
-
-
-        # what files are created, use created files
-        # self.pv_INPUTS = pd.read....
-        # print(PV_INPUTS.head())
         
-        self.data = pd.read_excel(reedsFile) #this is the gba data , same used above for masscalculations
+        self.data = pd.read_excel(reedsFile) #this is the pca file
 
         self.agents = self.create_agents(num_consumers)
-        self.pv_ice_yearly_waste = 0  ###
+        self.pv_ice_yearly_waste = 0 
 
         self.num_consumers = num_consumers
         self.consumers_node_degree = consumers_node_degree
@@ -752,7 +615,18 @@ class ABM_CE_PV(Model):
 
         # ! Initialize model with PV_ICE historical installed cap
         # self.total_number_product = total_number_product
-        subset_df_init_cap = self.df0[self.df0['year'] < 2020]
+        # subset_df_init_cap = self.df0[self.df0['year'] < 2020]
+        
+        # self.pca = self.create_agents(num_consumers)[self.unique_id][0]
+        all_pca_df = pd.DataFrame()
+        for pca in PCAs:
+            print(pca, PCAs)
+            subset_df_init_cap = pd.read_csv(
+                "datain_95-by-35.Adv_" + pca + "_.csv")
+            subset_df_init_cap['pca'] = pca
+            pd.concat([all_pca_df, subset_df_init_cap])
+        all_pca_df.to_csv('all_pca_datain_95-by-35.Adv.csv')
+
         subset_df_init_cap = subset_df_init_cap[
             'new_Installed_Capacity_[MW]'].tolist()
         self.total_number_product = subset_df_init_cap
@@ -769,7 +643,6 @@ class ABM_CE_PV(Model):
 
         # ! Changed from total_number_product to the class value (which is
         # ! PV_ICE based)
-        self.original_num_prod = self.total_number_product
         self.avg_lifetime = product_lifetime
         self.fsthand_mkt_pric = fsthand_mkt_pric
         self.fsthand_mkt_pric_reg_param = fsthand_mkt_pric_reg_param
@@ -857,14 +730,15 @@ class ABM_CE_PV(Model):
                            'Maryland', 'Massachusetts', 'Vermont',
                            'New Hampshire', 'New Jersey', 'Connecticut',
                            'Delaware', 'Rhode Island']
-        self.states = pd.read_csv("../StatesAdjacencyMatrix.csv").to_numpy()
+        
+        self.states = pd.read_csv("../../../StatesAdjacencyMatrix.csv").to_numpy()
         # Compute distances
         self.mean_distance_within_state = np.nanmean(
             np.where(self.states != 0, self.states, np.nan)) / 2
         self.states_graph = nx.from_numpy_matrix(self.states)
         nodes_states_dic = \
             dict(zip(list(self.states_graph.nodes),
-                     list(pd.read_csv("../StatesAdjacencyMatrix.csv"))))
+                     list(pd.read_csv("../../../StatesAdjacencyMatrix.csv"))))
         self.states_graph = nx.relabel_nodes(self.states_graph,
                                              nodes_states_dic)
         self.recycling_states = recycling_states
@@ -1431,4 +1305,4 @@ class ABM_CE_PV(Model):
 
         # Calculate yearly waste using pv_ice_waste_calculation method - pass pv_output
         self.pv_ice_yearly_waste = 0
-        self.pv_ice_waste_calculation(self.clock, self.df2)
+        # self.pv_ice_waste_calculation(self.clock, self.df2)
