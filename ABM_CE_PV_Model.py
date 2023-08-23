@@ -438,7 +438,7 @@ class ABM_CE_PV(Model):
 
         if not os.path.exists(testfolder):
             os.makedirs(testfolder)
-        print ("Your simulation will be stored in %s" % testfolder)
+        # print ("Your simulation will be stored in %s" % testfolder)
 
 
         SupportingMaterialFolder = str(Path().resolve()/ 'PV_ICE' / 'baselines' / 'SupportingMaterial')
