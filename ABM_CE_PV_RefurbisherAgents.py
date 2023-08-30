@@ -12,6 +12,7 @@ import numpy as np
 from ABM_CE_PV_RecyclerAgents import Recyclers
 import operator
 from scipy.stats import truncnorm
+import pandas as pd
 
 
 class Refurbishers(Agent):
@@ -54,12 +55,15 @@ class Refurbishers(Agent):
                                    in model.original_num_prod]
         #  Original repairing volume is based on previous years EoL volume
         # (from 2000 to 2019)
+        yearly_waste_file = pd.read_csv("all_pca_dataOut_95-by-35.Adv.csv")
+        yearly_waste = yearly_waste_file[
+            yearly_waste_file['year'] <= 2020]
+        yearly_waste = sum(
+            yearly_waste['Yearly_Sum_Power_atEOL'].tolist())
         self.original_repairing_volume = \
             self.model.repairability * (
                     init_eol_rate["repair"] + init_eol_rate["sell"]) * \
-            sum(self.model.waste_generation(self.model.d_product_lifetimes,
-                                            self.model.avg_failure_rate[2],
-                                            original_reused_volumes))
+            yearly_waste
         self.repairing_cost = self.original_repairing_cost
         self.refurbished_volume = 0
         self.repairing_shape_factor = repairing_learning_shape_factor
@@ -170,7 +174,10 @@ class Refurbishers(Agent):
                         self.storage_yr += 1
                     volume = (agent.number_product_EoL +
                               agent.product_storage_to_other_ref)
-                    mass_volume = agent.mass_per_function_model(agent.waste) \
+
+                    # ! TODO: replace with PVICE value in kg replace below 
+                    # ! is in Watt!! We need in kg!
+                    mass_volume = agent.tot_prod_EoL \
                         + agent.weighted_average_mass_watt * \
                         agent.product_storage_to_other_ref
                     self.update_volumes_eol(agent, eol_refurbisher,

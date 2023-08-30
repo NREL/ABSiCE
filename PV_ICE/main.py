@@ -702,6 +702,11 @@ class Simulation:
 
             df['Yearly_Sum_Area_atEOL'] = 0  # Failure + Degradation + ProjcLife
             df['Yearly_Sum_Power_atEOL'] = 0
+            
+            # Adding detailed waste variables to be used in the ABM
+            df['Detailed_Yearly_Sum_Area_atEOL'] = 0
+            df['Detailed_Yearly_Sum_Power_atEOL'] = 0
+            
             df['Yearly_Sum_Area_PathsBad'] = 0 # should be degradation, failures not fixed
             df['Yearly_Sum_Power_PathsBad'] = 0
             df['Yearly_Sum_Area_PathsGood'] = 0  # should be proj lifetimes
@@ -1035,6 +1040,21 @@ class Simulation:
                 df['Yearly_Sum_Power_atEOL'] += powerEOL_failure_notrepaired_all
                 df['Yearly_Sum_Power_atEOL'] += (
                     powerEOL_ProjLife_all)
+                
+                # There is a weird behavior from the pandas data frame df
+                # so we need to pass a string first
+                df['Detailed_Yearly_Sum_Area_atEOL'].iloc[generation] = \
+                    'Passing string to counter behavior'
+                df['Detailed_Yearly_Sum_Area_atEOL'].iloc[generation] = [
+                    x + y + z for x, y, z in zip(
+                        areaEOL_failure_notrepaired_all,
+                        areaEOL_ProjLife_all,
+                        areaEOL_degradation_all)]
+                df['Detailed_Yearly_Sum_Power_atEOL'].iloc[generation] = \
+                    'Passing string to counter behavior'
+                df['Detailed_Yearly_Sum_Power_atEOL'].iloc[generation] = [
+                    x + y for x, y in zip(powerEOL_failure_notrepaired_all, 
+                                          powerEOL_ProjLife_all)]
 
                 df['Repaired_Area'] += area_repaired_all
                 df['Repaired_[W]'] += power_repaired_all

@@ -618,16 +618,23 @@ class ABM_CE_PV(Model):
         # subset_df_init_cap = self.df0[self.df0['year'] < 2020]
         
         # self.pca = self.create_agents(num_consumers)[self.unique_id][0]
-        all_pca_df = pd.DataFrame()
+        all_pca_df_in = pd.DataFrame()
+        all_pca_df_out = pd.DataFrame()
         for pca in PCAs:
             subset_df_init_cap = pd.read_csv(
                 "datain_95-by-35.Adv_" + pca + "_.csv")
             subset_df_init_cap['pca'] = pca
-            all_pca_df = pd.concat([all_pca_df, subset_df_init_cap])
-        all_pca_df.to_csv('all_pca_datain_95-by-35.Adv.csv')
-        all_pca_df = all_pca_df.groupby('year', as_index=False).sum()
-        
-        subset_df_init_cap = all_pca_df[all_pca_df['year'] < 2020]
+            all_pca_df_in = pd.concat([all_pca_df_in, subset_df_init_cap])
+            subset_df_init_cap_out = pd.read_csv(
+                "dataOut_95-by-35.Adv_" + pca + "_.csv")
+            subset_df_init_cap_out['pca'] = pca
+            all_pca_df_out = pd.concat([all_pca_df_out,
+                                        subset_df_init_cap_out])
+        all_pca_df_in.to_csv('all_pca_datain_95-by-35.Adv.csv')
+        all_pca_df_out.to_csv('all_pca_dataOut_95-by-35.Adv.csv')
+
+        all_pca_df_in = all_pca_df_in.groupby('year', as_index=False).sum()
+        subset_df_init_cap = all_pca_df_in[all_pca_df_in['year'] < 2020]
         subset_df_init_cap = subset_df_init_cap[
             'new_Installed_Capacity_[MW]'].tolist()
         self.total_number_product = subset_df_init_cap
