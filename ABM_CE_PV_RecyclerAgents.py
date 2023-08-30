@@ -9,6 +9,7 @@ Agent - Recycler
 
 from mesa import Agent
 import numpy as np
+import pandas as pd
 
 
 class Recyclers(Agent):
@@ -47,14 +48,14 @@ class Recyclers(Agent):
         self.total_repairable_volume = 0
         #  Original recycling volume is based on previous years EoL volume
         # (from 2000 to 2019)
-        original_recycled_volumes = [x / model.num_recyclers * 1E6 for x
-                                     in model.original_num_prod]
+        yearly_waste_file = pd.read_csv("all_pca_dataOut_95-by-35.Adv.csv")
+        yearly_waste = yearly_waste_file[
+            yearly_waste_file['year'] <= 2020]
+        yearly_waste = sum(
+            yearly_waste['Yearly_Sum_Power_atEOL'].tolist())
         self.original_recycling_volume = \
             (1 - self.model.repairability) * \
-            self.original_fraction_recycled_waste * \
-            sum(self.model.waste_generation(self.model.d_product_lifetimes,
-                                            self.model.avg_failure_rate[2],
-                                            original_recycled_volumes))
+            self.original_fraction_recycled_waste * yearly_waste
         self.symbiosis = False
         self.agent_i = self.unique_id - self.model.num_consumers
         self.recycler_costs = 0

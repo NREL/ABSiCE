@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import time
 import os
 
+
 def run_model(number_run, number_steps):
     """
     Run model several times and collect outputs at each time steps. Creates
