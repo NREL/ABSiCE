@@ -649,6 +649,13 @@ class ABM_CE_PV(Model):
         self.purchase_options = purchase_choices
         self.avg_failure_rate = failure_rate_alpha
 
+        self.pca_outputs = {}
+        for pca in PCAs:
+            pathway_dict = {}
+            for pathway in self.all_EoL_pathways.keys():
+                pathway_dict[pathway] = 0
+            self.pca_outputs[pca] = pathway_dict
+
         # ! Changed from total_number_product to the class value (which is
         # ! PV_ICE based)
         self.original_num_prod = self.total_number_product
@@ -884,7 +891,8 @@ class ABM_CE_PV(Model):
             "Refurbisher costs": lambda c:
             self.report_output("refurbisher_costs"),
             "Refurbisher costs w margins": lambda c:
-            self.report_output("refurbisher_costs_w_margins")}
+            self.report_output("refurbisher_costs_w_margins"),
+            "Waste (kg) by pca": lambda c: str(self.pca_outputs)}
 
         ABM_CE_PV_agent_reporters = {
             "Year": lambda c:
@@ -952,36 +960,36 @@ class ABM_CE_PV(Model):
             mat_PG2_stored
         )
         # print("\n\ntotal:", self.pv_ice_yearly_waste )
-        
+
 
     def create_agents(self, num_consumers):
         pca_column = self.data['PCA']
         unique_pca = pca_column.unique()
         total_unique_pca = len(unique_pca)
-       
+
         # Calculate the number of agents per unique PCA value
         agents_per_pca = num_consumers // total_unique_pca
-       
+
         # Distribute agents evenly to each unique PCA value
         agents_count_per_pca = [agents_per_pca] * total_unique_pca
-       
+
         # Distribute remaining agents if any
         remaining_agents = num_consumers % total_unique_pca
         for i in range(remaining_agents):
             agents_count_per_pca[i] += 1
-       
+
         agents = {}
         agent_id = 0
         for i, pca_value in enumerate(unique_pca):
             state_values = self.data.loc[self.data['PCA'] == pca_value, 'State']
             agents_count = agents_count_per_pca[i]
-           
+
             for j in range(agents_count):
                 # agent_id = self.unique_id()
                 state = state_values.sample().iloc[0]
-                agents[agent_id] = (pca_value, state)
-                agent_id +=1
-       
+                agents[agent_id] = (pca_value, state, agents_count)
+                agent_id += 1
+
         return agents
 
     def shortest_paths(self, target_states, distances_to_target):
