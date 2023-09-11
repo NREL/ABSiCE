@@ -117,8 +117,28 @@ class Consumers(Agent):
         self.used_EoL_pathway = self.EoL_pathway
         self.purchase_choice = self.initial_choice(
             self.model.init_purchase_choice)
-        self.number_product = [x / model.num_consumers * 1E6 for x
-                               in model.total_number_product]
+
+        # ! This increases model resolution nothing to do here for now
+        self.pca = self.model.agents[self.unique_id][0]
+        self.state = self.model.agents[self.unique_id][1]
+        self.agents_per_pca = self.model.agents[self.unique_id][2]
+
+        # ! prepare pvice waste outputs
+        self.data_out_pca = pd.read_csv(
+            "dataOut_95-by-35.Adv_" + self.pca + "_.csv")
+        self.data_out_pca['Yearly_Sum_Power_atEOL'] /= self.agents_per_pca
+        self.data_out_pca['Yearly_Sum_Area_atEOL'] /= self.agents_per_pca
+        # ! modified the initial number of products & prepare pvice outputs
+        self.data_in_pca = pd.read_csv(
+            "datain_95-by-35.Adv_" + self.pca + "_.csv")
+        self.data_in_pca['new_Installed_Capacity_[MW]'] /= self.agents_per_pca
+        self.data_in_pca['new_Installed_Capacity_[MW]'] *= 1E6
+        subset_df_cap = self.data_in_pca.copy()
+        subset_df_cap = subset_df_cap[
+            subset_df_cap['year'] < (2020 + self.model.clock)]
+        self.number_product = subset_df_cap[
+            'new_Installed_Capacity_[MW]'].to_list()
+
         self.number_product_hard_copy = self.number_product.copy()
         self.product_distribution = product_distribution
         self.new_products = self.number_product.copy()
@@ -209,9 +229,6 @@ class Consumers(Agent):
         self.convenience = self.extended_tpb_convenience()
         self.knowledge = self.extended_tpb_knowledge()
 
-        # ! This increases model resolution nothing to do here for now
-        self.pca = self.model.agents[self.unique_id][0]
-        self.state = self.model.agents[self.unique_id][1]
 
     def update_transport_costs(self):
         """
@@ -334,8 +351,7 @@ class Consumers(Agent):
         # subset_df_init_cap = self.model.df0[
         #     self.model.df0['year'] == 2020 + self.model.clock]
 
-        subset_df_cap = pd.read_csv(
-            "datain_95-by-35.Adv_" + self.pca + "_.csv")
+        subset_df_cap = self.data_in_pca.copy()
         subset_df_cap = subset_df_cap[
             subset_df_cap['year'] == (2020 + self.model.clock)]
         additional_capacity = subset_df_cap[
@@ -393,14 +409,6 @@ class Consumers(Agent):
         # ! Implementation is below. Left to do: check with Silvana that
         # ! Yearly_Sum_Power_atEOL is the total waste generated in a year
         # ! expressed in W
-        # subset_df_waste = self.model.df1[
-        #     self.model.df1['Year'] < (2020 + self.model.clock)]
-
-        subset_df_waste = pd.read_csv(
-            "dataOut_95-by-35.Adv_" + self.pca + "_.csv")
-        subset_df_waste = subset_df_waste[
-            subset_df_waste['year'] <= (2020 + self.model.clock)]
-
         # ! Old code
         # self.number_product_EoL = sum(self.waste)
         # self.number_used_product_EoL = sum(self.used_waste)
@@ -412,8 +420,8 @@ class Consumers(Agent):
         else:
             self.used_new_ratio = self.used_products[-1] / (
                 self.new_products[-1] + self.used_products[-1])
-        yearly_waste_file = pd.read_csv(
-            "dataOut_95-by-35.Adv_" + self.pca + "_.csv")
+
+        yearly_waste_file = self.data_out_pca.copy()
         if self.model.clock == 0:
             yearly_waste = yearly_waste_file[
                 yearly_waste_file['year'] <= (2020 + self.model.clock)]
@@ -422,6 +430,14 @@ class Consumers(Agent):
             self.number_product_EoL = yearly_waste * (
                 1 - self.used_new_ratio)
             self.number_used_product_EoL = yearly_waste * self.used_new_ratio
+            yearly_waste_m2 = yearly_waste_file[
+                yearly_waste_file['year'] <= (2020 + self.model.clock)]
+            yearly_waste_m2 = sum(
+                yearly_waste_m2['Yearly_Sum_Area_atEOL'].tolist())
+            self.number_product_EoL_m2 = yearly_waste_m2 * (
+                1 - self.used_new_ratio)
+            self.number_used_product_EoL_m2 = yearly_waste_m2 * \
+                self.used_new_ratio
         else:
             yearly_waste = yearly_waste_file[
                 yearly_waste_file['year'] == (2020 + self.model.clock)]
@@ -429,11 +445,18 @@ class Consumers(Agent):
                 'Yearly_Sum_Power_atEOL'].iloc[0] * (1 - self.used_new_ratio)
             self.number_used_product_EoL = yearly_waste[
                 'Yearly_Sum_Power_atEOL'].iloc[0] * self.used_new_ratio
+            yearly_waste_m2 = yearly_waste_file[
+                yearly_waste_file['year'] == (2020 + self.model.clock)]
+            self.number_product_EoL_m2 = yearly_waste_m2[
+                'Yearly_Sum_Area_atEOL'].iloc[0] * (1 - self.used_new_ratio)
+            self.number_used_product_EoL_m2 = yearly_waste[
+                'Yearly_Sum_Area_atEOL'].iloc[0] * self.used_new_ratio
         self.tot_prod_EoL = self.number_product_EoL + \
             self.number_used_product_EoL
-        
-        subset_df_remaining_cap = pd.read_csv(
-            "dataOut_95-by-35.Adv_" + self.pca + "_.csv")
+        self.tot_prod_EoL_m2 = self.number_product_EoL_m2 + \
+            self.number_used_product_EoL_m2
+
+        subset_df_remaining_cap = self.data_out_pca.copy()
         subset_df_remaining_cap = subset_df_remaining_cap[
             subset_df_remaining_cap['year'] <= (2020 + self.model.clock)]
         self.new_products = [
@@ -705,15 +728,16 @@ class Consumers(Agent):
             if product_type == "new":
                 # ! TODO: replace self.number_product_EoL with converted value
                 # ! in kg + self.weighted_average_mass_watt with average
-                # ! conversion factor up to the clock
+                # ! conversion factor up to the clock (from last max storage
+                # ! year)
                 self.number_new_prod_repaired += \
-                    self.number_product_EoL + \
+                    self.number_product_EoL_m2 + \
                     self.weighted_average_mass_watt * storage
             else:
                 # ! TODO: replace self.number_used_product_EoL with converted
                 # ! value in kg
                 self.number_used_prod_repaired += \
-                    self.number_used_product_EoL
+                    self.number_used_product_EoL_m2
         elif eol_pathway == "sell":
             self.number_product_sold += managed_waste
             self.consumer_costs += managed_waste * \
@@ -723,13 +747,13 @@ class Consumers(Agent):
                 # ! in kg + self.weighted_average_mass_watt with average
                 # ! conversion factor up to the clock
                 self.number_new_prod_sold += \
-                    self.number_product_EoL + \
+                    self.number_product_EoL_m2 + \
                     self.weighted_average_mass_watt * storage
             else:
                 # ! TODO: replace self.number_used_product_EoL with converted
                 # ! value in kg
                 self.number_used_prod_sold += \
-                    self.number_used_product_EoL
+                    self.number_used_product_EoL_m2
         elif eol_pathway == "recycle":
             self.number_product_recycled += managed_waste
             if not self.model.epr_business_model:
@@ -738,15 +762,16 @@ class Consumers(Agent):
             if product_type == "new":
                 # ! TODO: replace self.number_product_EoL with converted value
                 # ! in kg + self.weighted_average_mass_watt with average
-                # ! conversion factor up to the clock
+                # ! conversion factor up to the clock (from last max storage
+                # ! year)
                 self.number_new_prod_recycled += \
-                    self.number_product_EoL + \
+                    self.number_product_EoL_m2 + \
                     self.weighted_average_mass_watt * storage
             else:
                 # ! TODO: replace self.number_used_product_EoL with converted
                 # ! value in kg
                 self.number_used_prod_recycled += \
-                    self.number_used_product_EoL
+                    self.number_used_product_EoL_m2
         elif eol_pathway == "landfill":
             self.number_product_landfilled += managed_waste
             self.consumer_costs += managed_waste * \
@@ -754,15 +779,16 @@ class Consumers(Agent):
             if product_type == "new":
                 # ! TODO: replace self.number_product_EoL with converted value
                 # ! in kg + self.weighted_average_mass_watt with average
-                # ! conversion factor up to the clock
+                # ! conversion factor up to the clock (from last max storage
+                # ! year)
                 self.number_new_prod_landfilled += \
-                    self.number_product_EoL + \
+                    self.number_product_EoL_m2 + \
                     self.weighted_average_mass_watt * storage
             else:
                 # ! TODO: replace self.number_used_product_EoL with converted
                 # ! value in kg
                 self.number_used_prod_landfilled += \
-                    self.number_used_product_EoL
+                    self.number_used_product_EoL_m2
         else:
             self.number_product_hoarded += managed_waste
             self.consumer_costs += managed_waste * \
@@ -771,12 +797,13 @@ class Consumers(Agent):
                 # ! TODO: replace self.number_product_EoL with converted value
                 # ! in kg
                 self.number_new_prod_hoarded += \
-                    self.number_product_EoL
+                    self.number_product_EoL_m2
             else:
                 # ! TODO: replace self.number_used_product_EoL with converted
                 # ! value in kg
                 self.number_used_prod_hoarded += \
-                    self.number_used_product_EoL
+                    self.number_used_product_EoL_m2
+        self.model.pca_outputs[self.pca][eol_pathway] += self.tot_prod_EoL_m2
 
         # ! TODO: replace code below with PV_ICE waste value - STOP
 
