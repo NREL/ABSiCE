@@ -409,6 +409,7 @@ class Consumers(Agent):
         # ! Implementation is below. Left to do: check with Silvana that
         # ! Yearly_Sum_Power_atEOL is the total waste generated in a year
         # ! expressed in W
+
         # ! Old code
         # self.number_product_EoL = sum(self.waste)
         # self.number_used_product_EoL = sum(self.used_waste)

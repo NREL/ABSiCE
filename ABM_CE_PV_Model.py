@@ -438,14 +438,14 @@ class ABM_CE_PV(Model):
 
         if not os.path.exists(testfolder):
             os.makedirs(testfolder)
-        print ("Your simulation will be stored in %s" % testfolder)
+        # print ("Your simulation will be stored in %s" % testfolder)
 
 
         SupportingMaterialFolder = str(Path().resolve()/ 'PV_ICE' / 'baselines' / 'SupportingMaterial')
         BaselinesFolder = str(Path().resolve()/ 'PV_ICE' / 'baselines')
 
         reedsFile = os.path.join(SupportingMaterialFolder, 'December Core Scenarios ReEDS Outputs Solar Futures v3a.xlsx')
-        print ("Input file is stored in %s" % reedsFile)
+        # print ("Input file is stored in %s" % reedsFile)
 
         rawdf = pd.read_excel(reedsFile,
                         sheet_name="new installs PV")
@@ -570,13 +570,10 @@ class ABM_CE_PV(Model):
                 self.df = self.df.join(self.year_column)
                 self.df.to_csv(output_filename, index=False)
 
-        print("\nVersion: ", PV_ICE.__version__)
-
  
         if pv_ice:
  
             testfolder = str(Path().resolve().parent.parent)
-            print("\n Test path location", testfolder)
             r1 = PV_ICE.Simulation(name='Simulation1', path=testfolder)
             r1.createScenario(name='standard', massmodulefile=r'./baselines/baseline_modules_mass_US.csv')
             r1.scenario['standard'].addMaterial('glass', massmatfile=r'./baselines/baseline_material_mass_glass.csv' )
@@ -641,6 +638,43 @@ class ABM_CE_PV(Model):
 
         self.copy_total_number_product = self.total_number_product.copy()
         self.mass_to_function_reg_coeff = mass_to_function_reg_coeff
+
+        # Create an empty DataFrame to store the material factors
+        df_mat_factor = pd.DataFrame()
+
+        # List of valid materials
+        valid_materials = ["aluminum_frames.csv", "backsheets.csv", "copper.csv", "encapsulant.csv", "glass.csv", "silicon.csv", "silver.csv"]
+
+        # Loop through files in the specified folder
+        baseline_folder = "../../baselines"
+        output_folder = "../../material_factor_output_folder"
+
+
+        for filename in os.listdir(baseline_folder):
+            if filename.startswith("baseline_material_mass_") and filename.endswith(".csv") and not filename.endswith("_cdte.csv") and not filename.endswith("cadmium.csv") and not filename.endswith("tellurium.csv"):
+                material_name = filename.split("_")[3] 
+                if material_name in valid_materials:
+                    file_path = os.path.join(baseline_folder, filename)
+                    data = pd.read_csv(file_path, skiprows=[1])
+                    # Add the material mass per m^2 column to the existing DataFrame
+                    df_mat_factor["year"] = data["year"]  
+                    try:
+                        df_mat_factor[material_name] = data["mat_massperm2"].astype(float) / 1000
+                    except ValueError:
+                        # Handle non-numeric values in the column (e.g., strings)
+                        print(f"Skipping non-numeric values in {material_name} column")
+                        continue
+                    
+        df_mat_factor["total_massperm2"] = df_mat_factor.drop('year', axis=1).sum(axis=1)
+                    
+        material_folder = os.path.join(output_folder, material_name)
+        os.makedirs(material_folder, exist_ok=True)
+        output_filename = os.path.join(material_folder, "mat_factor.csv")
+        df_mat_factor.to_csv(output_filename, index=False)
+
+
+
+
         self.iteration = 0
         self.running = True
         self.color_map = []
