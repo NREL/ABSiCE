@@ -645,12 +645,12 @@ class ABM_CE_PV(Model):
 
         for filename in os.listdir(baseline_folder):
             if filename.startswith("baseline_material_mass_") and filename.endswith(".csv") and not filename.endswith("_cdte.csv") and not filename.endswith("cadmium.csv") and not filename.endswith("tellurium.csv"):
-                material_name = filename.split("_")[3]  # Extract material name from filename
+                material_name = filename.split("_")[3] 
                 if material_name in valid_materials:
                     file_path = os.path.join(baseline_folder, filename)
                     data = pd.read_csv(file_path, skiprows=[1])
                     # Add the material mass per m^2 column to the existing DataFrame
-                    df_mat_factor["year"] = data["year"]  # Add year column only onces
+                    df_mat_factor["year"] = data["year"]  
                     try:
                         df_mat_factor[material_name] = data["mat_massperm2"].astype(float) / 1000
                     except ValueError:
@@ -658,15 +658,13 @@ class ABM_CE_PV(Model):
                         print(f"Skipping non-numeric values in {material_name} column")
                         continue
                     
-                    # Add a column for the sum of all material mass per m^2 columns
-                    df_mat_factor["total_massperm2"] = df_mat_factor.sum(axis=1)
+        df_mat_factor["total_massperm2"] = df_mat_factor.drop('year', axis=1).sum(axis=1)
                     
-                    material_folder = os.path.join(output_folder, material_name)
-                    os.makedirs(material_folder, exist_ok=True)
-                    output_filename = os.path.join(material_folder, f"{material_name}_mat_factor.csv")
-                    df_mat_factor.to_csv(output_filename, index=False)
+        material_folder = os.path.join(output_folder, material_name)
+        os.makedirs(material_folder, exist_ok=True)
+        output_filename = os.path.join(material_folder, "mat_factor.csv")
+        df_mat_factor.to_csv(output_filename, index=False)
 
-                    print(f"Saved {output_filename}")
 
 
 
