@@ -97,7 +97,12 @@ import random
 import PV_ICE
 import os
 import csv
+import pandas as pd
+from geopy.geocoders import Nominatim
+import time
+from math import radians, sin, cos, sqrt, atan2
 from pathlib import Path
+
 
 
 class ABM_CE_PV(Model):
@@ -223,8 +228,8 @@ class ABM_CE_PV(Model):
                                 "Year": 10, "number_seed": 50,
                                 "discount": 0.35},
                                 pv_ice = False,
-                                pca = False,
-                                pca_scenario = False,
+                                pca = True,
+                                pca_scenario = True,
 
                      ):
         
@@ -532,6 +537,30 @@ class ABM_CE_PV(Model):
                 simulationname = [w.replace('+', '_') for w in simulationname]
                 SFscenarios = [simulationname[0], simulationname[4], simulationname[8]]
 
+
+        excel_file_path = '/Users/aharouna/Documents/Table A-1_Global PV Recyclers_states.xlsx'  
+        df = pd.read_excel(excel_file_path, skiprows=[0])  # Skip the first row
+        df = df[df['Country'] == 'United States of America']
+
+        # Function to calculate the Haversine distance between two points given their latitude and longitude
+        def haversine(lat1, lon1, lat2, lon2):
+            # Convert latitude and longitude from degrees to radians
+            lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+
+            # Haversine formula
+            dlon = lon2 - lon1
+            dlat = lat2 - lat1
+            a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
+            c = 2 * atan2(sqrt(a), sqrt(1 - a))
+            return 6371 * c  # Radius of the Earth in kilometers
+
+        # Initialize a geocoder to fetch latitude and longitude coordinates
+        geolocator = Nominatim(user_agent="recycler_locator")
+
+        # Create an empty DataFrame to store distances
+        distance_df = pd.DataFrame(columns=["PCA", "Recycler", "Distance (km)"])
+
+
         #     #### Create the 3 Scenarios and assign Baselines
 
         if pca_scenario:
@@ -556,6 +585,37 @@ class ABM_CE_PV(Model):
                 r1.scenario[PCAs[jj]].latitude = GIS.loc[PCAs[jj]].lat
                 r1.scenario[PCAs[jj]].longitude = GIS.loc[PCAs[jj]].long
 
+            # Calculate distances from the current PCA to all recyclers
+                for index, row in df.iterrows():
+                    recycler_name = row['Recycler Name']
+                    state = row['State']
+                    city = row['City']
+
+                    try:
+                        # Fetch latitude and longitude for the recycler
+                        location = geolocator.geocode(f"{city}, {state}", timeout=10)
+                        if location:
+                            recycler_latitude = location.latitude
+                            recycler_longitude = location.longitude
+                        else:
+                            recycler_latitude = None
+                            recycler_longitude = None
+                    except Exception as e:
+                        print(f"Error geocoding for {recycler_name}: {str(e)}")
+                        recycler_latitude = None
+                        recycler_longitude = None
+
+                    # Calculate the distance from the PCA to the recycler
+                    if recycler_latitude is not None and recycler_longitude is not None:
+                        pca_latitude = GIS.loc[PCAs[jj]].lat
+                        pca_longitude = GIS.loc[PCAs[jj]].long
+                        distance = haversine(pca_latitude, pca_longitude, recycler_latitude, recycler_longitude)
+
+                        # Append the distance to the DataFrame
+                        distance_df = distance_df.append({"PCA": PCAs[jj], "Recycler": recycler_name, "Distance (km)": distance}, ignore_index=True)
+
+                distance_df.to_csv("/Users/aharouna/Documents/pca_recycler_distances.csv", index=False)
+
                 self.df_in = r1.scenario[PCAs[jj]].dataIn_m
                 self.df_in.to_csv(output_filename_in, index=False)
                 self.year_column = self.df_in['year']
@@ -569,7 +629,6 @@ class ABM_CE_PV(Model):
                 self.df = r1.scenario[PCAs[jj]].material['silicon'].matdataOut_m
                 self.df = self.df.join(self.year_column)
                 self.df.to_csv(output_filename, index=False)
-
 
         if pv_ice:
 
