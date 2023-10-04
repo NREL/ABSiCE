@@ -559,9 +559,9 @@ class ABM_CE_PV(Model):
                 self.df_in = r1.scenario[PCAs[jj]].dataIn_m
                 self.df_in.to_csv(output_filename_in, index=False)
                 self.year_column = self.df_in['year']
-                
+
                 r1.calculateMassFlow()
-            
+
                 self.df0 = r1.scenario[PCAs[jj]].dataOut_m
                 self.df0 = self.df0.join(self.year_column)
                 self.df0.to_csv(output_filename0, index=False)
@@ -570,15 +570,15 @@ class ABM_CE_PV(Model):
                 self.df = self.df.join(self.year_column)
                 self.df.to_csv(output_filename, index=False)
 
- 
+
         if pv_ice:
- 
+
             testfolder = str(Path().resolve().parent.parent)
             r1 = PV_ICE.Simulation(name='Simulation1', path=testfolder)
             r1.createScenario(name='standard', massmodulefile=r'./baselines/baseline_modules_mass_US.csv')
             r1.scenario['standard'].addMaterial('glass', massmatfile=r'./baselines/baseline_material_mass_glass.csv' )
             r1.scenario['standard'].addMaterial('silicon', massmatfile=r'./baselines/baseline_material_mass_silicon.csv' )
-    
+
             self.df0 = r1.scenario['standard'].dataIn_m
             self.df0.to_csv("df1_dataout.csv", index=False)
 
@@ -591,11 +591,11 @@ class ABM_CE_PV(Model):
 
             self.df2 = r1.scenario['standard'].material['silicon'].matdataOut_m
             self.df2.to_csv("df2_matdataout.csv", index=False)
-        
+
         self.data = pd.read_excel(reedsFile) #this is the pca file
 
         self.agents = self.create_agents(num_consumers)
-        self.pv_ice_yearly_waste = 0 
+        self.pv_ice_yearly_waste = 0
 
         self.num_consumers = num_consumers
         self.consumers_node_degree = consumers_node_degree
@@ -613,7 +613,7 @@ class ABM_CE_PV(Model):
         # ! Initialize model with PV_ICE historical installed cap
         # self.total_number_product = total_number_product
         # subset_df_init_cap = self.df0[self.df0['year'] < 2020]
-        
+
         # self.pca = self.create_agents(num_consumers)[self.unique_id][0]
         all_pca_df_in = pd.DataFrame()
         all_pca_df_out = pd.DataFrame()
@@ -643,7 +643,7 @@ class ABM_CE_PV(Model):
         df_mat_factor = pd.DataFrame()
 
         # List of valid materials
-        valid_materials = ["aluminum_frames.csv", "backsheets.csv", "copper.csv", "encapsulant.csv", "glass.csv", "silicon.csv", "silver.csv"]
+        valid_materials = ["aluminium_frames.csv", "backsheet.csv", "copper.csv", "encapsulant.csv", "glass.csv", "silicon.csv", "silver.csv"]
 
         # Loop through files in the specified folder
         baseline_folder = "../../baselines"
@@ -652,7 +652,8 @@ class ABM_CE_PV(Model):
 
         for filename in os.listdir(baseline_folder):
             if filename.startswith("baseline_material_mass_") and filename.endswith(".csv") and not filename.endswith("_cdte.csv") and not filename.endswith("cadmium.csv") and not filename.endswith("tellurium.csv"):
-                material_name = filename.split("_")[3] 
+                material_name = filename.split("_")[3:]
+                material_name = '_'.join(material_name)
                 if material_name in valid_materials:
                     file_path = os.path.join(baseline_folder, filename)
                     data = pd.read_csv(file_path, skiprows=[1])
@@ -664,16 +665,16 @@ class ABM_CE_PV(Model):
                         # Handle non-numeric values in the column (e.g., strings)
                         print(f"Skipping non-numeric values in {material_name} column")
                         continue
-                    
+
         df_mat_factor["total_massperm2"] = df_mat_factor.drop('year', axis=1).sum(axis=1)
-                    
-        material_folder = os.path.join(output_folder, material_name)
-        os.makedirs(material_folder, exist_ok=True)
-        output_filename = os.path.join(material_folder, "mat_factor.csv")
+
+        os.makedirs(output_folder, exist_ok=True)
+        output_filename = os.path.join(output_folder, "mat_factor.csv")
         df_mat_factor.to_csv(output_filename, index=False)
-
-
-
+        self.pvice_mat_factor = df_mat_factor
+        self.weight_factor = 0
+        self.max_storage = max_storage
+        self.avg_weight_factor_stored_pv = 0
 
         self.iteration = 0
         self.running = True
@@ -689,6 +690,11 @@ class ABM_CE_PV(Model):
             for pathway in self.all_EoL_pathways.keys():
                 pathway_dict[pathway] = 0
             self.pca_outputs[pca] = pathway_dict
+        self.refurbisher_outputs_watt = {}
+        self.refurbisher_outputs_kg = {}
+        for pathway in self.all_EoL_pathways.keys():
+            self.refurbisher_outputs_watt[pathway] = 0
+            self.refurbisher_outputs_kg[pathway] = 0
 
         # ! Changed from total_number_product to the class value (which is
         # ! PV_ICE based)
@@ -713,9 +719,28 @@ class ABM_CE_PV(Model):
         self.material_waste_ratio = material_waste_ratio
         self.established_scd_mkt = established_scd_mkt
         self.recovery_fractions = recovery_fractions
-        self.product_average_wght = product_average_wght
-        self.dynamic_product_average_wght = product_average_wght
-        self.yearly_product_wght = product_average_wght
+
+        pvice_mat_factor_copy = self.pvice_mat_factor[
+            self.pvice_mat_factor['year'] == 2020]
+        conversion_factor = \
+            pvice_mat_factor_copy['total_massperm2'].iloc[0]
+        all_data_out_pca = pd.read_csv(
+            "all_pca_dataOut_95-by-35.Adv.csv")
+        all_data_out_pca = all_data_out_pca.groupby(
+            'year', as_index=False).mean()
+        data_out_pca_copy = all_data_out_pca[
+            all_data_out_pca['year'] == 2020]
+        waste_in_w = \
+            data_out_pca_copy['Yearly_Sum_Power_atEOL'].iloc[0]
+        waste_in_m2 = \
+            data_out_pca_copy['Yearly_Sum_Area_atEOL'].iloc[0]
+        waste_w_m2 = waste_in_m2 / waste_in_w
+        pv_ice_product_average_wght = conversion_factor * waste_w_m2
+
+        self.product_average_wght = pv_ice_product_average_wght
+        self.dynamic_product_average_wght = pv_ice_product_average_wght
+        self.yearly_product_wght = pv_ice_product_average_wght
+
         self.transportation_cost = transportation_cost
         self.epr_business_model = epr_business_model
         self.average_landfill_cost = sum(landfill_cost) / len(landfill_cost)
@@ -730,7 +755,7 @@ class ABM_CE_PV(Model):
         self.seeding_recyc = seeding_recyc
 
         self.all_gba = pd.read_excel(reedsFile)  #importing all grid balancing areas in an excel file
-        
+
         self.cost_seeding = 0
         self.product_lifetime = product_lifetime
         self.d_product_lifetimes = []
@@ -780,7 +805,7 @@ class ABM_CE_PV(Model):
                            'Maryland', 'Massachusetts', 'Vermont',
                            'New Hampshire', 'New Jersey', 'Connecticut',
                            'Delaware', 'Rhode Island']
-        
+
         self.states = pd.read_csv("../../../StatesAdjacencyMatrix.csv").to_numpy()
         # Compute distances
         self.mean_distance_within_state = np.nanmean(
@@ -926,7 +951,9 @@ class ABM_CE_PV(Model):
             self.report_output("refurbisher_costs"),
             "Refurbisher costs w margins": lambda c:
             self.report_output("refurbisher_costs_w_margins"),
-            "Waste (kg) by pca": lambda c: str(self.pca_outputs)}
+            "Waste (kg) by pca": lambda c: str(self.pca_outputs),
+            "Waste (kg) refurbishers": lambda c: str(
+                self.refurbisher_outputs_kg)}
 
         ABM_CE_PV_agent_reporters = {
             "Year": lambda c:
@@ -971,7 +998,6 @@ class ABM_CE_PV(Model):
         self.datacollector = DataCollector(
             model_reporters=ABM_CE_PV_model_reporters,
             agent_reporters=ABM_CE_PV_agent_reporters)
-    
 
     # ## New edits
     def pv_ice_waste_calculation(self, clock, pv_ice_outputs):
@@ -1124,22 +1150,36 @@ class ABM_CE_PV(Model):
         fu). The weights are the amount of waste for each year. The weighted
         average mass is returned each time step of the simulation.
         """
-        if self.clock <= self.growth_threshold:
-            product_growth_rate = self.product_growth[0]
-        else:
-            product_growth_rate = self.product_growth[1]
-        additional_capacity = sum(product_as_function) * product_growth_rate
-        product_as_function.append(additional_capacity)
-        mass_conversion_coeffs = [
-            self.product_average_wght * e**(
-                -self.mass_to_function_reg_coeff * x) for x in
-            range(len(product_as_function))]
-        self.yearly_product_wght = mass_conversion_coeffs[-1]
-        weighted_average_mass_watt = sum(
-            [product_as_function[i] / sum(product_as_function) *
-             mass_conversion_coeffs[i] for i
-             in range(len(mass_conversion_coeffs))])
+        len_product_as_function = len(product_as_function)
+        pvice_mat_factor_copy = self.pvice_mat_factor[
+            self.pvice_mat_factor['year'] <= 2020 + self.clock]
+        conversion_factors = \
+            pvice_mat_factor_copy['total_massperm2'].to_list()
+        conversion_factors = conversion_factors[-len_product_as_function:]
+        all_data_out_pca = pd.read_csv(
+            "all_pca_dataOut_95-by-35.Adv.csv")
+        all_data_out_pca = all_data_out_pca.groupby(
+            'year', as_index=False).mean()
+        data_out_pca_copy = all_data_out_pca[
+            all_data_out_pca['year'] <= 2020 + self.clock]
+        waste_in_w_list = \
+            data_out_pca_copy['Yearly_Sum_Power_atEOL'].to_list()
+        waste_in_m2_list = \
+            data_out_pca_copy['Yearly_Sum_Area_atEOL'].to_list()
+        waste_in_w_list = waste_in_w_list[-len_product_as_function:]
+        waste_in_m2_list = waste_in_m2_list[-len_product_as_function:]
+        waste_w_m2_list = [x / y if y != 0 else 0 for x, y in
+                           zip(waste_in_m2_list, waste_in_w_list)]
+        product_percent = [x / sum(product_as_function) if
+                           sum(product_as_function) != 0 else 0 for x in
+                           product_as_function]
+        product_as_mass_percent = [x * y * z for x, y, z in zip(
+            product_percent, conversion_factors, waste_w_m2_list)]
+        self.yearly_product_wght = conversion_factors[-1]
+        weighted_average_mass_watt = sum(product_as_mass_percent)
         return weighted_average_mass_watt
+    # ! Problem is not dynamic weighted average but agent distribution of
+    # ! -recycled waste
 
     def average_price_per_function_model(self):
         """
@@ -1335,6 +1375,21 @@ class ABM_CE_PV(Model):
             model.past_sold_repaired_waste = count2
         return count
 
+    def pv_ice_mat_factor(self):
+        """
+        Defines the yearly weight (kg/m2) of pv panels. Also Compute the
+        average mass of the panels for the last "stored" years.
+        """
+        pv_ice_mat_subset = self.pvice_mat_factor[
+            self.pvice_mat_factor['year'] == (2020 + self.clock)]
+        self.weight_factor = pv_ice_mat_subset['total_massperm2'].iloc[0]
+        past_storage = max(0, (2020 + self.clock - self.max_storage[1]))
+        pv_ice_mat_subset_stored_years = self.pvice_mat_factor[
+            (self.pvice_mat_factor['year'] >= past_storage) &
+            (self.pvice_mat_factor['year'] < 2020 + self.clock)]
+        self.avg_weight_factor_stored_pv = pv_ice_mat_subset_stored_years[
+            'total_massperm2'].mean()
+
     def step(self):
         """
         Advance the model by one step and collect data.
@@ -1346,6 +1401,7 @@ class ABM_CE_PV(Model):
         self.dynamic_product_average_wght = \
             self.average_mass_per_function_model(
                 self.copy_total_number_product)
+        self.pv_ice_mat_factor()
         # Collect data
         self.datacollector.collect(self)
         # Refers to agent step function
@@ -1357,3 +1413,8 @@ class ABM_CE_PV(Model):
         # Calculate yearly waste using pv_ice_waste_calculation method - pass pv_output
         self.pv_ice_yearly_waste = 0
         # self.pv_ice_waste_calculation(self.clock, self.df2)
+        test = 0
+        for val in self.pca_outputs.values():
+            for key, value in val.items():
+                if key == 'recycle':
+                    test += value

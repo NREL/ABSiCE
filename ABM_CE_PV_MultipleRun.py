@@ -93,15 +93,14 @@ def run_model(number_run, number_steps):
         # Get results in a pandas DataFrame
         results_model = model.datacollector.get_model_vars_dataframe()
         results_agents = model.datacollector.get_agent_vars_dataframe()
-        #results_model.to_csv(
-        #    "C:/Users/jwalzber/PycharmProjects/ABM_CE_PV_model/Results_model_run%s.csv" % j)
-        #results_agents.to_csv("results\\Results_agents.csv")
         # Draw figures
         draw_graphs(False, False, model, results_agents, results_model)
         print("Run", j+1, "out of", number_run)
         t1 = time.time()
         print(t1 - t0)
         os.chdir('../../../')
+        results_model.to_csv("results\\Results_model_run_%s.csv" % j)
+        results_agents.to_csv("results\\Results_agents_run_%s.csv" % j)
 
 
 
