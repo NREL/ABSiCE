@@ -117,8 +117,28 @@ class Consumers(Agent):
         self.used_EoL_pathway = self.EoL_pathway
         self.purchase_choice = self.initial_choice(
             self.model.init_purchase_choice)
-        self.number_product = [x / model.num_consumers * 1E6 for x
-                               in model.total_number_product]
+
+        # ! This increases model resolution nothing to do here for now
+        self.pca = self.model.agents[self.unique_id][0]
+        self.state = self.model.agents[self.unique_id][1]
+        self.agents_per_pca = self.model.agents[self.unique_id][2]
+
+        # ! prepare pvice waste outputs
+        self.data_out_pca = pd.read_csv(
+            "dataOut_95-by-35.Adv_" + self.pca + "_.csv")
+        self.data_out_pca['Yearly_Sum_Power_atEOL'] /= self.agents_per_pca
+        self.data_out_pca['Yearly_Sum_Area_atEOL'] /= self.agents_per_pca
+        # ! modified the initial number of products & prepare pvice outputs
+        self.data_in_pca = pd.read_csv(
+            "datain_95-by-35.Adv_" + self.pca + "_.csv")
+        self.data_in_pca['new_Installed_Capacity_[MW]'] /= self.agents_per_pca
+        self.data_in_pca['new_Installed_Capacity_[MW]'] *= 1E6
+        subset_df_cap = self.data_in_pca.copy()
+        subset_df_cap = subset_df_cap[
+            subset_df_cap['year'] < (2020 + self.model.clock)]
+        self.number_product = subset_df_cap[
+            'new_Installed_Capacity_[MW]'].to_list()
+
         self.number_product_hard_copy = self.number_product.copy()
         self.product_distribution = product_distribution
         self.new_products = self.number_product.copy()
@@ -201,8 +221,6 @@ class Consumers(Agent):
             self.distances_to_customers)
         self.agent_breed()
         self.product_storage_to_other_ref = 0
-        self.waste = []
-        self.used_waste = []
         self.weighted_average_mass_watt = 0
         self.consumer_costs = 0
         self.past_recycled_waste = 0
@@ -211,9 +229,6 @@ class Consumers(Agent):
         self.convenience = self.extended_tpb_convenience()
         self.knowledge = self.extended_tpb_knowledge()
 
-        # ! This increases model resolution nothing to do here for now
-        self.pca = self.model.agents[self.unique_id][0]
-        self.state = self.model.agents[self.unique_id][1]
 
     def update_transport_costs(self):
         """
@@ -332,15 +347,14 @@ class Consumers(Agent):
         # self.model.initial_capacity = [5, 5, 5, 5, 52, 67, 45, 120] # MWp
 
         # ! Scratch all above: the easiest is to use PV_ICE inputs:
-        
+
         # subset_df_init_cap = self.model.df0[
         #     self.model.df0['year'] == 2020 + self.model.clock]
 
-        subset_df_init_cap = pd.read_csv(
-            "datain_95-by-35.Adv_" + self.pca + "_.csv")
-        subset_df_init_cap = subset_df_init_cap[
-            subset_df_init_cap['year'] == (2020 + self.model.clock)]
-        additional_capacity = subset_df_init_cap[
+        subset_df_cap = self.data_in_pca.copy()
+        subset_df_cap = subset_df_cap[
+            subset_df_cap['year'] == (2020 + self.model.clock)]
+        additional_capacity = subset_df_cap[
             'new_Installed_Capacity_[MW]'].iloc[0]
         # ! Old code
         # additional_capacity = sum(self.number_product_hard_copy) * \
@@ -391,46 +405,71 @@ class Consumers(Agent):
         # sel.waste = df1.subset(row_index_for_year0, row_index_for_year_now,
         #                       column1, column1).to_list()
         # sum the first five years for PV_ICE
-        
+
         # ! Implementation is below. Left to do: check with Silvana that
         # ! Yearly_Sum_Power_atEOL is the total waste generated in a year
         # ! expressed in W
-        # subset_df_waste = self.model.df1[
-        #     self.model.df1['Year'] < (2020 + self.model.clock)]
 
-        subset_df_waste = pd.read_csv(
-            "dataOut_95-by-35.Adv_" + self.pca + "_.csv")
-        subset_df_waste = subset_df_waste[
-            subset_df_waste['year'] < (2020 + self.model.clock)]
-
-        self.waste = subset_df_waste[
-            'Yearly_Sum_Power_atEOL'].tolist()
-        # print(len(self.waste))
         # ! Old code
-        # self.waste = self.model.waste_generation(
-        #    self.model.d_product_lifetimes, self.failure_rate_alpha,
-        #    self.new_products)
-        
-        # ! TODO: still left to do: modify self.used_waste
-        self.used_waste = self.model.waste_generation(
-            [x * self.used_product_substitution_rate for x in
-             self.model.d_product_lifetimes],
-            self.model.avg_failure_rate[0], self.used_products)
+        # self.number_product_EoL = sum(self.waste)
+        # self.number_used_product_EoL = sum(self.used_waste)
+        if type(self.used_products[-1]) != float and \
+                type(self.used_products[-1]) != int:
+            self.used_products[-1] = 0
+        if self.new_products[-1] + self.used_products[-1] == 0:
+            self.used_new_ratio = 0
+        else:
+            self.used_new_ratio = self.used_products[-1] / (
+                self.new_products[-1] + self.used_products[-1])
 
-        # ! TODO: replace code below with PV_ICE waste value - STOP
-
-        self.number_product_EoL = sum(self.waste)
-        self.number_used_product_EoL = sum(self.used_waste)
+        yearly_waste_file = self.data_out_pca.copy()
+        if self.model.clock == 0:
+            yearly_waste = yearly_waste_file[
+                yearly_waste_file['year'] <= (2020 + self.model.clock)]
+            yearly_waste = sum(
+                yearly_waste['Yearly_Sum_Power_atEOL'].tolist())
+            self.number_product_EoL = yearly_waste * (
+                1 - self.used_new_ratio)
+            self.number_used_product_EoL = yearly_waste * self.used_new_ratio
+            yearly_waste_m2 = yearly_waste_file[
+                yearly_waste_file['year'] <= (2020 + self.model.clock)]
+            yearly_waste_m2 = sum(
+                yearly_waste_m2['Yearly_Sum_Area_atEOL'].tolist())
+            self.number_product_EoL_m2 = yearly_waste_m2 * (
+                1 - self.used_new_ratio)
+            self.number_used_product_EoL_m2 = yearly_waste_m2 * \
+                self.used_new_ratio
+        else:
+            yearly_waste = yearly_waste_file[
+                yearly_waste_file['year'] == (2020 + self.model.clock)]
+            self.number_product_EoL = yearly_waste[
+                'Yearly_Sum_Power_atEOL'].iloc[0] * (1 - self.used_new_ratio)
+            self.number_used_product_EoL = yearly_waste[
+                'Yearly_Sum_Power_atEOL'].iloc[0] * self.used_new_ratio
+            yearly_waste_m2 = yearly_waste_file[
+                yearly_waste_file['year'] == (2020 + self.model.clock)]
+            self.number_product_EoL_m2 = yearly_waste_m2[
+                'Yearly_Sum_Area_atEOL'].iloc[0] * (1 - self.used_new_ratio)
+            self.number_used_product_EoL_m2 = yearly_waste[
+                'Yearly_Sum_Area_atEOL'].iloc[0] * self.used_new_ratio
         self.tot_prod_EoL = self.number_product_EoL + \
             self.number_used_product_EoL
-        self.new_products = [product - waste_new for product, waste_new in
-                             zip(self.new_products, self.waste)]
-        self.used_products = [product - waste_used for product, waste_used in
-                              zip(self.used_products, self.used_waste)]
-        self.number_product = [
-            product - waste_new - waste_used for
-            product, waste_new, waste_used in
-            zip(self.number_product, self.waste, self.used_waste)]
+        self.tot_prod_EoL_m2 = self.number_product_EoL_m2 + \
+            self.number_used_product_EoL_m2
+
+        subset_df_remaining_cap = self.data_out_pca.copy()
+        subset_df_remaining_cap = subset_df_remaining_cap[
+            subset_df_remaining_cap['year'] <= (2020 + self.model.clock)]
+        self.new_products = [
+            x * (1 - self.used_new_ratio) for x in subset_df_remaining_cap[
+                'Effective_Capacity_[W]'].tolist()]
+        self.used_products = [
+            x * self.used_new_ratio for x in subset_df_remaining_cap[
+                'Effective_Capacity_[W]'].tolist()]
+        self.number_product = [x + y for x, y in zip(
+            self.new_products, self.used_products)]
+
+        # ! TODO: replace code below with PV_ICE waste value - STOP
 
     def tpb_subjective_norm(self, decision, list_choices, weight_sn):
         """
@@ -633,7 +672,8 @@ class Consumers(Agent):
                     self.attitude_levels_pathways, self.attitude_level,
                     self.w_a_eol)
             # HERE: self.number_product_EoL + self.product_storage_to_other
-            self.update_eol_volumes(self.EoL_pathway, self.number_product_EoL +
+            self.update_eol_volumes(self.EoL_pathway,
+                                    self.number_product_EoL +
                                     self.product_storage_to_other,
                                     product_type,
                                     self.product_storage_to_other)
@@ -662,16 +702,6 @@ class Consumers(Agent):
         end-of-life costs do not decrease with the decrease in
         mass/functional_unit.
         """
-
-        # ! TODO: replace code below with PV_ICE waste value - START
-
-        # ! Use PV_ICE variables to come up with a kg / W number for each year
-        # ! for PV panels (if needed use PV_ICE inputs rather than outputs).
-        # ! put the numbers in a list of kg/W and replace
-        # ! self.mass_per_function_model(self.waste) by a list comprehension
-        # ! applying each kg/W from PV_ICE to each value in self.waste (and
-        # ! used waste). Use the average of the list for storage
-
         # yearly_converting_factor_list = [
         #               pv_ice_waste_in_kg / pv_ice_waste_in_w, ..., year_n]
         # average_converting_factor = \
@@ -683,6 +713,20 @@ class Consumers(Agent):
         # self.number_new_prod_repaired = sum([x * y for x in
         # yearly_converting_factor_list and y in self.waste]) +
         # average_converting_factor * storage
+        past_storage = max(0, (2020 + self.model.clock - self.max_storage))
+        pv_ice_mat_subset_stored_years = self.model.pvice_mat_factor[
+            (self.model.pvice_mat_factor['year'] >= past_storage) &
+            (self.model.pvice_mat_factor['year'] <= 2020 + self.model.clock)]
+        avg_weight_factor_stored_pv = pv_ice_mat_subset_stored_years[
+            'total_massperm2'].mean()
+
+        original_df = self.data_out_pca.copy()
+        original_df = original_df[
+            (original_df['year'] >= past_storage) &
+            (original_df['year'] <= 2020 + self.model.clock)]
+        waste_in_w = original_df['Yearly_Sum_Power_atEOL'].mean()
+        waste_in_m2 = original_df['Yearly_Sum_Area_atEOL'].mean()
+        waste_w_to_m2_factor = waste_in_m2 / waste_in_w
 
         if eol_pathway == "repair":
             self.number_product_repaired += managed_waste
@@ -690,22 +734,30 @@ class Consumers(Agent):
                 self.perceived_behavioral_control[0]
             if product_type == "new":
                 self.number_new_prod_repaired += \
-                    self.mass_per_function_model(self.waste) + \
-                    self.weighted_average_mass_watt * storage
+                    self.number_product_EoL_m2 * self.model.weight_factor + \
+                    avg_weight_factor_stored_pv * storage * \
+                    waste_w_to_m2_factor
             else:
                 self.number_used_prod_repaired += \
-                    self.mass_per_function_model(self.used_waste)
+                    self.number_used_product_EoL_m2 * self.model.weight_factor
+            self.model.pca_outputs[self.pca][eol_pathway] = (
+                self.number_new_prod_repaired +
+                self.number_used_prod_repaired)
         elif eol_pathway == "sell":
             self.number_product_sold += managed_waste
             self.consumer_costs += managed_waste * \
                 self.perceived_behavioral_control[1]
             if product_type == "new":
                 self.number_new_prod_sold += \
-                    self.mass_per_function_model(self.waste) + \
-                    self.weighted_average_mass_watt * storage
+                    self.number_product_EoL_m2 * self.model.weight_factor + \
+                    avg_weight_factor_stored_pv * storage * \
+                    waste_w_to_m2_factor
             else:
                 self.number_used_prod_sold += \
-                    self.mass_per_function_model(self.used_waste)
+                    self.number_used_product_EoL_m2 * self.model.weight_factor
+            self.model.pca_outputs[self.pca][eol_pathway] = (
+                self.number_new_prod_sold +
+                self.number_used_prod_sold)
         elif eol_pathway == "recycle":
             self.number_product_recycled += managed_waste
             if not self.model.epr_business_model:
@@ -713,34 +765,45 @@ class Consumers(Agent):
                                        self.perceived_behavioral_control[2]
             if product_type == "new":
                 self.number_new_prod_recycled += \
-                    self.mass_per_function_model(self.waste) + \
-                    self.weighted_average_mass_watt * storage
+                    self.number_product_EoL_m2 * self.model.weight_factor + \
+                    avg_weight_factor_stored_pv * storage * \
+                    waste_w_to_m2_factor
             else:
                 self.number_used_prod_recycled += \
-                    self.mass_per_function_model(self.used_waste)
+                    self.number_used_product_EoL_m2 * self.model.weight_factor
+            self.model.pca_outputs[self.pca][eol_pathway] = (
+                self.number_new_prod_recycled +
+                self.number_used_prod_recycled)
         elif eol_pathway == "landfill":
             self.number_product_landfilled += managed_waste
             self.consumer_costs += managed_waste * \
                 self.perceived_behavioral_control[3]
             if product_type == "new":
                 self.number_new_prod_landfilled += \
-                    self.mass_per_function_model(self.waste) + \
-                    self.weighted_average_mass_watt * storage
+                    self.number_product_EoL_m2 * self.model.weight_factor + \
+                    avg_weight_factor_stored_pv * storage * \
+                    waste_w_to_m2_factor
             else:
                 self.number_used_prod_landfilled += \
-                    self.mass_per_function_model(self.used_waste)
+                    self.number_used_product_EoL_m2 * self.model.weight_factor
+            self.model.pca_outputs[self.pca][eol_pathway] = (
+                self.number_new_prod_landfilled +
+                self.number_used_prod_landfilled)
         else:
+            # managed_waste = self.number_product_EoL or
+            # self.number_product_EoL + storage_to_others
             self.number_product_hoarded += managed_waste
             self.consumer_costs += managed_waste * \
                 self.perceived_behavioral_control[4]
             if product_type == "new":
                 self.number_new_prod_hoarded += \
-                    self.mass_per_function_model(self.waste)
+                    self.number_product_EoL_m2 * self.model.weight_factor
             else:
                 self.number_used_prod_hoarded += \
-                    self.mass_per_function_model(self.used_waste)
-
-        # ! TODO: replace code below with PV_ICE waste value - STOP
+                    self.number_used_product_EoL_m2 * self.model.weight_factor
+            self.model.pca_outputs[self.pca][eol_pathway] = (
+                self.number_new_prod_hoarded +
+                self.number_used_prod_hoarded)
 
     def update_yearly_recycled_waste(self, installer):
         """
@@ -757,16 +820,41 @@ class Consumers(Agent):
         module was manufactured and the average weight-to-power ratio at that
         time. The model from IRENA-IEA 2016 is used.
         """
-        mass_conversion_coeffs = [
-            self.model.product_average_wght * e**(
-                - self.model.mass_to_function_reg_coeff * x) for x in
-            range(len(product_as_function))]
-        product_as_mass = [product_as_function[i] * mass_conversion_coeffs[i]
-                           for i in range(len(product_as_function))]
+        past_storage = max(0, (2020 + self.model.clock - self.max_storage))
+        pv_ice_mat_subset_stored_years = self.model.pvice_mat_factor[
+            (self.model.pvice_mat_factor['year'] >= past_storage) &
+            (self.model.pvice_mat_factor['year'] <= 2020 + self.model.clock)]
+        original_df = self.data_out_pca.copy()
+        original_df = original_df[
+            (original_df['year'] >= past_storage) &
+            (original_df['year'] <= 2020 + self.model.clock)]
+        waste_in_w = original_df['Yearly_Sum_Power_atEOL'].mean()
+        waste_in_m2 = original_df['Yearly_Sum_Area_atEOL'].mean()
+        waste_w_to_m2_factor = waste_in_m2 / waste_in_w
+
+        self.weighted_average_mass_watt = pv_ice_mat_subset_stored_years[
+            'total_massperm2'].mean() * waste_w_to_m2_factor
+
+        len_product_as_function = len(product_as_function)
+        pvice_mat_factor_copy = self.model.pvice_mat_factor[
+            self.model.pvice_mat_factor['year'] <= 2020 + self.model.clock]
+        conversion_factors = \
+            pvice_mat_factor_copy['total_massperm2'].to_list()
+        conversion_factors = conversion_factors[-len_product_as_function:]
+        data_out_pca_copy = self.data_out_pca[
+            self.data_out_pca['year'] <= 2020 + self.model.clock]
+        waste_in_w_list = \
+            data_out_pca_copy['Yearly_Sum_Power_atEOL'].to_list()
+        waste_in_m2_list = \
+            data_out_pca_copy['Yearly_Sum_Area_atEOL'].to_list()
+        waste_in_w_list = waste_in_w_list[-len_product_as_function:]
+        waste_in_m2_list = waste_in_m2_list[-len_product_as_function:]
+        waste_w_m2_list = [x / y if y != 0 else 0 for x, y in
+                           zip(waste_in_m2_list, waste_in_w_list)]
+
+        product_as_mass = [x * y * z for x, y, z in zip(
+            product_as_function, conversion_factors, waste_w_m2_list)]
         mass_eol = sum(product_as_mass)
-        self.weighted_average_mass_watt = sum(
-            [product_as_mass[i] / mass_eol * mass_conversion_coeffs[i] for i
-             in range(len(mass_conversion_coeffs)) if mass_eol != 0])
         return mass_eol
 
     def storage_management(self, limited_paths):

@@ -12,6 +12,7 @@ import numpy as np
 from ABM_CE_PV_RecyclerAgents import Recyclers
 import operator
 from scipy.stats import truncnorm
+import pandas as pd
 
 
 class Refurbishers(Agent):
@@ -54,12 +55,15 @@ class Refurbishers(Agent):
                                    in model.original_num_prod]
         #  Original repairing volume is based on previous years EoL volume
         # (from 2000 to 2019)
+        yearly_waste_file = pd.read_csv("all_pca_dataOut_95-by-35.Adv.csv")
+        yearly_waste = yearly_waste_file[
+            yearly_waste_file['year'] <= 2020]
+        yearly_waste = sum(
+            yearly_waste['Yearly_Sum_Power_atEOL'].tolist())
         self.original_repairing_volume = \
             self.model.repairability * (
                     init_eol_rate["repair"] + init_eol_rate["sell"]) * \
-            sum(self.model.waste_generation(self.model.d_product_lifetimes,
-                                            self.model.avg_failure_rate[2],
-                                            original_reused_volumes))
+            yearly_waste
         self.repairing_cost = self.original_repairing_cost
         self.refurbished_volume = 0
         self.repairing_shape_factor = repairing_learning_shape_factor
@@ -170,8 +174,10 @@ class Refurbishers(Agent):
                         self.storage_yr += 1
                     volume = (agent.number_product_EoL +
                               agent.product_storage_to_other_ref)
-                    mass_volume = agent.mass_per_function_model(agent.waste) \
-                        + agent.weighted_average_mass_watt * \
+
+                    mass_volume = agent.number_product_EoL_m2 * \
+                        self.model.weight_factor + \
+                        agent.weighted_average_mass_watt * \
                         agent.product_storage_to_other_ref
                     self.update_volumes_eol(agent, eol_refurbisher,
                                             volume, mass_volume, False)
@@ -199,6 +205,7 @@ class Refurbishers(Agent):
                             hoarded_waste_copy_mass / self.count_consumers)
                         eol_refurbisher_stored = \
                             self.economic_rationale_tpb(agent, True)
+
                         self.update_volumes_eol(
                             agent, eol_refurbisher_stored,
                             self.ref_hoarded_waste,
@@ -244,42 +251,77 @@ class Refurbishers(Agent):
         according to the decision made above.
         """
         if eol_path == "recycle":
-            agent.number_product_recycled += volume
-            agent.number_new_prod_recycled += mass_volume
+            self.model.refurbisher_outputs_watt[eol_path] += volume
+            self.model.refurbisher_outputs_kg[eol_path] += mass_volume
+
+            # agent.number_product_recycled += volume
+            # agent.number_new_prod_recycled += mass_volume
+
             self.prod_recycled += volume
             if storage:
-                agent.number_product_hoarded -= volume
-                agent.number_new_prod_hoarded -= mass_volume
+                self.model.refurbisher_outputs_watt['hoard'] -= volume
+                self.model.refurbisher_outputs_kg['hoard'] -= mass_volume
+
+                # agent.number_product_hoarded -= volume
+                # agent.number_new_prod_hoarded -= mass_volume
+
                 self.prod_hoarded -= volume
             else:
-                agent.number_product_sold -= volume
-                agent.number_new_prod_sold -= mass_volume
+                self.model.refurbisher_outputs_watt['sell'] -= volume
+                self.model.refurbisher_outputs_kg['sell'] -= mass_volume
+
+                # agent.number_product_sold -= volume
+                # agent.number_new_prod_sold -= mass_volume
+
         elif eol_path == "landfill":
-            agent.number_product_landfilled += volume
-            agent.number_new_prod_landfilled += mass_volume
+            self.model.refurbisher_outputs_watt[eol_path] += volume
+            self.model.refurbisher_outputs_kg[eol_path] += mass_volume
+
+            # agent.number_product_landfilled += volume
+            # agent.number_new_prod_landfilled += mass_volume
+
             self.prod_landfilled += volume
             if storage:
-                agent.number_product_hoarded -= volume
-                agent.number_new_prod_hoarded -= mass_volume
+                self.model.refurbisher_outputs_watt['hoard'] -= volume
+                self.model.refurbisher_outputs_kg['hoard'] -= mass_volume
+
+                # agent.number_product_hoarded -= volume
+                # agent.number_new_prod_hoarded -= mass_volume
+
                 self.prod_hoarded -= volume
             else:
-                agent.number_product_sold -= volume
-                agent.number_new_prod_sold -= mass_volume
+                self.model.refurbisher_outputs_watt['sell'] -= volume
+                self.model.refurbisher_outputs_kg['sell'] -= mass_volume
+
+                # agent.number_product_sold -= volume
+                # agent.number_new_prod_sold -= mass_volume
         elif eol_path == "sell":
             if storage:
-                agent.number_product_sold += volume
-                agent.number_product_hoarded -= volume
-                agent.number_new_prod_sold += mass_volume
-                agent.number_new_prod_hoarded -= mass_volume
+                self.model.refurbisher_outputs_watt[eol_path] += volume
+                self.model.refurbisher_outputs_kg[eol_path] += mass_volume
+                self.model.refurbisher_outputs_watt['hoard'] -= volume
+                self.model.refurbisher_outputs_kg['hoard'] -= mass_volume
+
+                # agent.number_product_sold += volume
+                # agent.number_product_hoarded -= volume
+                # agent.number_new_prod_sold += mass_volume
+                # agent.number_new_prod_hoarded -= mass_volume
+
                 self.prod_sold += volume
             else:
                 self.repaired_then_sold += volume
                 self.prod_sold += volume
         elif eol_path == "hoard":
-            agent.number_product_hoarded += volume
-            agent.number_new_prod_hoarded += mass_volume
-            agent.number_product_sold -= volume
-            agent.number_new_prod_sold -= mass_volume
+            self.model.refurbisher_outputs_watt[eol_path] += volume
+            self.model.refurbisher_outputs_kg[eol_path] += mass_volume
+            self.model.refurbisher_outputs_watt['sell'] -= volume
+            self.model.refurbisher_outputs_kg['sell'] -= mass_volume
+
+            # agent.number_product_hoarded += volume
+            # agent.number_new_prod_hoarded += mass_volume
+            # agent.number_product_sold -= volume
+            # agent.number_new_prod_sold -= mass_volume
+
             self.hoarded_waste += volume
             self.hoarded_waste_mass += mass_volume
             self.prod_hoarded += volume
@@ -342,39 +384,82 @@ class Refurbishers(Agent):
         according to the decision made above.
         """
         if eol_path == "recycle" and storage:
-            agent.number_product_recycled += volume
-            agent.number_product_hoarded -= volume
-            agent.number_new_prod_recycled += mass_volume_recycler
-            agent.number_new_prod_hoarded -= mass_volume_recycler
+            self.model.refurbisher_outputs_watt[eol_path] += volume
+            self.model.refurbisher_outputs_kg[eol_path] += \
+                mass_volume_recycler
+            self.model.refurbisher_outputs_watt['hoard'] -= volume
+            self.model.refurbisher_outputs_kg['hoard'] -= mass_volume_recycler
+
+            # agent.number_product_recycled += volume
+            # agent.number_product_hoarded -= volume
+            # agent.number_new_prod_recycled += mass_volume_recycler
+            # agent.number_new_prod_hoarded -= mass_volume_recycler
+
             self.prod_recycled += volume
             self.prod_hoarded -= volume
         elif eol_path == "landfill":
-            agent.number_product_landfilled += volume
-            agent.number_new_prod_landfilled += mass_volume_recycler
+            self.model.refurbisher_outputs_watt[eol_path] += volume
+            self.model.refurbisher_outputs_kg[eol_path] += \
+                mass_volume_recycler
+
+            # agent.number_product_landfilled += volume
+            # agent.number_new_prod_landfilled += mass_volume_recycler
+
             self.prod_landfilled += volume
             if storage:
-                agent.number_product_hoarded -= volume
-                agent.number_new_prod_hoarded -= mass_volume_recycler
+                self.model.refurbisher_outputs_watt['hoard'] -= volume
+                self.model.refurbisher_outputs_kg['hoard'] -= \
+                    mass_volume_recycler
+
+                # agent.number_product_hoarded -= volume
+                # agent.number_new_prod_hoarded -= mass_volume_recycler
+
                 self.prod_hoarded -= volume
             else:
-                agent.number_product_recycled -= volume
-                agent.number_new_prod_recycled -= mass_volume_recycler
+                self.model.refurbisher_outputs_watt['recycle'] -= volume
+                self.model.refurbisher_outputs_kg['recycle'] -= \
+                    mass_volume_recycler
+
+                # agent.number_product_recycled -= volume
+                # agent.number_new_prod_recycled -= mass_volume_recycler
         elif eol_path == "sell":
-            agent.number_product_sold += volume
-            agent.number_new_prod_sold += mass_volume_recycler
+            self.model.refurbisher_outputs_watt[eol_path] += volume
+            self.model.refurbisher_outputs_kg[eol_path] += \
+                mass_volume_recycler
+
+            # agent.number_product_sold += volume
+            # agent.number_new_prod_sold += mass_volume_recycler
+
             self.prod_sold += volume
             if storage:
-                agent.number_product_hoarded -= volume
-                agent.number_new_prod_hoarded -= mass_volume_recycler
+                self.model.refurbisher_outputs_watt['hoard'] -= volume
+                self.model.refurbisher_outputs_kg['hoard'] -= \
+                    mass_volume_recycler
+
+                # agent.number_product_hoarded -= volume
+                # agent.number_new_prod_hoarded -= mass_volume_recycler
+
                 self.prod_hoarded -= volume
             else:
-                agent.number_product_recycled -= volume
-                agent.number_new_prod_recycled -= mass_volume_recycler
+                self.model.refurbisher_outputs_watt['recycle'] -= volume
+                self.model.refurbisher_outputs_kg['recycle'] -= \
+                    mass_volume_recycler
+
+                # agent.number_product_recycled -= volume
+                # agent.number_new_prod_recycled -= mass_volume_recycler
         elif eol_path == "hoard":
-            agent.number_product_hoarded += volume
-            agent.number_new_prod_hoarded += mass_volume_recycler
-            agent.number_product_recycled -= volume
-            agent.number_new_prod_recycled -= mass_volume_recycler
+            self.model.refurbisher_outputs_watt['hoard'] += volume
+            self.model.refurbisher_outputs_kg['hoard'] += \
+                mass_volume_recycler
+            self.model.refurbisher_outputs_watt['recycle'] -= volume
+            self.model.refurbisher_outputs_kg['recycle'] -= \
+                mass_volume_recycler
+
+            # agent.number_product_hoarded += volume
+            # agent.number_new_prod_hoarded += mass_volume_recycler
+            # agent.number_product_recycled -= volume
+            # agent.number_new_prod_recycled -= mass_volume_recycler
+
             self.hoarded_waste_recycle += volume
             self.hoarded_waste_recycle_mass += mass_volume_recycler
             self.prod_hoarded += volume
