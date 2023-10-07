@@ -122,6 +122,15 @@ class Consumers(Agent):
         self.pca = self.model.agents[self.unique_id][0]
         self.state = self.model.agents[self.unique_id][1]
         self.agents_per_pca = self.model.agents[self.unique_id][2]
+        pca_recyc_transp_dist = self.model.distance_df.copy()
+        pca_recyc_transp_dist = pca_recyc_transp_dist[
+            pca_recyc_transp_dist['PCA'] == self.pca]
+        pca_recyc_transp_dist = pca_recyc_transp_dist.to_list()
+        self.pca_recyc_transp_dist = min(pca_recyc_transp_dist)
+        self.pca_recyc_transp_cost = self.pca_recyc_transp_dist * \
+            self.model.transportation_cost / 1E3 * \
+                self.model.dynamic_product_average_wght
+        # ! TODO: change landfill costs
 
         # ! prepare pvice waste outputs
         self.data_out_pca = pd.read_csv(
@@ -234,6 +243,9 @@ class Consumers(Agent):
         """
         Update transportation costs according to the (evolving) mass of waste.
         """
+        self.pca_recyc_transp_cost = self.pca_recyc_transp_dist * \
+            self.model.transportation_cost / 1E3 * \
+                self.model.dynamic_product_average_wght
         self.landfill_cost = \
             self.init_landfill_cost + \
             (self.model.dynamic_product_average_wght -
@@ -889,7 +901,7 @@ class Consumers(Agent):
         for agent in self.model.schedule.agents:
             if agent.unique_id == self.recycling_facility_id:
                 self.perceived_behavioral_control[2] = \
-                    agent.recycling_cost
+                    agent.recycling_cost + self.pca_recyc_transp_cost
             elif agent.unique_id == self.refurbisher_id:
                 self.perceived_behavioral_control[0] = \
                     agent.repairing_cost
