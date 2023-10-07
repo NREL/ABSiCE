@@ -580,7 +580,7 @@ class ABM_CE_PV(Model):
                 output_filename_in = f"datain_{SFscenarios[i]}_{PCAs[jj]}_.csv"
 
                 r1.trim_Years(startYear=2010, endYear=2050)
-                # All -- but these where not included in the Reeds initial study as we didnt have encapsulant or backsheet
+                # All -- but these where not included in the Reeds initial study as we didn't have encapsulant or backsheet
                 # r1.scenario[PCAs[jj]].addMaterials(['glass', 'silicon', 'silver', 'copper', 'aluminium_frames', 'encapsulant', 'backsheet'], baselinefolder=r'..\baselines')
                 r1.scenario[PCAs[jj]].latitude = GIS.loc[PCAs[jj]].lat
                 r1.scenario[PCAs[jj]].longitude = GIS.loc[PCAs[jj]].long
@@ -615,6 +615,7 @@ class ABM_CE_PV(Model):
                         distance_df = distance_df.append({"PCA": PCAs[jj], "Recycler": recycler_name, "Distance (km)": distance}, ignore_index=True)
 
                 distance_df.to_csv("/Users/aharouna/Documents/pca_recycler_distances.csv", index=False)
+                self.distance_df = distance_df
 
                 self.df_in = r1.scenario[PCAs[jj]].dataIn_m
                 self.df_in.to_csv(output_filename_in, index=False)
@@ -659,7 +660,8 @@ class ABM_CE_PV(Model):
         self.num_consumers = num_consumers
         self.consumers_node_degree = consumers_node_degree
         self.consumers_network_type = consumers_network_type
-        self.num_recyclers = num_recyclers
+        self.num_recyclers = len(self.distance_df['Recycler'].unique())
+        self.recycler_names = self.distance_df['Recycler'].to_list()
         self.num_producers = num_producers
         self.num_prod_n_recyc = num_recyclers + num_producers
         self.prod_n_recyc_node_degree = prod_n_recyc_node_degree
@@ -887,13 +889,23 @@ class ABM_CE_PV(Model):
             x * self.transportation_cost / 1E3 *
             self.dynamic_product_average_wght for x in
             self.mn_mx_av_distance_to_recycler]
+
+        # ! TODO: change landfill transportation costs
         self.transportation_cost_rpr_ldf = self.mean_distance_within_state * \
             self.transportation_cost / 1E3 * self.dynamic_product_average_wght
+
+        # ! We remove the use of the recycling distances calculated with the
+        # ! shortest path algorithm to use the pca-recycler distances instead
         # Add transportation costs to pathways' costs
-        self.original_recycling_cost = [sum(x) for x in zip(
-            self.original_recycling_cost, self.transportation_cost_rcl)]
+        # self.original_recycling_cost = [sum(x) for x in zip(
+        #    self.original_recycling_cost, self.transportation_cost_rcl)]
+
+        # ! we keep the assumption that repairing costs is the mean distance
+        # ! within states
         original_repairing_cost = [x + self.transportation_cost_rpr_ldf for
                                    x in original_repairing_cost]
+
+        # ! change landfill costs
         landfill_cost = [x + self.transportation_cost_rpr_ldf for x in
                          landfill_cost]
 
@@ -1237,8 +1249,6 @@ class ABM_CE_PV(Model):
         self.yearly_product_wght = conversion_factors[-1]
         weighted_average_mass_watt = sum(product_as_mass_percent)
         return weighted_average_mass_watt
-    # ! Problem is not dynamic weighted average but agent distribution of
-    # ! -recycled waste
 
     def average_price_per_function_model(self):
         """

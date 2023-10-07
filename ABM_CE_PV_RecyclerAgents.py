@@ -59,6 +59,7 @@ class Recyclers(Agent):
         self.symbiosis = False
         self.agent_i = self.unique_id - self.model.num_consumers
         self.recycler_costs = 0
+        self.recycler_name = self.model.recycler_names.pop()
 
     def update_transport_recycling_costs(self):
         """
@@ -173,4 +174,6 @@ class Recyclers(Agent):
             self.original_recycling_volume, self.recycling_volume,
             self.original_recycling_cost,
             self.recycling_learning_shape_factor)
-        self.update_transport_recycling_costs()
+        # ! we do not use this function anymore, distance now use the
+        # ! pca-recycler data frame
+        # self.update_transport_recycling_costs()
