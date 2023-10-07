@@ -500,10 +500,10 @@ class ABM_CE_PV(Model):
             row22 = row22 + ',' + x 
 
         if pca:
-            for ii in range (len(rawdf.unstack(level=1))):
+            for ii in range(len(rawdf.unstack(level=1))):
                 PCA = rawdf.unstack(level=1).iloc[ii].name[1]
                 SCEN = rawdf.unstack(level=1).iloc[ii].name[0]
-                SCEN=SCEN.replace('+', '_')
+                SCEN = SCEN.replace('+', '_')
                 filetitle = SCEN+'_'+PCA +'.csv'
                 subtestfolder = os.path.join(testfolder, 'PCAs')
                 if not os.path.exists(subtestfolder):
@@ -513,27 +513,27 @@ class ABM_CE_PV(Model):
                 A = A.droplevel(level=0)
                 A.name = 'new_Installed_Capacity_[MW]'
                 A = pd.DataFrame(A)
-                A.index=pd.PeriodIndex(A.index, freq='A')
+                A.index = pd.PeriodIndex(A.index, freq='A')
                 A = pd.DataFrame(A)
                 A['new_Installed_Capacity_[MW]'] = A['new_Installed_Capacity_[MW]'] * 0.85
                 A['new_Installed_Capacity_[MW]'] = A['new_Installed_Capacity_[MW]'] * 1000   # ReEDS file is in GW.
                 # Add other columns
                 A = pd.concat([A, baseline.reindex(A.index)], axis=1)
-            
+
                 header = row11 + '\n' + row22 + '\n'
-                
+
                 with open(filetitle, 'w', newline='') as ict:
-                # Write the header lines, including the index variable for
-                # the last one if you're letting Pandas produce that for you.
-                # (see above).
+                    # Write the header lines, including the index variable for
+                    # the last one if you're letting Pandas produce that for
+                    # you. (see above).
                     for line in header:
                         ict.write(line)
 
                     #    savedata.to_csv(ict, index=False)
                     A.to_csv(ict, header=False)
 
-                ### Create Scenarios in PV_ICE
-                #### Rename difficult characters from Scenarios Names
+                # Create Scenarios in PV_ICE
+                # Rename difficult characters from Scenarios Names
                 simulationname = scenarios
                 simulationname = [w.replace('+', '_') for w in simulationname]
                 SFscenarios = [simulationname[0], simulationname[4], simulationname[8]]
@@ -625,7 +625,6 @@ class ABM_CE_PV(Model):
                         distance_df = distance_df.append({"PCA": PCAs[jj], "Recycler": recycler_name, "Distance (km)": distance}, ignore_index=True)
 
                 distance_df.to_csv("/Users/aharouna/Documents/pca_recycler_distances.csv", index=False)
-                self.distance_df = distance_df
 
                 self.df_in = r1.scenario[PCAs[jj]].dataIn_m
                 self.df_in.to_csv(output_filename_in, index=False)
@@ -662,8 +661,9 @@ class ABM_CE_PV(Model):
             self.df2 = r1.scenario['standard'].material['silicon'].matdataOut_m
             self.df2.to_csv("df2_matdataout.csv", index=False)
 
+        # ! Abdouh needs to point to the right emplacement for the file
+        self.distance_df = pd.read_csv('pca_recycler_distances.csv')
         self.data = pd.read_excel(reedsFile) #this is the pca file
-
         self.agents = self.create_agents(num_consumers)
         self.pv_ice_yearly_waste = 0
 

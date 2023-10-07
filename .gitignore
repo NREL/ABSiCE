@@ -3,3 +3,4 @@ __pycache__/
 results/
 venv/
 tempfile.py
+Landfills_data.csv
