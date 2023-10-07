@@ -227,9 +227,10 @@ class ABM_CE_PV(Model):
                  seeding_recyc={"Seeding": False,
                                 "Year": 10, "number_seed": 50,
                                 "discount": 0.35},
-                                pv_ice = False,
-                                pca = True,
-                                pca_scenario = True,
+                 pv_ice=False,
+                 pca=True,
+                 pca_scenario=True,
+                 geopy=False
 
                      ):
         
@@ -538,9 +539,12 @@ class ABM_CE_PV(Model):
                 SFscenarios = [simulationname[0], simulationname[4], simulationname[8]]
 
 
-        excel_file_path = '/Users/aharouna/Documents/Table A-1_Global PV Recyclers_states.xlsx'  
-        df = pd.read_excel(excel_file_path, skiprows=[0])  # Skip the first row
-        df = df[df['Country'] == 'United States of America']
+        excel_file_path = '/Users/aharouna/Documents/Table A-1_Global PV Recyclers_states.xlsx'
+        if geopy:
+            df = pd.read_excel(excel_file_path, skiprows=[0])  # Skip the first row
+            df = df[df['Country'] == 'United States of America']
+        else:
+            df = pd.read_csv('recycler_data.csv')
 
         # Function to calculate the Haversine distance between two points given their latitude and longitude
         def haversine(lat1, lon1, lat2, lon2):
@@ -587,26 +591,32 @@ class ABM_CE_PV(Model):
 
             # Calculate distances from the current PCA to all recyclers
                 for index, row in df.iterrows():
-                    recycler_name = row['Recycler Name']
-                    state = row['State']
-                    city = row['City']
+                    if geopy:
+                        recycler_name = row['Recycler Name']
+                        state = row['State']
+                        city = row['City']
 
-                    try:
-                        # Fetch latitude and longitude for the recycler
-                        location = geolocator.geocode(f"{city}, {state}", timeout=10)
-                        if location:
-                            recycler_latitude = location.latitude
-                            recycler_longitude = location.longitude
-                        else:
+                        try:
+                            # Fetch latitude and longitude for the recycler
+                            location = geolocator.geocode(f"{city}, {state}", timeout=10)
+                            if location:
+                                recycler_latitude = location.latitude
+                                recycler_longitude = location.longitude
+                            else:
+                                recycler_latitude = None
+                                recycler_longitude = None
+                        except Exception as e:
+                            print(f"Error geocoding for {recycler_name}: {str(e)}")
                             recycler_latitude = None
                             recycler_longitude = None
-                    except Exception as e:
-                        print(f"Error geocoding for {recycler_name}: {str(e)}")
-                        recycler_latitude = None
-                        recycler_longitude = None
+                    else:
+                        recycler_name = row['Recycler Name']
+                        recycler_latitude = row['Latitude']
+                        recycler_longitude = row['Longitude']
 
                     # Calculate the distance from the PCA to the recycler
-                    if recycler_latitude is not None and recycler_longitude is not None:
+                    if recycler_latitude is not None and \
+                            recycler_longitude is not None:
                         pca_latitude = GIS.loc[PCAs[jj]].lat
                         pca_longitude = GIS.loc[PCAs[jj]].long
                         distance = haversine(pca_latitude, pca_longitude, recycler_latitude, recycler_longitude)
