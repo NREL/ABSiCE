@@ -539,12 +539,16 @@ class ABM_CE_PV(Model):
                 SFscenarios = [simulationname[0], simulationname[4], simulationname[8]]
 
 
-        excel_file_path = '/Users/aharouna/Documents/Table A-1_Global PV Recyclers_states.xlsx'
+        excel_file_path = 'TEMP/Table A-1_Global PV Recyclers_states.xlsx'
+
         if geopy:
             df = pd.read_excel(excel_file_path, skiprows=[0])  # Skip the first row
             df = df[df['Country'] == 'United States of America']
         else:
-            df = pd.read_csv('recycler_data.csv')
+            print("\nthis is path, ", os.getcwd())
+            df = pd.read_csv('../../../TEMP/recycler_data.csv')
+
+        #import the landfields here
 
         # Function to calculate the Haversine distance between two points given their latitude and longitude
         def haversine(lat1, lon1, lat2, lon2):
@@ -563,6 +567,8 @@ class ABM_CE_PV(Model):
 
         # Create an empty DataFrame to store distances
         distance_df = pd.DataFrame(columns=["PCA", "Recycler", "Distance (km)"])
+        pca_longlat = pd.DataFrame(columns=["PCA", "Long", "Lat"])
+
 
 
         #     #### Create the 3 Scenarios and assign Baselines
@@ -573,7 +579,9 @@ class ABM_CE_PV(Model):
             energymodulefilepath = os.path.join(Path().resolve().parent.parent.parent/ 'PV_ICE/baselines/baseline_modules_energy.csv')
             baslinefolderpath = os.path.join(Path().resolve().parent.parent.parent/ 'PV_ICE/baselines')
 
+
             for jj in range (0, len(PCAs)): 
+
                 filetitle = SFscenarios[i]+'_'+PCAs[jj]+'.csv'
                 filetitle = os.path.join(testfolder, 'PCAs', filetitle)   
                 print("filetitle:", filetitle) 
@@ -584,47 +592,97 @@ class ABM_CE_PV(Model):
                 output_filename_in = f"datain_{SFscenarios[i]}_{PCAs[jj]}_.csv"
 
                 r1.trim_Years(startYear=2010, endYear=2050)
+
                 # All -- but these where not included in the Reeds initial study as we didn't have encapsulant or backsheet
                 # r1.scenario[PCAs[jj]].addMaterials(['glass', 'silicon', 'silver', 'copper', 'aluminium_frames', 'encapsulant', 'backsheet'], baselinefolder=r'..\baselines')
                 r1.scenario[PCAs[jj]].latitude = GIS.loc[PCAs[jj]].lat
                 r1.scenario[PCAs[jj]].longitude = GIS.loc[PCAs[jj]].long
+                
+                data_to_append = pd.DataFrame({"PCA": [PCAs[jj]], "Long": [GIS.loc[PCAs[jj]].long], "Lat": [GIS.loc[PCAs[jj]].lat]})
+
+                # Append data to pca_longlat using pd.concat
+                pca_longlat = pd.concat([pca_longlat, data_to_append], ignore_index=True)
+
+
+
 
             # Calculate distances from the current PCA to all recyclers
-                for index, row in df.iterrows():
-                    if geopy:
-                        recycler_name = row['Recycler Name']
-                        state = row['State']
-                        city = row['City']
+                # for index, row in df.iterrows():
+                #     if geopy:
+                #         recycler_name = row['Recycler Name']
+                #         state = row['State']
+                #         city = row['City']
 
-                        try:
-                            # Fetch latitude and longitude for the recycler
-                            location = geolocator.geocode(f"{city}, {state}", timeout=10)
-                            if location:
-                                recycler_latitude = location.latitude
-                                recycler_longitude = location.longitude
-                            else:
-                                recycler_latitude = None
-                                recycler_longitude = None
-                        except Exception as e:
-                            print(f"Error geocoding for {recycler_name}: {str(e)}")
-                            recycler_latitude = None
-                            recycler_longitude = None
-                    else:
-                        recycler_name = row['Recycler Name']
-                        recycler_latitude = row['Latitude']
-                        recycler_longitude = row['Longitude']
+                #         try:
+                #             # Fetch latitude and longitude for the recycler
+                #             location = geolocator.geocode(f"{city}, {state}", timeout=10)
+                #             if location:
+                #                 recycler_latitude = location.latitude
+                #                 recycler_longitude = location.longitude
+                #             else:
+                #                 recycler_latitude = None
+                #                 recycler_longitude = None
+                #         except Exception as e:
+                #             print(f"Error geocoding for {recycler_name}: {str(e)}")
+                #             recycler_latitude = None
+                #             recycler_longitude = None
+                #     else:
+                #         recycler_name = row['Recycler Name']
+                #         recycler_latitude = row['Latitude']
+                #         recycler_longitude = row['Longitude']
 
-                    # Calculate the distance from the PCA to the recycler
-                    if recycler_latitude is not None and \
-                            recycler_longitude is not None:
-                        pca_latitude = GIS.loc[PCAs[jj]].lat
-                        pca_longitude = GIS.loc[PCAs[jj]].long
-                        distance = haversine(pca_latitude, pca_longitude, recycler_latitude, recycler_longitude)
+                #     # Calculate the distance from the PCA to the recycler
+                #     if recycler_latitude is not None and \
+                #             recycler_longitude is not None:
+                #         pca_latitude = GIS.loc[PCAs[jj]].lat
+                #         pca_longitude = GIS.loc[PCAs[jj]].long
+                #         distance = haversine(pca_latitude, pca_longitude, recycler_latitude, recycler_longitude)
 
-                        # Append the distance to the DataFrame
-                        distance_df = distance_df.append({"PCA": PCAs[jj], "Recycler": recycler_name, "Distance (km)": distance}, ignore_index=True)
+                #         # Append the distance to the DataFrame
+                #         data_to_append = pd.DataFrame({"PCA": PCAs[jj], "Recycler": recycler_name, "Distance (km)": distance}, ignore_index=True)
+                # distance_df = pd.concat([distance_df, data_to_append], ignore_index=True)
 
-                distance_df.to_csv("/Users/aharouna/Documents/pca_recycler_distances.csv", index=False)
+
+            #     # # Calculate distances from the current PCA to all recyclers
+                # for index, row in df.iterrows():
+                #     if geopy:
+                #         recycler_name = row['Recycler Name']
+                #         state = row['State']
+                #         city = row['City']
+
+                #         try:
+                #             # Fetch latitude and longitude for the recycler
+                #             location = geolocator.geocode(f"{city}, {state}", timeout=10)
+                #             if location:
+                #                 recycler_latitude = location.latitude
+                #                 recycler_longitude = location.longitude
+                #             else:
+                #                 recycler_latitude = None
+                #                 recycler_longitude = None
+                #         except Exception as e:
+                #             print(f"Error geocoding for {recycler_name}: {str(e)}")
+                #             recycler_latitude = None
+                #             recycler_longitude = None
+                #     else:
+                #         recycler_name = row['Recycler Name']
+                #         recycler_latitude = row['Latitude']
+                #         recycler_longitude = row['Longitude']
+
+                #     # Calculate the distance from the PCA to the recycler
+                #     if recycler_latitude is not None and \
+                #             recycler_longitude is not None:
+                #         pca_latitude = GIS.loc[PCAs[jj]].lat
+                #         pca_longitude = GIS.loc[PCAs[jj]].long
+                #         distance = haversine(pca_latitude, pca_longitude, recycler_latitude, recycler_longitude)
+
+                #         # Append the distance to the DataFrame
+                #         distance_df = distance_df.append({"PCA": PCAs[jj], "Recycler": recycler_name, "Distance (km)": distance}, ignore_index=True)
+                
+
+                distance_df.to_csv("../../../TEMP/pca_recycler_distances.csv", index=False)
+                
+                pca_longlat.to_csv("../../../TEMP/pca_longlat.csv", index=False)
+
 
                 self.df_in = r1.scenario[PCAs[jj]].dataIn_m
                 self.df_in.to_csv(output_filename_in, index=False)

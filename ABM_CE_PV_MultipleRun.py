@@ -144,4 +144,4 @@ def draw_graphs(network, figures, model, results_agents, results_model):
         plt.show()  # draw graph as desired and plot outputs
 
 
-run_model(30, 3)
+run_model(1, 3)
