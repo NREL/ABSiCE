@@ -122,15 +122,31 @@ class Consumers(Agent):
         self.pca = self.model.agents[self.unique_id][0]
         self.state = self.model.agents[self.unique_id][1]
         self.agents_per_pca = self.model.agents[self.unique_id][2]
-        pca_recyc_transp_dist = self.model.distance_df.copy()
-        pca_recyc_transp_dist = pca_recyc_transp_dist[
-            pca_recyc_transp_dist['PCA'] == self.pca]
+        pca_recyc_transp_dist = self.model.recycler_distance_df.copy()
+        pca_recyc_transp_dist = pca_recyc_transp_dist[self.pca]
         pca_recyc_transp_dist = pca_recyc_transp_dist.to_list()
         self.pca_recyc_transp_dist = min(pca_recyc_transp_dist)
         self.pca_recyc_transp_cost = self.pca_recyc_transp_dist * \
             self.model.transportation_cost / 1E3 * \
-                self.model.dynamic_product_average_wght
+            self.model.dynamic_product_average_wght
         # ! TODO: change landfill costs
+        pca_landfill_transp_dist = self.model.landfill_distance_df.copy()
+        pca_landfill_transp_dist = pca_landfill_transp_dist[self.pca]
+        pca_landfill_transp_dist = pca_landfill_transp_dist.to_list()
+        self.pca_landfill_transp_dist = min(pca_landfill_transp_dist)
+        self.pca_landfill_transp_cost = self.pca_landfill_transp_dist * \
+            self.model.transportation_cost / 1E3 * \
+            self.model.dynamic_product_average_wght
+        landfill_name = self.model.landfill_distance_df.loc[
+            self.model.landfill_distance_df[self.pca] ==
+            self.pca_landfill_transp_dist, 'Facility Name'].iloc[0]
+        landfills_data = self.model.landfill_cost_df.copy()
+        self.landfill_cost = landfills_data.loc[
+            landfills_data['Facility Name'] == landfill_name,
+            '$/ Ton'].iloc[0]  # in $/ton
+        self.landfill_cost = self.landfill_cost / 1E3 * \
+            self.model.dynamic_product_average_wght  # $/W
+        # self.init_landfill_cost = self.landfill_cost
 
         # ! prepare pvice waste outputs
         self.data_out_pca = pd.read_csv(
@@ -184,10 +200,9 @@ class Consumers(Agent):
             model.num_recyclers)
         self.refurbisher_id = model.num_consumers + model.num_prod_n_recyc + \
             random.randrange(model.num_refurbishers)
-        self.landfill_cost = random.choice(landfill_cost)
+        # self.landfill_cost = random.choice(landfill_cost)
         # self.landfill_cost = np.random.triangular(
         #   landfill_cost[0], landfill_cost[2], landfill_cost[1])
-        self.init_landfill_cost = self.landfill_cost
 
         # HERE
         self.hoarding_cost = np.random.triangular(
@@ -238,20 +253,22 @@ class Consumers(Agent):
         self.convenience = self.extended_tpb_convenience()
         self.knowledge = self.extended_tpb_knowledge()
 
-
     def update_transport_costs(self):
         """
         Update transportation costs according to the (evolving) mass of waste.
         """
         self.pca_recyc_transp_cost = self.pca_recyc_transp_dist * \
             self.model.transportation_cost / 1E3 * \
-                self.model.dynamic_product_average_wght
-        self.landfill_cost = \
-            self.init_landfill_cost + \
-            (self.model.dynamic_product_average_wght -
-             self.model.product_average_wght) * \
+            self.model.dynamic_product_average_wght
+        self.pca_landfill_transp_cost = self.pca_landfill_transp_dist * \
             self.model.transportation_cost / 1E3 * \
-            self.model.mean_distance_within_state
+            self.model.dynamic_product_average_wght
+        # self.landfill_cost = \
+        #    self.init_landfill_cost + \
+        #    (self.model.dynamic_product_average_wght -
+        #     self.model.product_average_wght) * \
+        #    self.model.transportation_cost / 1E3 * \
+        #    self.model.mean_distance_within_state
 
     def attitude_level_distribution(self, a, b, loc, scale):
         """
@@ -909,7 +926,8 @@ class Consumers(Agent):
                     agent.scd_hand_price * (1 - agent.refurbisher_margin)
                 self.pbc_reuse[1] = agent.scd_hand_price
         self.pbc_reuse[0] = self.model.fsthand_mkt_pric
-        self.perceived_behavioral_control[3] = self.landfill_cost
+        self.perceived_behavioral_control[3] = \
+            self.landfill_cost + self.pca_landfill_transp_cost
         self.perceived_behavioral_control[4] = self.hoarding_cost
 
     def product_mass_output_metrics(self):

@@ -103,7 +103,6 @@ def run_model(number_run, number_steps):
         results_agents.to_csv("results\\Results_agents_run_%s.csv" % j)
 
 
-
 def color_agents(step, column, condition1, condition2, model, results_agents):
     """
     Color figure of the network.
@@ -144,4 +143,4 @@ def draw_graphs(network, figures, model, results_agents, results_model):
         plt.show()  # draw graph as desired and plot outputs
 
 
-run_model(1, 3)
+run_model(3, 30)
