@@ -228,12 +228,10 @@ class ABM_CE_PV(Model):
                                 "Year": 10, "number_seed": 50,
                                 "discount": 0.35},
                  pv_ice=False,
-                 pca=True,
-                 pca_scenario=True,
-                 geopy=False
-
-                     ):
-        
+                 pca=False,
+                 pca_scenario=False,
+                 geopy=False,
+                 calculate_distances=False):
 
         """Initiate model.
 
@@ -538,38 +536,47 @@ class ABM_CE_PV(Model):
                 simulationname = [w.replace('+', '_') for w in simulationname]
                 SFscenarios = [simulationname[0], simulationname[4], simulationname[8]]
 
-
         excel_file_path = 'TEMP/Table A-1_Global PV Recyclers_states.xlsx'
 
         if geopy:
             df = pd.read_excel(excel_file_path, skiprows=[0])  # Skip the first row
             df = df[df['Country'] == 'United States of America']
-        else:
-            print("\nthis is path, ", os.getcwd())
-            df = pd.read_csv('../../../TEMP/recycler_data.csv')
+            df_recycler_out = pd.DataFrame(columns=["Recycler Name",
+                                                    "Long", "Lat"])
+            # Initialize a geocoder to fetch latitude and longitude
+            # coordinates
+            geolocator = Nominatim(user_agent="recycler_locator")
+            for index, row in df.iterrows():
+                recycler_name = row['Recycler Name']
+                state = row['State']
+                city = row['City']
+                try:
+                    # Fetch latitude and longitude for the recycler
+                    location = geolocator.geocode(f"{city}, {state}",
+                                                  timeout=10)
+                    if location:
+                        recycler_latitude = location.latitude
+                        recycler_longitude = location.longitude
+                    else:
+                        recycler_latitude = None
+                        recycler_longitude = None
+                except Exception as e:
+                    print(f"Error geocoding for {recycler_name}: {str(e)}")
+                    recycler_latitude = None
+                    recycler_longitude = None
+                data_to_append = pd.DataFrame(
+                    {"Recycler Name": recycler_name,
+                     "Long": recycler_longitude, "Lat": recycler_latitude})
+                df_recycler_out = pd.concat(
+                    [df_recycler_out, data_to_append], ignore_index=True)
+            df_recycler_out.to_csv("../../../TEMP/recycler_data.csv",
+                                   index=False)
 
-        #import the landfields here
+        # else:
+        #    print("\nthis is path, ", os.getcwd())
+        #    df = pd.read_csv('../../../TEMP/recycler_data.csv')
 
-        # Function to calculate the Haversine distance between two points given their latitude and longitude
-        def haversine(lat1, lon1, lat2, lon2):
-            # Convert latitude and longitude from degrees to radians
-            lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
-
-            # Haversine formula
-            dlon = lon2 - lon1
-            dlat = lat2 - lat1
-            a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
-            c = 2 * atan2(sqrt(a), sqrt(1 - a))
-            return 6371 * c  # Radius of the Earth in kilometers
-
-        # Initialize a geocoder to fetch latitude and longitude coordinates
-        geolocator = Nominatim(user_agent="recycler_locator")
-
-        # Create an empty DataFrame to store distances
-        distance_df = pd.DataFrame(columns=["PCA", "Recycler", "Distance (km)"])
         pca_longlat = pd.DataFrame(columns=["PCA", "Long", "Lat"])
-
-
 
         #     #### Create the 3 Scenarios and assign Baselines
 
@@ -579,8 +586,7 @@ class ABM_CE_PV(Model):
             energymodulefilepath = os.path.join(Path().resolve().parent.parent.parent/ 'PV_ICE/baselines/baseline_modules_energy.csv')
             baslinefolderpath = os.path.join(Path().resolve().parent.parent.parent/ 'PV_ICE/baselines')
 
-
-            for jj in range (0, len(PCAs)): 
+            for jj in range(0, len(PCAs)):
 
                 filetitle = SFscenarios[i]+'_'+PCAs[jj]+'.csv'
                 filetitle = os.path.join(testfolder, 'PCAs', filetitle)   
@@ -597,14 +603,14 @@ class ABM_CE_PV(Model):
                 # r1.scenario[PCAs[jj]].addMaterials(['glass', 'silicon', 'silver', 'copper', 'aluminium_frames', 'encapsulant', 'backsheet'], baselinefolder=r'..\baselines')
                 r1.scenario[PCAs[jj]].latitude = GIS.loc[PCAs[jj]].lat
                 r1.scenario[PCAs[jj]].longitude = GIS.loc[PCAs[jj]].long
-                
-                data_to_append = pd.DataFrame({"PCA": [PCAs[jj]], "Long": [GIS.loc[PCAs[jj]].long], "Lat": [GIS.loc[PCAs[jj]].lat]})
+
+                data_to_append = pd.DataFrame(
+                    {"PCA": [PCAs[jj]], "Long": [GIS.loc[PCAs[jj]].long],
+                     "Lat": [GIS.loc[PCAs[jj]].lat]})
 
                 # Append data to pca_longlat using pd.concat
-                pca_longlat = pd.concat([pca_longlat, data_to_append], ignore_index=True)
-
-
-
+                pca_longlat = pd.concat([pca_longlat, data_to_append],
+                                        ignore_index=True)
 
             # Calculate distances from the current PCA to all recyclers
                 # for index, row in df.iterrows():
@@ -642,7 +648,6 @@ class ABM_CE_PV(Model):
                 #         data_to_append = pd.DataFrame({"PCA": PCAs[jj], "Recycler": recycler_name, "Distance (km)": distance}, ignore_index=True)
                 # distance_df = pd.concat([distance_df, data_to_append], ignore_index=True)
 
-
             #     # # Calculate distances from the current PCA to all recyclers
                 # for index, row in df.iterrows():
                 #     if geopy:
@@ -677,12 +682,11 @@ class ABM_CE_PV(Model):
 
                 #         # Append the distance to the DataFrame
                 #         distance_df = distance_df.append({"PCA": PCAs[jj], "Recycler": recycler_name, "Distance (km)": distance}, ignore_index=True)
-                
 
-                distance_df.to_csv("../../../TEMP/pca_recycler_distances.csv", index=False)
-                
-                pca_longlat.to_csv("../../../TEMP/pca_longlat.csv", index=False)
+                # distance_df.to_csv("../../../TEMP/pca_recycler_distances.csv", index=False)
 
+                pca_longlat.to_csv("../../../TEMP/pca_longlat.csv",
+                                   index=False)
 
                 self.df_in = r1.scenario[PCAs[jj]].dataIn_m
                 self.df_in.to_csv(output_filename_in, index=False)
@@ -719,17 +723,82 @@ class ABM_CE_PV(Model):
             self.df2 = r1.scenario['standard'].material['silicon'].matdataOut_m
             self.df2.to_csv("df2_matdataout.csv", index=False)
 
-        # ! Abdouh needs to point to the right emplacement for the file
-        self.distance_df = pd.read_csv('pca_recycler_distances.csv')
-        self.data = pd.read_excel(reedsFile) #this is the pca file
+        if calculate_distances:
+            # Function to calculate the Haversine distance between two points
+            # given their latitude and longitude
+            def haversine(lat1, lon1, lat2, lon2):
+                # Convert latitude and longitude from degrees to radians
+                lat1, lon1, lat2, lon2 = map(radians,
+                                             [lat1, lon1, lat2, lon2])
+
+                # Haversine formula
+                dlon = lon2 - lon1
+                dlat = lat2 - lat1
+                a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * \
+                    sin(dlon / 2)**2
+                c = 2 * atan2(sqrt(a), sqrt(1 - a))
+                return 6371 * c  # Radius of the Earth in kilometers
+
+            # Load the data for PCAs and recyclers from CSV files
+            pca_data = pd.read_csv("TEMP/pca_longlat.csv")  # Replace with your PCA data file
+            recycler_data = pd.read_csv("TEMP/recycler_data.csv")  # Replace with your recycler data file
+            landfills_data = pd.read_csv("TEMP/Landfills_data.csv")
+
+            # Create an empty DataFrame to store distances
+            distance_df = pd.DataFrame(columns=pca_data['PCA'],
+                                       index=recycler_data['Recycler Name'])
+            distance_df2 = pd.DataFrame(columns=pca_data['PCA'],
+                                        index=recycler_data['Facility Name'])
+
+            # Calculate distances between each PCA and each recycler
+            for pca_index, pca_row in pca_data.iterrows():
+                pca_lat = pca_row['Lat']
+                pca_lon = pca_row['Long']
+
+                for recycler_index, recycler_row in recycler_data.iterrows():
+                    recycler_lat = recycler_row['Latitude']
+                    recycler_lon = recycler_row['Longitude']
+
+                    distance = haversine(pca_lat, pca_lon, recycler_lat,
+                                         recycler_lon)
+
+                    # Fill in the distance in the DataFrame
+                    distance_df.at[recycler_row['Recycler Name'],
+                                   pca_row['PCA']] = distance
+
+                for landfills_index, landfills_row in \
+                        landfills_data.iterrows():
+                    landfills_lat = landfills_row['Latitude']
+                    landfills_lon = landfills_row['Longitude']
+
+                    distance2 = haversine(pca_lat, pca_lon,
+                                          landfills_lat, landfills_lon)
+
+                    # Fill in the distance in the DataFrame
+                    distance_df2.at[landfills_row['Facility Name'],
+                                    pca_row['PCA']] = distance2
+
+            # Save the distances to a CSV file
+            distance_df.to_csv("TEMP/pca_recycler_distances.csv")
+            distance_df2.to_csv("TEMP/pca_landfills_distances.csv")
+
+        self.recycler_distance_df = pd.read_csv(
+            '../../../TEMP/pca_recycler_distances.csv')
+        self.landfill_distance_df = pd.read_csv(
+            '../../../TEMP/pca_landfills_distances.csv')
+        self.landfill_cost_df = pd.read_csv(
+            '../../../TEMP/Landfills_data.csv')
+        self.data = pd.read_excel(reedsFile)  # this is the pca file
         self.agents = self.create_agents(num_consumers)
         self.pv_ice_yearly_waste = 0
 
         self.num_consumers = num_consumers
         self.consumers_node_degree = consumers_node_degree
         self.consumers_network_type = consumers_network_type
-        self.num_recyclers = len(self.distance_df['Recycler'].unique())
-        self.recycler_names = self.distance_df['Recycler'].to_list()
+        self.num_recyclers = len(self.recycler_distance_df[
+            'Recycler Name'].unique())
+        self.recycler_names = self.recycler_distance_df[
+            'Recycler Name'].to_list()
         self.num_producers = num_producers
         self.num_prod_n_recyc = num_recyclers + num_producers
         self.prod_n_recyc_node_degree = prod_n_recyc_node_degree
@@ -872,6 +941,8 @@ class ABM_CE_PV(Model):
 
         self.transportation_cost = transportation_cost
         self.epr_business_model = epr_business_model
+        # Here we keep the old code regarding landfill costs. This does not
+        # affect the updates made during the NSF convergence project - phase I
         self.average_landfill_cost = sum(landfill_cost) / len(landfill_cost)
         self.installer_recycled_amount = 0
         # Change eol_pathways depending on business model
@@ -973,17 +1044,13 @@ class ABM_CE_PV(Model):
         original_repairing_cost = [x + self.transportation_cost_rpr_ldf for
                                    x in original_repairing_cost]
 
-        # ! change landfill costs
-        landfill_cost = [x + self.transportation_cost_rpr_ldf for x in
-                         landfill_cost]
-
         # Create agents, G nodes labels are equal to agents' unique_ID
         for node in self.G.nodes():
             if node < self.num_consumers:
                 a = Consumers(node, self, product_growth, failure_rate_alpha,
                               perceived_behavioral_control, w_sn_eol,
                               w_pbc_eol, w_a_eol, w_sn_reuse, w_pbc_reuse,
-                              w_a_reuse, landfill_cost, hoarding_cost,
+                              w_a_reuse, None, hoarding_cost,
                               used_product_substitution_rate,
                               att_distrib_param_eol, att_distrib_param_reuse,
                               max_storage, consumers_distribution,
@@ -1160,7 +1227,6 @@ class ABM_CE_PV(Model):
         )
         # print("\n\ntotal:", self.pv_ice_yearly_waste )
 
-
     def create_agents(self, num_consumers):
         pca_column = self.data['PCA']
         unique_pca = pca_column.unique()
@@ -1180,7 +1246,8 @@ class ABM_CE_PV(Model):
         agents = {}
         agent_id = 0
         for i, pca_value in enumerate(unique_pca):
-            state_values = self.data.loc[self.data['PCA'] == pca_value, 'State']
+            state_values = self.data.loc[self.data['PCA'] == pca_value,
+                                         'State']
             agents_count = agents_count_per_pca[i]
 
             for j in range(agents_count):
