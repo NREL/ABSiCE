@@ -13,6 +13,7 @@ from mesa.batchrunner import BatchRunnerMP
 from SALib.sample import saltelli
 from copy import deepcopy
 import time
+import os
 
 # Batch run model
 if __name__ == '__main__':
@@ -125,7 +126,12 @@ if __name__ == '__main__':
             "knowledge_distrib": [0.5, 0.49]},
         "seeding": {"Seeding": False, "Year": 10, "number_seed": 50},
         "seeding_recyc": {"Seeding": False, "Year": 10, "number_seed": 50,
-                          "discount": 0.35}}
+                          "discount": 0.35},
+        "pv_ice": False,
+        "pca": False,
+        "pca_scenario": False,
+        "geopy": False,
+        "calculate_distances": False}
 
     # The variables parameters will be invoke along with the fixed parameters
     # allowing for either or both to be honored.
@@ -144,12 +150,12 @@ if __name__ == '__main__':
                             # "w_pbc_eol": [0.100, 0.500]
                             # "calibration_n_sensitivity":
                             #    [0.544],
-                            "calibration_n_sensitivity":
-                                [0, 0.2, 0.4, 0.544, 0.6, 0.8, 1],
+                            # "calibration_n_sensitivity":
+                            #    [0, 0.2, 0.4, 0.544, 0.6, 0.8, 1],
                             # "calibration_n_sensitivity_2":
                             #    [0, 0.2, 0.223, 0.4, 0.6, 0.8, 1]
-                            "calibration_n_sensitivity_2":
-                                [0.223]
+                            # "calibration_n_sensitivity_2":
+                            #    [0.223]
                             }
                     if i == 1:
                         variable_params = {
@@ -171,10 +177,11 @@ if __name__ == '__main__':
             for var_p in variable_params.values():
                 tot_run *= len(var_p)
             print("Total number of run:", tot_run)
-            batch_run = BatchRunner(
+            batch_run = BatchRunnerMP(
                 ABM_CE_PV,
-                variable_params,
-                fixed_params,
+                nr_processes=1,
+                variable_parameters=variable_params,
+                fixed_parameters=fixed_params,
                 iterations=1,
                 max_steps=30,
                 model_reporters={
@@ -257,10 +264,19 @@ if __name__ == '__main__':
                         "Recycler costs": lambda c:
                         ABM_CE_PV.report_output(c, "recycler_costs"),
                         "Refurbisher costs": lambda c:
-                        ABM_CE_PV.report_output(c, "refurbisher_costs")})
+                        ABM_CE_PV.report_output(c, "refurbisher_costs"),
+                        "Refurbisher costs w margins": lambda c:
+                        ABM_CE_PV.report_output(c,
+                            "refurbisher_costs_w_margins"),
+                        "Waste (kg) by pca": lambda c: 
+                            str(getattr(c, 'pca_outputs')),
+                        "Waste (kg) refurbishers": lambda c: 
+                            str(getattr(c, 'refurbisher_outputs_kg'))})
             batch_run.run_all()
             run_data = batch_run.get_model_vars_dataframe()
-            #run_data.to_csv("results\\BatchRun%s.csv" % i)
+            os.chdir('../../../')
+            run_data.to_csv("results\\BatchRun%s.csv" % i)
+            os.chdir('../../../')
     else:
         list_variables = \
             ["recovery_fractions", "num_recyclers",
