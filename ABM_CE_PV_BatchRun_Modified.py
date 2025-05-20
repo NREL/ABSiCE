@@ -18,7 +18,6 @@ import os
 # Batch run model
 if __name__ == '__main__':
     t0 = time.time()
-    last_step = 31
     all_fixed_params = {
         "seed": None,
         "calibration_n_sensitivity": 1,
@@ -69,12 +68,12 @@ if __name__ == '__main__':
         "w_pbc_reuse": 0.382,
         "w_a_reuse": 0.464,
         "product_lifetime": 30,
-        "all_EoL_pathways": {"repair": False, "sell": False, "recycle": True,
+        "all_EoL_pathways": {"repair": True, "sell": True, "recycle": True,
                              "landfill": True, "hoard": True},
         "max_storage": [1, 8, 4],
-        "att_distrib_param_eol": [0.83, 1E-6],
+        "att_distrib_param_eol": [0.544, 0.1],
         "att_distrib_param_reuse": [0.223, 0.262],
-        "original_recycling_cost": [0.128-1E-6, 0.128+1E-6, 0.128],
+        "original_recycling_cost": [0.106, 0.128, 0.117],
         "recycling_learning_shape_factor": -0.39,
         "repairability": 0.55,
         "original_repairing_cost": [0.1, 0.45, 0.23],
@@ -132,8 +131,7 @@ if __name__ == '__main__':
         "pca": False,
         "pca_scenario": False,
         "geopy": False,
-        "calculate_distances": False,
-        "last_step": last_step}
+        "calculate_distances": False}
 
     # The variables parameters will be invoke along with the fixed parameters
     # allowing for either or both to be honored.
@@ -181,11 +179,11 @@ if __name__ == '__main__':
             print("Total number of run:", tot_run)
             batch_run = BatchRunnerMP(
                 ABM_CE_PV,
-                nr_processes=6,
+                nr_processes=1,
                 variable_parameters=variable_params,
                 fixed_parameters=fixed_params,
-                iterations=30,
-                max_steps=last_step,
+                iterations=1,
+                max_steps=30,
                 model_reporters={
                         "Year": lambda c: ABM_CE_PV.report_output(c, "year"),
                         "Agents repairing": lambda c:
@@ -343,7 +341,7 @@ if __name__ == '__main__':
                 variable_parameters=variable_params,
                 fixed_parameters=fixed_params,
                 iterations=1,
-                max_steps=last_step,
+                max_steps=30,
                 model_reporters={
                     "Year": lambda c: ABM_CE_PV.report_output(c, "year"),
                     "Agents repairing": lambda c:

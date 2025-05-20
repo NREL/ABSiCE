@@ -113,7 +113,7 @@ class ABM_CE_PV(Model):
                  calibration_n_sensitivity_3=1,
                  calibration_n_sensitivity_4=1,
                  calibration_n_sensitivity_5=1,
-                 num_consumers=1000,  
+                 num_consumers=1000,
                  consumers_node_degree=10,
                  consumers_network_type="small-world",
                  rewiring_prob=0.1,
@@ -156,13 +156,13 @@ class ABM_CE_PV(Model):
                  w_pbc_reuse=0.382,
                  w_a_reuse=0.464,
                  product_lifetime=30,
-                 all_EoL_pathways={"repair": True, "sell": True,
+                 all_EoL_pathways={"repair": False, "sell": False,
                                    "recycle": True, "landfill": True,
-                                   "hoard": True},
+                                   "hoard": False},
                  max_storage=[1, 8, 4],
-                 att_distrib_param_eol=[0.544, 0.1],
+                 att_distrib_param_eol=[0.857, 0.07],
                  att_distrib_param_reuse=[0.223, 0.262],
-                 original_recycling_cost=[0.106, 0.128, 0.117],
+                 original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
                  recycling_learning_shape_factor=-0.39,
                  repairability=0.55,
                  original_repairing_cost=[0.1, 0.45, 0.23],
@@ -208,7 +208,8 @@ class ABM_CE_PV(Model):
                  recycling_states=[
                      'Texas', 'Arizona', 'Oregon', 'Oklahoma',
                      'Wisconsin', 'Ohio', 'Kentucky', 'South Carolina'],
-                 transportation_cost=0.0314,
+                 # transportation_cost=0.0314,
+                 transportation_cost=1.5,
                  used_product_substitution_rate=[0.6, 1, 0.8],
                  imperfect_substitution=0,
                  epr_business_model=False,
@@ -231,7 +232,12 @@ class ABM_CE_PV(Model):
                  pca=False,
                  pca_scenario=False,
                  geopy=False,
-                 calculate_distances=False):
+                 calculate_distances=False,
+                 last_step=31,
+                 sa_landfill_costs=(False, 0.0037),
+                 file_name={'Landfill data': "Landfills_data.csv",
+                            'PCA-landfill distances':
+                                "pca_landfills_distances.csv"}):
 
         """Initiate model.
 
@@ -424,8 +430,8 @@ class ABM_CE_PV(Model):
         """
         # Set up variables
         self.seed = seed
-        att_distrib_param_eol[0] = calibration_n_sensitivity
-        att_distrib_param_reuse[0] = calibration_n_sensitivity_2
+        # att_distrib_param_eol[0] = calibration_n_sensitivity
+        # att_distrib_param_reuse[0] = calibration_n_sensitivity_2
         # original_recycling_cost = [x * calibration_n_sensitivity_3 for x in
         #                          original_recycling_cost]
         # landfill_cost = [x * calibration_n_sensitivity_4 for x in
@@ -460,6 +466,8 @@ class ABM_CE_PV(Model):
         scenarios = list(rawdf.index.get_level_values('Scenario').unique())
         PCAs = list(rawdf.index.get_level_values('PCA').unique())
         STATEs = list(rawdf.index.get_level_values('State').unique())
+
+        self.file_names = file_name
 
         GISfile = os.path.join(SupportingMaterialFolder, 'gis_centroid_n.csv')
         GIS = pd.read_csv(GISfile)
@@ -513,7 +521,7 @@ class ABM_CE_PV(Model):
                 A = pd.DataFrame(A)
                 A.index = pd.PeriodIndex(A.index, freq='A')
                 A = pd.DataFrame(A)
-                A['new_Installed_Capacity_[MW]'] = A['new_Installed_Capacity_[MW]'] * 0.85
+                A['new_Installed_Capacity_[MW]'] = A['new_Installed_Capacity_[MW]'] * 0.85  # 85% of capacity is Silicon PV?
                 A['new_Installed_Capacity_[MW]'] = A['new_Installed_Capacity_[MW]'] * 1000   # ReEDS file is in GW.
                 # Add other columns
                 A = pd.concat([A, baseline.reindex(A.index)], axis=1)
@@ -539,6 +547,7 @@ class ABM_CE_PV(Model):
         excel_file_path = 'TEMP/Table A-1_Global PV Recyclers_states.xlsx'
 
         if geopy:
+            os.chdir('../../../')
             df = pd.read_excel(excel_file_path, skiprows=[0])  # Skip the first row
             df = df[df['Country'] == 'United States of America']
             df_recycler_out = pd.DataFrame(columns=["Recycler Name",
@@ -740,15 +749,16 @@ class ABM_CE_PV(Model):
                 return 6371 * c  # Radius of the Earth in kilometers
 
             # Load the data for PCAs and recyclers from CSV files
-            pca_data = pd.read_csv("TEMP/pca_longlat.csv")  # Replace with your PCA data file
-            recycler_data = pd.read_csv("TEMP/recycler_data.csv")  # Replace with your recycler data file
-            landfills_data = pd.read_csv("TEMP/Landfills_data.csv")
+            pca_data = pd.read_csv("../../../TEMP/pca_longlat.csv")  # Replace with your PCA data file
+            recycler_data = pd.read_csv("../../../TEMP/recycler_data.csv")  # Replace with your recycler data file
+            landfills_data = pd.read_csv("../../../TEMP/" +
+                                         self.file_names['Landfill data'])
 
             # Create an empty DataFrame to store distances
             distance_df = pd.DataFrame(columns=pca_data['PCA'],
                                        index=recycler_data['Recycler Name'])
             distance_df2 = pd.DataFrame(columns=pca_data['PCA'],
-                                        index=recycler_data['Facility Name'])
+                                        index=landfills_data['Facility Name'])
 
             # Calculate distances between each PCA and each recycler
             for pca_index, pca_row in pca_data.iterrows():
@@ -758,9 +768,9 @@ class ABM_CE_PV(Model):
                 for recycler_index, recycler_row in recycler_data.iterrows():
                     recycler_lat = recycler_row['Latitude']
                     recycler_lon = recycler_row['Longitude']
-
-                    distance = haversine(pca_lat, pca_lon, recycler_lat,
-                                         recycler_lon)
+                    distance = haversine(float(pca_lat), float(pca_lon),
+                                         float(recycler_lat),
+                                         float(recycler_lon))
 
                     # Fill in the distance in the DataFrame
                     distance_df.at[recycler_row['Recycler Name'],
@@ -779,15 +789,19 @@ class ABM_CE_PV(Model):
                                     pca_row['PCA']] = distance2
 
             # Save the distances to a CSV file
-            distance_df.to_csv("TEMP/pca_recycler_distances.csv")
-            distance_df2.to_csv("TEMP/pca_landfills_distances.csv")
+            distance_df.to_csv("../../../TEMP/pca_recycler_distances.csv")
+            distance_df2.to_csv("../../../TEMP/" +
+                                self.file_names['PCA-landfill distances'])
 
         self.recycler_distance_df = pd.read_csv(
             '../../../TEMP/pca_recycler_distances.csv')
         self.landfill_distance_df = pd.read_csv(
-            '../../../TEMP/pca_landfills_distances.csv')
+            '../../../TEMP/' + self.file_names['PCA-landfill distances'])
         self.landfill_cost_df = pd.read_csv(
-            '../../../TEMP/Landfills_data.csv')
+            '../../../TEMP/' + self.file_names['Landfill data'])
+        self.correct_mat_factor = pd.read_csv(
+            '../../../TEMP/correct_mat_factor.csv')
+        
         self.data = pd.read_excel(reedsFile)  # this is the pca file
         self.agents = self.create_agents(num_consumers)
         self.pv_ice_yearly_waste = 0
@@ -800,13 +814,15 @@ class ABM_CE_PV(Model):
         self.recycler_names = self.recycler_distance_df[
             'Recycler Name'].to_list()
         self.num_producers = num_producers
-        self.num_prod_n_recyc = num_recyclers + num_producers
+        self.num_prod_n_recyc = self.num_recyclers + num_producers
         self.prod_n_recyc_node_degree = prod_n_recyc_node_degree
         self.prod_n_recyc_network_type = prod_n_recyc_network_type
         self.num_refurbishers = num_refurbishers
         self.init_eol_rate = init_eol_rate
         self.init_purchase_choice = init_purchase_choice
         self.clock = 0
+        self.last_step = last_step
+        self.sa_landfill_costs = sa_landfill_costs
 
         # ! Initialize model with PV_ICE historical installed cap
         # self.total_number_product = total_number_product
@@ -883,11 +899,18 @@ class ABM_CE_PV(Model):
         self.avg_failure_rate = failure_rate_alpha
 
         self.pca_outputs = {}
+        self.pca_install_test = 0
+        self.pca_install = {}
+        self.pca_tot_waste_w = {}
+        self.pca_tot_waste_m2 = {}
         for pca in PCAs:
             pathway_dict = {}
             for pathway in self.all_EoL_pathways.keys():
                 pathway_dict[pathway] = 0
             self.pca_outputs[pca] = pathway_dict
+            self.pca_install[pca] = 0
+            self.pca_tot_waste_w[pca] = 0
+            self.pca_tot_waste_m2[pca] = 0
         self.refurbisher_outputs_watt = {}
         self.refurbisher_outputs_kg = {}
         for pathway in self.all_EoL_pathways.keys():
@@ -925,7 +948,7 @@ class ABM_CE_PV(Model):
         all_data_out_pca = pd.read_csv(
             "all_pca_dataOut_95-by-35.Adv.csv")
         all_data_out_pca = all_data_out_pca.groupby(
-            'year', as_index=False).mean()
+            'year', as_index=False).mean(numeric_only=True)
         data_out_pca_copy = all_data_out_pca[
             all_data_out_pca['year'] == 2020]
         waste_in_w = \
@@ -1159,7 +1182,12 @@ class ABM_CE_PV(Model):
             self.report_output("refurbisher_costs_w_margins"),
             "Waste (kg) by pca": lambda c: str(self.pca_outputs),
             "Waste (kg) refurbishers": lambda c: str(
-                self.refurbisher_outputs_kg)}
+                self.refurbisher_outputs_kg),
+            "Tot waste (W) by pca": lambda c: str(self.pca_tot_waste_w),
+            "Tot waste (m2) by pca": lambda c: str(self.pca_tot_waste_m2),
+            "Tot install (W) by pca": lambda c: str(self.pca_install),
+            "Tot install (W) by pca TEST": lambda c: str(
+                self.pca_install_test)}
 
         ABM_CE_PV_agent_reporters = {
             "Year": lambda c:
@@ -1356,33 +1384,45 @@ class ABM_CE_PV(Model):
         fu). The weights are the amount of waste for each year. The weighted
         average mass is returned each time step of the simulation.
         """
-        len_product_as_function = len(product_as_function)
-        pvice_mat_factor_copy = self.pvice_mat_factor[
-            self.pvice_mat_factor['year'] <= 2020 + self.clock]
-        conversion_factors = \
-            pvice_mat_factor_copy['total_massperm2'].to_list()
-        conversion_factors = conversion_factors[-len_product_as_function:]
-        all_data_out_pca = pd.read_csv(
-            "all_pca_dataOut_95-by-35.Adv.csv")
-        all_data_out_pca = all_data_out_pca.groupby(
-            'year', as_index=False).mean()
-        data_out_pca_copy = all_data_out_pca[
-            all_data_out_pca['year'] <= 2020 + self.clock]
-        waste_in_w_list = \
-            data_out_pca_copy['Yearly_Sum_Power_atEOL'].to_list()
-        waste_in_m2_list = \
-            data_out_pca_copy['Yearly_Sum_Area_atEOL'].to_list()
-        waste_in_w_list = waste_in_w_list[-len_product_as_function:]
-        waste_in_m2_list = waste_in_m2_list[-len_product_as_function:]
-        waste_w_m2_list = [x / y if y != 0 else 0 for x, y in
-                           zip(waste_in_m2_list, waste_in_w_list)]
-        product_percent = [x / sum(product_as_function) if
-                           sum(product_as_function) != 0 else 0 for x in
-                           product_as_function]
-        product_as_mass_percent = [x * y * z for x, y, z in zip(
-            product_percent, conversion_factors, waste_w_m2_list)]
-        self.yearly_product_wght = conversion_factors[-1]
-        weighted_average_mass_watt = sum(product_as_mass_percent)
+        
+        # len_product_as_function = len(product_as_function)
+        # pvice_mat_factor_copy = self.pvice_mat_factor[
+        #     self.pvice_mat_factor['year'] <= 2020 + self.clock]
+        # conversion_factors = \
+        #     pvice_mat_factor_copy['total_massperm2'].to_list()
+        # conversion_factors = conversion_factors[-len_product_as_function:]
+        # all_data_out_pca = pd.read_csv(
+        #     "all_pca_dataOut_95-by-35.Adv.csv")
+        # all_data_out_pca = all_data_out_pca.groupby(
+        #     'year', as_index=False).mean()
+        # data_out_pca_copy = all_data_out_pca[
+        #     all_data_out_pca['year'] <= 2020 + self.clock]
+        # waste_in_w_list = \
+        #     data_out_pca_copy['Yearly_Sum_Power_atEOL'].to_list()
+        # waste_in_m2_list = \
+        #     data_out_pca_copy['Yearly_Sum_Area_atEOL'].to_list()
+        # waste_in_w_list = waste_in_w_list[-len_product_as_function:]
+        # waste_in_m2_list = waste_in_m2_list[-len_product_as_function:]
+        # waste_w_m2_list = [x / y if y != 0 else 0 for x, y in
+        #                    zip(waste_in_m2_list, waste_in_w_list)]
+        # product_percent = [x / sum(product_as_function) if
+        #                    sum(product_as_function) != 0 else 0 for x in
+        #                    product_as_function]
+        # product_as_mass_percent = [x * y * z for x, y, z in zip(
+        #     product_percent, conversion_factors, waste_w_m2_list)]
+        # self.yearly_product_wght = conversion_factors[-1]
+        # weighted_average_mass_watt = sum(product_as_mass_percent)
+        # # print(weighted_average_mass_watt)
+
+        # ! Much simpler version than commented code above:
+        # ! Assuming average lifetime of 25 years so waste at t=0 (2020) is
+        # ! weighting (per watt) the factor of the file first entry (iloc[0])
+        # ! which is 1995 - correct_mat_factor was calculated by hand from
+        # ! PV ICE outputs
+        weighted_average_mass_watt = float(self.correct_mat_factor[
+            'total_massperW'].iloc[self.clock])
+        # print(weighted_average_mass_watt)
+
         return weighted_average_mass_watt
 
     def average_price_per_function_model(self):
@@ -1613,12 +1653,9 @@ class ABM_CE_PV(Model):
         self.average_price_per_function_model()
         self.schedule.step()
         self.clock = self.clock + 1
+        if self.clock == self.last_step:
+            self.datacollector.collect(self)
 
-        # Calculate yearly waste using pv_ice_waste_calculation method - pass pv_output
+        # Calculate yearly waste using pv_ice_waste_calculation method
+        # pass pv_output
         self.pv_ice_yearly_waste = 0
-        # self.pv_ice_waste_calculation(self.clock, self.df2)
-        test = 0
-        for val in self.pca_outputs.values():
-            for key, value in val.items():
-                if key == 'recycle':
-                    test += value
