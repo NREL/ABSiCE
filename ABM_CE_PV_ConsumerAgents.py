@@ -127,16 +127,16 @@ class Consumers(Agent):
         pca_recyc_transp_dist = pca_recyc_transp_dist.to_list()
         self.pca_recyc_transp_dist = min(pca_recyc_transp_dist)
         self.pca_recyc_transp_cost = self.pca_recyc_transp_dist * \
-            self.model.transportation_cost / 1E3 * \
-            self.model.dynamic_product_average_wght
+            self.model.transportation_cost / 1E3 
+            # ! remove weight * \ self.model.dynamic_product_average_wght
         # ! TODO: change landfill costs
         pca_landfill_transp_dist = self.model.landfill_distance_df.copy()
         pca_landfill_transp_dist = pca_landfill_transp_dist[self.pca]
         pca_landfill_transp_dist = pca_landfill_transp_dist.to_list()
         self.pca_landfill_transp_dist = min(pca_landfill_transp_dist)
         self.pca_landfill_transp_cost = self.pca_landfill_transp_dist * \
-            self.model.transportation_cost / 1E3 * \
-            self.model.dynamic_product_average_wght
+            self.model.transportation_cost / 1E3 
+            # ! remove weight * \ self.model.dynamic_product_average_wght
         landfill_name = self.model.landfill_distance_df.loc[
             self.model.landfill_distance_df[self.pca] ==
             self.pca_landfill_transp_dist, 'Facility Name'].iloc[0]
@@ -144,8 +144,11 @@ class Consumers(Agent):
         self.landfill_cost = landfills_data.loc[
             landfills_data['Facility Name'] == landfill_name,
             '$/ Ton'].iloc[0]  # in $/ton
-        self.landfill_cost = self.landfill_cost / 1E3 * \
-            self.model.dynamic_product_average_wght  # $/W
+        if self.model.sa_landfill_costs[0]:
+            self.landfill_cost = self.model.sa_landfill_costs[1]
+        else:
+            self.landfill_cost = self.landfill_cost / 1E3 * \
+                self.model.dynamic_product_average_wght  # $/W
         # self.init_landfill_cost = self.landfill_cost
 
         # ! prepare pvice waste outputs
@@ -256,13 +259,18 @@ class Consumers(Agent):
     def update_transport_costs(self):
         """
         Update transportation costs according to the (evolving) mass of waste.
+        # ! remove weight so NOT according to the (evolving) mass of waste.
         """
+        #if self.pca == 'p31':
+            #print(self.unique_id, self.pca_recyc_transp_dist, 
+            #      self.model.transportation_cost, 
+            #      self.model.dynamic_product_average_wght)
         self.pca_recyc_transp_cost = self.pca_recyc_transp_dist * \
-            self.model.transportation_cost / 1E3 * \
-            self.model.dynamic_product_average_wght
+            self.model.transportation_cost / 1E3 
+            # ! remove weight * \ self.model.dynamic_product_average_wght
         self.pca_landfill_transp_cost = self.pca_landfill_transp_dist * \
-            self.model.transportation_cost / 1E3 * \
-            self.model.dynamic_product_average_wght
+            self.model.transportation_cost / 1E3 
+            # ! remove weight * \ self.model.dynamic_product_average_wght
         # self.landfill_cost = \
         #    self.init_landfill_cost + \
         #    (self.model.dynamic_product_average_wght -
@@ -385,6 +393,8 @@ class Consumers(Agent):
             subset_df_cap['year'] == (2020 + self.model.clock)]
         additional_capacity = subset_df_cap[
             'new_Installed_Capacity_[MW]'].iloc[0]
+        self.model.pca_install[self.pca] += additional_capacity
+        self.model.pca_install_test += additional_capacity
         # ! Old code
         # additional_capacity = sum(self.number_product_hard_copy) * \
         #    self.product_growth
@@ -468,6 +478,8 @@ class Consumers(Agent):
                 1 - self.used_new_ratio)
             self.number_used_product_EoL_m2 = yearly_waste_m2 * \
                 self.used_new_ratio
+            self.model.pca_tot_waste_w[self.pca] += yearly_waste
+            self.model.pca_tot_waste_m2[self.pca] += yearly_waste_m2
         else:
             yearly_waste = yearly_waste_file[
                 yearly_waste_file['year'] == (2020 + self.model.clock)]
@@ -481,6 +493,11 @@ class Consumers(Agent):
                 'Yearly_Sum_Area_atEOL'].iloc[0] * (1 - self.used_new_ratio)
             self.number_used_product_EoL_m2 = yearly_waste[
                 'Yearly_Sum_Area_atEOL'].iloc[0] * self.used_new_ratio
+            self.model.pca_tot_waste_w[self.pca] += yearly_waste[
+                'Yearly_Sum_Power_atEOL'].iloc[0]
+            self.model.pca_tot_waste_m2[self.pca] += yearly_waste_m2[
+                'Yearly_Sum_Area_atEOL'].iloc[0]
+
         self.tot_prod_EoL = self.number_product_EoL + \
             self.number_used_product_EoL
         self.tot_prod_EoL_m2 = self.number_product_EoL_m2 + \
@@ -756,68 +773,55 @@ class Consumers(Agent):
         waste_in_w = original_df['Yearly_Sum_Power_atEOL'].mean()
         waste_in_m2 = original_df['Yearly_Sum_Area_atEOL'].mean()
         waste_w_to_m2_factor = waste_in_m2 / waste_in_w
+        # if self.unique_id == 0:
+        #    print(waste_w_to_m2_factor)
+
+        new_eol_vol = self.number_product_EoL_m2 * self.model.weight_factor \
+            + avg_weight_factor_stored_pv * storage * waste_w_to_m2_factor
+        used_eol_vol = self.number_used_product_EoL_m2 * \
+            self.model.weight_factor
 
         if eol_pathway == "repair":
             self.number_product_repaired += managed_waste
             self.consumer_costs += managed_waste * \
                 self.perceived_behavioral_control[0]
             if product_type == "new":
-                self.number_new_prod_repaired += \
-                    self.number_product_EoL_m2 * self.model.weight_factor + \
-                    avg_weight_factor_stored_pv * storage * \
-                    waste_w_to_m2_factor
+                self.number_new_prod_repaired += new_eol_vol
             else:
-                self.number_used_prod_repaired += \
-                    self.number_used_product_EoL_m2 * self.model.weight_factor
-            self.model.pca_outputs[self.pca][eol_pathway] = (
-                self.number_new_prod_repaired +
-                self.number_used_prod_repaired)
+                self.number_used_prod_repaired += used_eol_vol
+            self.model.pca_outputs[self.pca][eol_pathway] += (new_eol_vol +
+                                                              used_eol_vol)
         elif eol_pathway == "sell":
             self.number_product_sold += managed_waste
             self.consumer_costs += managed_waste * \
                 self.perceived_behavioral_control[1]
             if product_type == "new":
-                self.number_new_prod_sold += \
-                    self.number_product_EoL_m2 * self.model.weight_factor + \
-                    avg_weight_factor_stored_pv * storage * \
-                    waste_w_to_m2_factor
+                self.number_new_prod_sold += new_eol_vol
             else:
-                self.number_used_prod_sold += \
-                    self.number_used_product_EoL_m2 * self.model.weight_factor
-            self.model.pca_outputs[self.pca][eol_pathway] = (
-                self.number_new_prod_sold +
-                self.number_used_prod_sold)
+                self.number_used_prod_sold += used_eol_vol
+            self.model.pca_outputs[self.pca][eol_pathway] += (new_eol_vol +
+                                                              used_eol_vol)
         elif eol_pathway == "recycle":
             self.number_product_recycled += managed_waste
             if not self.model.epr_business_model:
                 self.consumer_costs += managed_waste * \
                                        self.perceived_behavioral_control[2]
             if product_type == "new":
-                self.number_new_prod_recycled += \
-                    self.number_product_EoL_m2 * self.model.weight_factor + \
-                    avg_weight_factor_stored_pv * storage * \
-                    waste_w_to_m2_factor
+                self.number_new_prod_recycled += new_eol_vol
             else:
-                self.number_used_prod_recycled += \
-                    self.number_used_product_EoL_m2 * self.model.weight_factor
-            self.model.pca_outputs[self.pca][eol_pathway] = (
-                self.number_new_prod_recycled +
-                self.number_used_prod_recycled)
+                self.number_used_prod_recycled += used_eol_vol
+            self.model.pca_outputs[self.pca][eol_pathway] += (new_eol_vol +
+                                                              used_eol_vol)
         elif eol_pathway == "landfill":
             self.number_product_landfilled += managed_waste
             self.consumer_costs += managed_waste * \
                 self.perceived_behavioral_control[3]
             if product_type == "new":
-                self.number_new_prod_landfilled += \
-                    self.number_product_EoL_m2 * self.model.weight_factor + \
-                    avg_weight_factor_stored_pv * storage * \
-                    waste_w_to_m2_factor
+                self.number_new_prod_landfilled += new_eol_vol
             else:
-                self.number_used_prod_landfilled += \
-                    self.number_used_product_EoL_m2 * self.model.weight_factor
-            self.model.pca_outputs[self.pca][eol_pathway] = (
-                self.number_new_prod_landfilled +
-                self.number_used_prod_landfilled)
+                self.number_used_prod_landfilled += used_eol_vol
+            self.model.pca_outputs[self.pca][eol_pathway] += (new_eol_vol +
+                                                              used_eol_vol)
         else:
             # managed_waste = self.number_product_EoL or
             # self.number_product_EoL + storage_to_others
@@ -828,11 +832,13 @@ class Consumers(Agent):
                 self.number_new_prod_hoarded += \
                     self.number_product_EoL_m2 * self.model.weight_factor
             else:
-                self.number_used_prod_hoarded += \
-                    self.number_used_product_EoL_m2 * self.model.weight_factor
-            self.model.pca_outputs[self.pca][eol_pathway] = (
-                self.number_new_prod_hoarded +
-                self.number_used_prod_hoarded)
+                self.number_used_prod_hoarded += used_eol_vol
+            self.model.pca_outputs[self.pca][eol_pathway] += (new_eol_vol +
+                                                              used_eol_vol)
+        if self.unique_id == 0:
+            test = 0
+            for value in self.model.pca_outputs[self.pca].values():
+                test += value
 
     def update_yearly_recycled_waste(self, installer):
         """
@@ -917,8 +923,10 @@ class Consumers(Agent):
         """
         for agent in self.model.schedule.agents:
             if agent.unique_id == self.recycling_facility_id:
-                self.perceived_behavioral_control[2] = \
-                    agent.recycling_cost + self.pca_recyc_transp_cost
+                self.perceived_behavioral_control[2] = (
+                    agent.recycling_cost +
+                    self.pca_recyc_transp_cost * 0.0077)  # ! Multiply
+                # ! by average mass per watt instead of dynamic
             elif agent.unique_id == self.refurbisher_id:
                 self.perceived_behavioral_control[0] = \
                     agent.repairing_cost
@@ -926,8 +934,10 @@ class Consumers(Agent):
                     agent.scd_hand_price * (1 - agent.refurbisher_margin)
                 self.pbc_reuse[1] = agent.scd_hand_price
         self.pbc_reuse[0] = self.model.fsthand_mkt_pric
-        self.perceived_behavioral_control[3] = \
-            self.landfill_cost + self.pca_landfill_transp_cost
+        self.perceived_behavioral_control[3] = (
+            self.landfill_cost +
+            self.pca_landfill_transp_cost * 0.0077) # ! Multiply
+                # ! by average mass per watt instead of dynamic
         self.perceived_behavioral_control[4] = self.hoarding_cost
 
     def product_mass_output_metrics(self):
@@ -962,4 +972,4 @@ class Consumers(Agent):
         self.volume_used_products_purchased()
         self.update_product_eol("new")
         self.product_storage_to_other_ref = self.product_storage_to_other
-        self.update_product_eol("used")
+        # self.update_product_eol("used")
