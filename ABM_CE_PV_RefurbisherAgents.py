@@ -46,7 +46,8 @@ class Refurbishers(Agent):
         """
         Creation of new refurbisher agent
         """
-        super().__init__(unique_id, model)
+        super().__init__(model)
+        self.unique_id = unique_id
         self.original_repairing_cost = \
             np.random.triangular(original_repairing_cost[0],
                                  original_repairing_cost[2],
@@ -115,7 +116,7 @@ class Refurbishers(Agent):
         """
         self.refurbished_volume = 0
         total_volume_recycler = 0
-        for agent in self.model.schedule.agents:
+        for agent in self.model.agents:
             if self.model.num_consumers <= agent.unique_id < \
                     self.model.num_consumers + self.model.num_recyclers:
                 total_volume_recycler += agent.repairable_volume
@@ -148,7 +149,7 @@ class Refurbishers(Agent):
         """
         self.count_consumers = 0
         self.count_consumers_tot = 0
-        for agent in self.model.schedule.agents:
+        for agent in self.model.agents:
             if agent.unique_id < self.model.num_consumers:
                 if agent.refurbisher_id == self.unique_id and \
                         agent.EoL_pathway == "sell":
@@ -164,7 +165,7 @@ class Refurbishers(Agent):
         sold (either due to insufficient demand or repairs that are too costly)
         to the landfill, storage, and recycle pathways.
         """
-        for agent in self.model.schedule.agents:
+        for agent in self.model.agents:
             if agent.unique_id < self.model.num_consumers:
                 if agent.refurbisher_id == self.unique_id and \
                         agent.EoL_pathway == "sell":
@@ -193,7 +194,7 @@ class Refurbishers(Agent):
             self.ref_hoarded_waste = 0
             hoarded_waste_copy = self.hoarded_waste
             hoarded_waste_copy_mass = self.hoarded_waste_mass
-            for agent in self.model.schedule.agents:
+            for agent in self.model.agents:
                 if agent.unique_id < self.model.num_consumers:
                     if agent.refurbisher_id == self.unique_id and \
                             agent.EoL_pathway == "sell":
@@ -338,7 +339,7 @@ class Refurbishers(Agent):
             self.model.num_consumers
         mass_volume_recycler = self.sold_waste_recycler * \
             self.model.dynamic_product_average_wght
-        for agent in self.model.schedule.agents:
+        for agent in self.model.agents:
             if agent.unique_id < self.model.num_consumers:
                 if agent.refurbisher_id == self.unique_id:
                     eol_ref_recycled_vol = \
@@ -360,7 +361,7 @@ class Refurbishers(Agent):
             self.ref_hoarded_waste = 0
             hoarded_waste_copy = self.hoarded_waste_recycle
             hoarded_waste_copy_mass = self.hoarded_waste_recycle_mass
-            for agent in self.model.schedule.agents:
+            for agent in self.model.agents:
                 if agent.unique_id < self.model.num_consumers:
                     if agent.refurbisher_id == self.unique_id:
                         self.ref_hoarded_waste = \
@@ -469,7 +470,7 @@ class Refurbishers(Agent):
         Compute societal costs of refurbishers. Assume an average of all
         refurbisher's customers' characteristics when computing costs.
         """
-        for agent in self.model.schedule.agents:
+        for agent in self.model.agents:
             if agent.unique_id < self.model.num_consumers and \
                     agent.refurbisher_id == self.unique_id and \
                     agent.EoL_pathway == "sell":
@@ -501,7 +502,7 @@ class Refurbishers(Agent):
         # Last refurbisher calls producers to update amount of waste recycled
         if self.unique_id == self.model.num_consumers + \
                 self.model.num_prod_n_recyc + self.model.num_refurbishers - 1:
-            for agent in self.model.schedule.agents:
+            for agent in self.model.agents:
                 if agent.unique_id < self.model.num_consumers:
                     agent.update_yearly_recycled_waste(True)
                 if self.model.num_consumers + self.model.num_recyclers \
@@ -510,7 +511,7 @@ class Refurbishers(Agent):
                     agent.add_installer_recycled_volumes()
                     agent.recovered_volume_n_value()
                     agent.costs_producer()
-            for agent in self.model.schedule.agents:
+            for agent in self.model.agents:
                 if self.model.num_consumers <= agent.unique_id < \
                         self.model.num_consumers + self.model.num_recyclers:
                     agent.compute_recycler_costs()

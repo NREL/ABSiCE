@@ -86,7 +86,6 @@ from ABM_CE_PV_ConsumerAgents import Consumers
 from ABM_CE_PV_RecyclerAgents import Recyclers
 from ABM_CE_PV_RefurbisherAgents import Refurbishers
 from ABM_CE_PV_ProducerAgents import Producers
-from mesa.time import BaseScheduler
 from mesa.space import NetworkGrid
 from mesa.datacollection import DataCollector
 import networkx as nx
@@ -102,6 +101,7 @@ from geopy.geocoders import Nominatim
 import time
 from math import radians, sin, cos, sqrt, atan2
 from pathlib import Path
+import pdb
 
 
 
@@ -429,7 +429,6 @@ class ABM_CE_PV(Model):
                 "number_seed": 50, "discount": 0.35}.
         """
         # Set up variables
-        self.seed = seed
         # att_distrib_param_eol[0] = calibration_n_sensitivity
         # att_distrib_param_reuse[0] = calibration_n_sensitivity_2
         # original_recycling_cost = [x * calibration_n_sensitivity_3 for x in
@@ -440,8 +439,10 @@ class ABM_CE_PV(Model):
         #   calibration_n_sensitivity_4
         # w_sn_eol = w_sn_eol * calibration_n_sensitivity_5
 
-        np.random.seed(self.seed)
-        random.seed(self.seed)
+        super().__init__(seed=seed)
+        # np.random.seed(self.seed)
+        # random.seed(self.seed)
+        self.seed = seed
 
         #Set path for data saving
         testfolder = str(Path().resolve() / 'PV_ICE' / 'TEMP' / 'PCA')
@@ -504,7 +505,6 @@ class ABM_CE_PV(Model):
         row22 = 'year'
         for x in row2[1:]:
             row22 = row22 + ',' + x 
-
         if pca:
             for ii in range(len(rawdf.unstack(level=1))):
                 PCA = rawdf.unstack(level=1).iloc[ii].name[1]
@@ -802,8 +802,11 @@ class ABM_CE_PV(Model):
         self.correct_mat_factor = pd.read_csv(
             '../../../TEMP/correct_mat_factor.csv')
         
+        # print("pwd", os.getcwd())
+        # breakpoint()
+        
         self.data = pd.read_excel(reedsFile)  # this is the pca file
-        self.agents = self.create_agents(num_consumers)
+        self.agent_pca_map = self.create_agent_pca_map(num_consumers)
         self.pv_ice_yearly_waste = 0
 
         self.num_consumers = num_consumers
@@ -1007,7 +1010,6 @@ class ABM_CE_PV(Model):
         self.G = nx.disjoint_union(self.H1, self.H2)
         self.G = nx.disjoint_union(self.G, self.H3)
         self.grid = NetworkGrid(self.G)
-        self.schedule = BaseScheduler(self)
         # Compute distance for the repair, sell, recycle, landfill and storage
         # pathways. Assumptions: 1) Only certain states have recycling
         # facilities, 2) The refurbisher who performs repair and
@@ -1033,7 +1035,7 @@ class ABM_CE_PV(Model):
         # Compute distances
         self.mean_distance_within_state = np.nanmean(
             np.where(self.states != 0, self.states, np.nan)) / 2
-        self.states_graph = nx.from_numpy_matrix(self.states)
+        self.states_graph = nx.from_numpy_array(self.states)
         nodes_states_dic = \
             dict(zip(list(self.states_graph.nodes),
                      list(pd.read_csv("../../../StatesAdjacencyMatrix.csv"))))
@@ -1078,18 +1080,15 @@ class ABM_CE_PV(Model):
                               att_distrib_param_eol, att_distrib_param_reuse,
                               max_storage, consumers_distribution,
                               product_distribution)
-                self.schedule.add(a)
                 # Add the agent to the node
                 self.grid.place_agent(a, node)
             elif node < self.num_recyclers + self.num_consumers:
                 b = Recyclers(node, self, self.original_recycling_cost,
                               init_eol_rate,
                               recycling_learning_shape_factor)
-                self.schedule.add(b)
                 self.grid.place_agent(b, node)
             elif node < self.num_prod_n_recyc + self.num_consumers:
                 c = Producers(node, self, scd_mat_prices, virgin_mat_prices)
-                self.schedule.add(c)
                 self.grid.place_agent(c, node)
             else:
                 d = Refurbishers(node, self, original_repairing_cost,
@@ -1097,7 +1096,6 @@ class ABM_CE_PV(Model):
                                  repairing_learning_shape_factor,
                                  scndhand_mkt_pric_rate, refurbisher_margin,
                                  max_storage)
-                self.schedule.add(d)
                 self.grid.place_agent(d, node)
         # Draw initial graph
         # nx.draw(self.G, with_labels=True)
@@ -1255,7 +1253,7 @@ class ABM_CE_PV(Model):
         )
         # print("\n\ntotal:", self.pv_ice_yearly_waste )
 
-    def create_agents(self, num_consumers):
+    def create_agent_pca_map(self, num_consumers):
         pca_column = self.data['PCA']
         unique_pca = pca_column.unique()
         total_unique_pca = len(unique_pca)
@@ -1441,7 +1439,7 @@ class ABM_CE_PV(Model):
         reported by model's reporters.
         """
         count = 0
-        for agent in model.schedule.agents:
+        for agent in model.agents:
             if agent.unique_id < model.num_consumers:
                 if condition == "repairing" and agent.EoL_pathway == "repair":
                     count += 1
@@ -1482,7 +1480,7 @@ class ABM_CE_PV(Model):
         industrial_waste_recycled = 0
         industrial_waste_landfill_mass = 0
         industrial_waste_recycled_mass = 0
-        for agent in model.schedule.agents:
+        for agent in model.agents:
             if model.num_consumers + model.num_recyclers <= agent.unique_id < \
                     model.num_consumers + model.num_prod_n_recyc:
                 if model.epr_business_model:
@@ -1497,7 +1495,7 @@ class ABM_CE_PV(Model):
                     industrial_waste_landfill_mass += \
                         model.yearly_product_wght * \
                         agent.industrial_waste_generated / model.num_consumers
-        for agent in model.schedule.agents:
+        for agent in model.agents:
             if condition == "product_stock" and agent.unique_id < \
                     model.num_consumers:
                 count += sum(agent.number_product_hard_copy)
@@ -1651,7 +1649,7 @@ class ABM_CE_PV(Model):
         # Refers to agent step function
         self.update_dynamic_lifetime()
         self.average_price_per_function_model()
-        self.schedule.step()
+        self.agents.do("step")
         self.clock = self.clock + 1
         if self.clock == self.last_step:
             self.datacollector.collect(self)

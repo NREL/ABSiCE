@@ -52,7 +52,8 @@ class Producers(Agent):
         """
         Creation of new producer agent
         """
-        super().__init__(unique_id, model)
+        super().__init__(model)
+        self.unique_id = unique_id
         self.agent_i = self.unique_id - self.model.num_consumers
         self.material_produced = self.producer_type()
         self.recycled_material_volume = 0
@@ -100,7 +101,7 @@ class Producers(Agent):
         Count the number of producers according to their types.
         """
         count = 0
-        for agent in self.model.schedule.agents:
+        for agent in self.model.agents:
             if hasattr(agent, 'material_produced'):
                 if agent.material_produced == producer_type:
                     count += 1
@@ -125,7 +126,7 @@ class Producers(Agent):
         tot_recycled = 0
         amount_recyclers = 0
         self.model.installer_recycled_amount = 0
-        for agent in self.model.schedule.agents:
+        for agent in self.model.agents:
             if agent.unique_id < self.model.num_consumers:
                 tot_recycled += agent.yearly_recycled_waste
             if self.model.num_consumers <= agent.unique_id < \
@@ -142,7 +143,7 @@ class Producers(Agent):
         self.yearly_recycled_material_volume = 0
         num_neighbors_producer = 0
         tot_recycling_volume = 0
-        for agent in self.model.schedule.agents:
+        for agent in self.model.agents:
             if self.model.num_consumers <= agent.unique_id < \
                     self.model.num_consumers + self.model.num_prod_n_recyc:
                 if agent.unique_id >= self.model.num_recyclers + \

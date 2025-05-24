@@ -22,7 +22,7 @@ def run_model(number_run, number_steps):
     """
     for j in range(number_run):
         # Reinitialize model
-        j = j + 43
+        # j = j + 43
         t0 = time.time()
         if j < 1:
             model = ABM_CE_PV(
@@ -43,7 +43,8 @@ def run_model(number_run, number_steps):
                 # transportation_cost=0.25)
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                )
         elif j < 2:
             model = ABM_CE_PV(
                 seed=(j - 1), last_step=number_steps,
@@ -201,7 +202,7 @@ def run_model(number_run, number_steps):
             model = ABM_CE_PV(
                 seed=(j - 9), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0000),
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -222,7 +223,7 @@ def run_model(number_run, number_steps):
                 seed=(j - 10), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0077),
                 # sa_landfill_costs=(True, 0.0038),
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -243,7 +244,7 @@ def run_model(number_run, number_steps):
                 seed=(j - 11), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0134),
                 # sa_landfill_costs=(True, 0.0077),
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -263,7 +264,7 @@ def run_model(number_run, number_steps):
             model = ABM_CE_PV(
                 seed=(j - 12), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0000),
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -282,7 +283,7 @@ def run_model(number_run, number_steps):
             model = ABM_CE_PV(
                 seed=(j - 13), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0077),
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -301,7 +302,7 @@ def run_model(number_run, number_steps):
             model = ABM_CE_PV(
                 seed=(j - 14), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0134),
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -320,7 +321,7 @@ def run_model(number_run, number_steps):
             model = ABM_CE_PV(
                 seed=(j - 15), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0000),
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -338,7 +339,7 @@ def run_model(number_run, number_steps):
             model = ABM_CE_PV(
                 seed=(j - 16), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0077),
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -356,7 +357,7 @@ def run_model(number_run, number_steps):
             model = ABM_CE_PV(
                 seed=(j - 17), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0134),
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -373,7 +374,7 @@ def run_model(number_run, number_steps):
         elif j < 19:
             model = ABM_CE_PV(
                 seed=(j - 18), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -390,7 +391,7 @@ def run_model(number_run, number_steps):
         elif j < 20:
             model = ABM_CE_PV(
                 seed=(j - 19), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -407,7 +408,7 @@ def run_model(number_run, number_steps):
         elif j < 21:
             model = ABM_CE_PV(
                 seed=(j - 20), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -424,7 +425,7 @@ def run_model(number_run, number_steps):
         elif j < 22:
             model = ABM_CE_PV(
                 seed=(j - 21), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -441,7 +442,7 @@ def run_model(number_run, number_steps):
         elif j < 33:
             model = ABM_CE_PV(
                 seed=(j - 22), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 recycling_learning_shape_factor=-0.0,
@@ -455,7 +456,7 @@ def run_model(number_run, number_steps):
         elif j < 43:
             model = ABM_CE_PV(
                 seed=(j - 33), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 recycling_learning_shape_factor=-0.0,
@@ -469,7 +470,7 @@ def run_model(number_run, number_steps):
         elif j < 53:
             model = ABM_CE_PV(
                 seed=(j - 43), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 recycling_learning_shape_factor=-0.0,
@@ -483,7 +484,7 @@ def run_model(number_run, number_steps):
         elif j < 63:
             model = ABM_CE_PV(
                 seed=(j - 53), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 recycling_learning_shape_factor=-0.0,
@@ -498,7 +499,7 @@ def run_model(number_run, number_steps):
             model = ABM_CE_PV(
                 seed=(j - 120), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0115),
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 original_recycling_cost=[0.085-1E-6, 0.085+1E-6, 0.085],
@@ -512,7 +513,7 @@ def run_model(number_run, number_steps):
             model = ABM_CE_PV(
                 seed=(j - 140), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0134),
-                file_name={'Landfill data': "Landfills_data.csv",
+                file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 original_recycling_cost=[0.085-1E-6, 0.085+1E-6, 0.085],
@@ -575,7 +576,10 @@ def run_model(number_run, number_steps):
         t1 = time.time()
         print(t1 - t0)
         os.chdir('../../../')
-        results_model.to_csv("results\\Results_model_run_%s.csv" % j)
+        if not os.path.exists("results"):
+            os.makedirs("results")
+        results_model.to_csv(os.path.join(
+            "results", "Results_model_run_%s.csv" % j))
         # results_agents.to_csv("results\\Results_agents_run_%s.csv" % j)
 
 
@@ -674,7 +678,10 @@ def run_batch(number_run, number_steps, **kwargs):
         t1 = time.time()
         print(t1 - t0)
         os.chdir('../../../')
-        results_model.to_csv("results\\Results_model_run_%s.csv" % j)
+        if not os.path.exists("results"):
+            os.makedirs("results")
+        results_model.to_csv(os.path.join(
+            "results", "Results_model_run_%s.csv" % j))
         # results_agents.to_csv("results\\Results_agents_run_%s.csv" % j)
 
 

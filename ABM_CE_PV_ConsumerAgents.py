@@ -84,7 +84,8 @@ class Consumers(Agent):
         """
         Creation of new consumer agent
         """
-        super().__init__(unique_id, model)
+        super().__init__(model)
+        self.unique_id = unique_id
         self.breed = "residential"
         self.consumers_distribution = consumers_distribution
         self.trust_levels = []
@@ -119,9 +120,9 @@ class Consumers(Agent):
             self.model.init_purchase_choice)
 
         # ! This increases model resolution nothing to do here for now
-        self.pca = self.model.agents[self.unique_id][0]
-        self.state = self.model.agents[self.unique_id][1]
-        self.agents_per_pca = self.model.agents[self.unique_id][2]
+        self.pca = self.model.agent_pca_map[self.unique_id][0]
+        self.state = self.model.agent_pca_map[self.unique_id][1]
+        self.agents_per_pca = self.model.agent_pca_map[self.unique_id][2]
         pca_recyc_transp_dist = self.model.recycler_distance_df.copy()
         pca_recyc_transp_dist = pca_recyc_transp_dist[self.pca]
         pca_recyc_transp_dist = pca_recyc_transp_dist.to_list()
@@ -521,7 +522,7 @@ class Consumers(Agent):
         """
         Calculate subjective norm (peer pressure) component of EoL TPB rule
         """
-        neighbors_nodes = self.model.grid.get_neighbors(self.pos,
+        neighbors_nodes = self.model.grid.get_neighborhood(self.pos,
                                                         include_center=False)
         proportions_choices = []
         for i in range(len(list_choices)):
@@ -595,7 +596,7 @@ class Consumers(Agent):
         total_waste = 0
         self.sold_waste = 0
         total_volume_refurbished = 0
-        for agent in self.model.schedule.agents:
+        for agent in self.model.agents:
             if self.model.num_consumers + self.model.num_prod_n_recyc <= \
                     agent.unique_id:
                 total_volume_refurbished += agent.refurbished_volume
@@ -651,7 +652,7 @@ class Consumers(Agent):
                     return key
                 else:
                     new_installed_capacity = 0
-                    for agent in self.model.schedule.agents:
+                    for agent in self.model.agents:
                         if agent.unique_id < self.model.num_consumers:
                             new_installed_capacity += agent.number_product[-1]
                     used_volume_purchased = self.model.consumer_used_product \
@@ -679,7 +680,7 @@ class Consumers(Agent):
                         self.model.list_consumer_id_seed[consumer]:
                     second_hand_p = 0
                     repair_c = 0
-                    for agent in self.model.schedule.agents:
+                    for agent in self.model.agents:
                         if agent.unique_id == self.refurbisher_id:
                             second_hand_p = agent.scd_hand_price
                             repair_c = agent.repairing_cost
@@ -921,7 +922,7 @@ class Consumers(Agent):
         behavioral control are updated according to processes from other agents
         or own initiated costs.
         """
-        for agent in self.model.schedule.agents:
+        for agent in self.model.agents:
             if agent.unique_id == self.recycling_facility_id:
                 self.perceived_behavioral_control[2] = (
                     agent.recycling_cost +
