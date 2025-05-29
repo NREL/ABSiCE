@@ -12,9 +12,10 @@ import matplotlib.pyplot as plt
 import time
 import os
 from itertools import product
+from utils import TIMESTEP
 
 
-def run_model(number_run, number_steps):
+def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
     """
     Run model several times and collect outputs at each time steps. Creates
     a new file for each run. Use a new seed for random generation at each
@@ -24,6 +25,7 @@ def run_model(number_run, number_steps):
         # Reinitialize model
         # j = j + 43
         t0 = time.time()
+        number_steps = get_number_of_steps(number_steps, timestep)
         if j < 1:
             model = ABM_CE_PV(
                 seed=(j), last_step=number_steps,
@@ -44,6 +46,7 @@ def run_model(number_run, number_steps):
                 w_sn_eol=0,
                 w_pbc_eol=1,
                 w_a_eol=0,
+                timestep=timestep,
                 )
         elif j < 2:
             model = ABM_CE_PV(
@@ -65,7 +68,8 @@ def run_model(number_run, number_steps):
                 # transportation_cost=0.75)
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 3:
             model = ABM_CE_PV(
                 seed=(j - 2), last_step=number_steps,
@@ -86,7 +90,8 @@ def run_model(number_run, number_steps):
                 # transportation_cost=1.25)
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 4:
             model = ABM_CE_PV(
                 seed=(j - 3), last_step=number_steps,
@@ -105,7 +110,8 @@ def run_model(number_run, number_steps):
                 # transportation_cost=1.25,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 5:
             model = ABM_CE_PV(
                 seed=(j - 4), last_step=number_steps,
@@ -124,7 +130,8 @@ def run_model(number_run, number_steps):
                 # transportation_cost=1.25,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 6:
             model = ABM_CE_PV(
                 seed=(j - 5), last_step=number_steps,
@@ -143,7 +150,8 @@ def run_model(number_run, number_steps):
                 # transportation_cost=1.25,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 7:
             model = ABM_CE_PV(
                 seed=(j - 6), last_step=number_steps,
@@ -161,7 +169,8 @@ def run_model(number_run, number_steps):
                 # transportation_cost=1.25,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 8:
             model = ABM_CE_PV(
                 seed=(j - 7), last_step=number_steps,
@@ -179,7 +188,8 @@ def run_model(number_run, number_steps):
                 # transportation_cost=1.25,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 9:
             model = ABM_CE_PV(
                 seed=(j - 8), last_step=number_steps,
@@ -197,12 +207,13 @@ def run_model(number_run, number_steps):
                 # transportation_cost=1.25,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 10:
             model = ABM_CE_PV(
                 seed=(j - 9), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0000),
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -217,13 +228,14 @@ def run_model(number_run, number_steps):
                 # transportation_cost=0.25)
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 11:
             model = ABM_CE_PV(
                 seed=(j - 10), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0077),
                 # sa_landfill_costs=(True, 0.0038),
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -238,13 +250,14 @@ def run_model(number_run, number_steps):
                 # transportation_cost=0.75)
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 12:
             model = ABM_CE_PV(
                 seed=(j - 11), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0134),
                 # sa_landfill_costs=(True, 0.0077),
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -259,12 +272,13 @@ def run_model(number_run, number_steps):
                 # transportation_cost=1.25)
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 13:
             model = ABM_CE_PV(
                 seed=(j - 12), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0000),
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -278,12 +292,13 @@ def run_model(number_run, number_steps):
                 # transportation_cost=1.25,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 14:
             model = ABM_CE_PV(
                 seed=(j - 13), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0077),
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -297,12 +312,13 @@ def run_model(number_run, number_steps):
                 # transportation_cost=1.25,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 15:
             model = ABM_CE_PV(
                 seed=(j - 14), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0134),
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -316,12 +332,13 @@ def run_model(number_run, number_steps):
                 # transportation_cost=1.25,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 16:
             model = ABM_CE_PV(
                 seed=(j - 15), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0000),
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -334,12 +351,13 @@ def run_model(number_run, number_steps):
                 # transportation_cost=1.25,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 17:
             model = ABM_CE_PV(
                 seed=(j - 16), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0077),
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -352,12 +370,13 @@ def run_model(number_run, number_steps):
                 # transportation_cost=1.25,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 18:
             model = ABM_CE_PV(
                 seed=(j - 17), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0134),
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -370,11 +389,12 @@ def run_model(number_run, number_steps):
                 # transportation_cost=1.25,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 19:
             model = ABM_CE_PV(
                 seed=(j - 18), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -387,11 +407,12 @@ def run_model(number_run, number_steps):
                 transportation_cost=1.5,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 20:
             model = ABM_CE_PV(
                 seed=(j - 19), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -404,11 +425,12 @@ def run_model(number_run, number_steps):
                 transportation_cost=1,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 21:
             model = ABM_CE_PV(
                 seed=(j - 20), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -421,11 +443,12 @@ def run_model(number_run, number_steps):
                 transportation_cost=0.5,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 22:
             model = ABM_CE_PV(
                 seed=(j - 21), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
@@ -438,11 +461,12 @@ def run_model(number_run, number_steps):
                 transportation_cost=1E-12,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 33:
             model = ABM_CE_PV(
                 seed=(j - 22), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 recycling_learning_shape_factor=-0.0,
@@ -452,11 +476,12 @@ def run_model(number_run, number_steps):
                 transportation_cost=1.5,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep,)
         elif j < 43:
             model = ABM_CE_PV(
                 seed=(j - 33), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 recycling_learning_shape_factor=-0.0,
@@ -466,11 +491,12 @@ def run_model(number_run, number_steps):
                 transportation_cost=1E-12,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep)
         elif j < 53:
             model = ABM_CE_PV(
                 seed=(j - 43), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 recycling_learning_shape_factor=-0.0,
@@ -480,11 +506,12 @@ def run_model(number_run, number_steps):
                 transportation_cost=1.5,
                 w_sn_eol=0.27,
                 w_pbc_eol=0.44,
-                w_a_eol=0.39)
+                w_a_eol=0.39,
+                timestep=timestep)
         elif j < 63:
             model = ABM_CE_PV(
                 seed=(j - 53), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 recycling_learning_shape_factor=-0.0,
@@ -494,12 +521,13 @@ def run_model(number_run, number_steps):
                 transportation_cost=1E-12,
                 w_sn_eol=0.27,
                 w_pbc_eol=0.44,
-                w_a_eol=0.39)
+                w_a_eol=0.39,
+                timestep=timestep)
         elif j < 140:
             model = ABM_CE_PV(
                 seed=(j - 120), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0115),
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 original_recycling_cost=[0.085-1E-6, 0.085+1E-6, 0.085],
@@ -508,12 +536,13 @@ def run_model(number_run, number_steps):
                 # transportation_cost=1.5,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep)
         elif j < 160:
             model = ABM_CE_PV(
                 seed=(j - 140), last_step=number_steps,
                 sa_landfill_costs=(True, 0.0134),
-                file_name={'Landfill data': "Landfills_data_SA.csv",
+                file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
                 original_recycling_cost=[0.085-1E-6, 0.085+1E-6, 0.085],
@@ -522,7 +551,8 @@ def run_model(number_run, number_steps):
                 # transportation_cost=1.5,
                 w_sn_eol=0,
                 w_pbc_eol=1,
-                w_a_eol=0)
+                w_a_eol=0,
+                timestep=timestep)
         elif j < 240:
             model = ABM_CE_PV(seed=(j - 210),
                               dynamic_lifetime_model={
@@ -536,7 +566,8 @@ def run_model(number_run, number_steps):
                               all_EoL_pathways={"repair": True, "sell": True,
                                                 "recycle": True,
                                                 "landfill": False,
-                                                "hoard": True})
+                                                "hoard": True},
+                                                timestep=timestep)
         elif j < 300:
             model = ABM_CE_PV(seed=(j - 270),
                               seeding={"Seeding": True,
@@ -557,14 +588,16 @@ def run_model(number_run, number_steps):
                               all_EoL_pathways={"repair": False, "sell": True,
                                                 "recycle": False,
                                                 "landfill": True,
-                                                "hoard": True})
+                                                "hoard": True},
+                                                timestep=timestep)
         else:
             model = ABM_CE_PV(seed=(j - 330),
                               calibration_n_sensitivity_3=0.65,
                               recovery_fractions={
                 "Product": np.nan, "Aluminum": 0.994, "Glass": 0.98,
                 "Copper": 0.97, "Insulated cable": 1., "Silicon": 0.97,
-                "Silver": 0.94})
+                "Silver": 0.94},
+                timestep=timestep)
         for i in range(number_steps):
             model.step()
         # Get results in a pandas DataFrame
@@ -724,6 +757,18 @@ def draw_graphs(network, figures, model, results_agents, results_model):
     if network or figures:
         plt.show()  # draw graph as desired and plot outputs
 
+def get_number_of_steps(number_steps: int, timestep: TIMESTEP):
+    """
+    Get the number of steps based on the timestep.
+    """
+    if timestep == TIMESTEP.ANNUAL:
+        return number_steps
+    elif timestep == TIMESTEP.MONTHLY:
+        return number_steps * 12
+    elif timestep == TIMESTEP.QUARTERLY:
+        return number_steps * 4
+    else:
+        raise ValueError("Unsupported timestep: {}".format(timestep))
 
 run_model(15, 15)
 # run_batch(40, 31, list1=['a', 'b', 'c'],list2=['d', 'e', 'f'],

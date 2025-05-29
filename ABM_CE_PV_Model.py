@@ -101,7 +101,8 @@ from geopy.geocoders import Nominatim
 import time
 from math import radians, sin, cos, sqrt, atan2
 from pathlib import Path
-import pdb
+from utils import TIMESTEP, transform_timeseries_timestep, transform_pca_timeseries_timestep
+from datetime import datetime
 
 
 
@@ -113,6 +114,7 @@ class ABM_CE_PV(Model):
                  calibration_n_sensitivity_3=1,
                  calibration_n_sensitivity_4=1,
                  calibration_n_sensitivity_5=1,
+                 timestep=TIMESTEP.ANNUAL,
                  num_consumers=1000,
                  consumers_node_degree=10,
                  consumers_network_type="small-world",
@@ -254,6 +256,9 @@ class ABM_CE_PV(Model):
                 different type of input parameters . Defaults to 1.
             calibration_n_sensitivity_5 (int, optional): enable varying
                 different type of input parameters . Defaults to 1.
+            timestep (TIMESTEP, optional): time step of the model. Defaults to
+                TIMESTEP.ANNUAL. Scaling is applied linearly to the model data
+                to match the time step.
             num_consumers (int, optional): number of consumers.
                 Defaults to 1000.
             consumers_node_degree (int, optional): average node degree in the
@@ -443,6 +448,7 @@ class ABM_CE_PV(Model):
         # np.random.seed(self.seed)
         # random.seed(self.seed)
         self.seed = seed
+        self.timestep = timestep
 
         #Set path for data saving
         testfolder = str(Path().resolve() / 'PV_ICE' / 'TEMP' / 'PCA')
@@ -802,8 +808,8 @@ class ABM_CE_PV(Model):
         self.correct_mat_factor = pd.read_csv(
             '../../../TEMP/correct_mat_factor.csv')
         
-        # print("pwd", os.getcwd())
-        # breakpoint()
+        self.correct_mat_factor = transform_timeseries_timestep(
+            self.correct_mat_factor, self.timestep, scale=False)
         
         self.data = pd.read_excel(reedsFile)  # this is the pca file
         self.agent_pca_map = self.create_agent_pca_map(num_consumers)
@@ -849,6 +855,7 @@ class ABM_CE_PV(Model):
 
         all_pca_df_in = all_pca_df_in.groupby('year', as_index=False).sum()
         subset_df_init_cap = all_pca_df_in[all_pca_df_in['year'] < 2020]
+        subset_df_init_cap = transform_timeseries_timestep(subset_df_init_cap, self.timestep)
         subset_df_init_cap = subset_df_init_cap[
             'new_Installed_Capacity_[MW]'].tolist()
         self.total_number_product = subset_df_init_cap
@@ -888,6 +895,7 @@ class ABM_CE_PV(Model):
         os.makedirs(output_folder, exist_ok=True)
         output_filename = os.path.join(output_folder, "mat_factor.csv")
         df_mat_factor.to_csv(output_filename, index=False)
+        df_mat_factor = transform_timeseries_timestep(df_mat_factor, self.timestep, scale=False)
         self.pvice_mat_factor = df_mat_factor
         self.weight_factor = 0
         self.max_storage = max_storage
@@ -949,7 +957,9 @@ class ABM_CE_PV(Model):
         conversion_factor = \
             pvice_mat_factor_copy['total_massperm2'].iloc[0]
         all_data_out_pca = pd.read_csv(
-            "all_pca_dataOut_95-by-35.Adv.csv")
+            "all_pca_dataOut_95-by-35.Adv.csv", index_col=0)
+        columns_to_expand = ['Yearly_Sum_Power_atEOL', 'Yearly_Sum_Area_atEOL']
+        all_data_out_pca = transform_pca_timeseries_timestep(all_data_out_pca, self.timestep, filtered_columns=columns_to_expand)
         all_data_out_pca = all_data_out_pca.groupby(
             'year', as_index=False).mean(numeric_only=True)
         data_out_pca_copy = all_data_out_pca[
@@ -1103,8 +1113,7 @@ class ABM_CE_PV(Model):
 
         # Defines reporters and set up data collector
         ABM_CE_PV_model_reporters = {
-            "Year": lambda c:
-            self.report_output("year"),
+            **self.get_temporal_data(),
             "Average weight of waste": lambda c:
             self.report_output("weight"),
             "Agents repairing": lambda c: self.count_EoL("repairing"),
@@ -1188,8 +1197,7 @@ class ABM_CE_PV(Model):
                 self.pca_install_test)}
 
         ABM_CE_PV_agent_reporters = {
-            "Year": lambda c:
-            self.report_output("year"),
+            **self.get_temporal_data(),
             "Number_product_repaired":
                 lambda a: getattr(a, "number_product_repaired", None),
             "Number_product_sold":
@@ -1428,9 +1436,10 @@ class ABM_CE_PV(Model):
         Compute the price of first hand products. Price ratio is compared to
         modules of the same year.
         """
-        correction_year = len(self.total_number_product)
+        correction_year = len(self.total_number_product) // self.timestep.value
+        year = self.clock // self.timestep.value
         self.fsthand_mkt_pric = self.fsthand_mkt_pric_reg_param[0] * e**(
-                -self.fsthand_mkt_pric_reg_param[1] * (self.clock +
+                -self.fsthand_mkt_pric_reg_param[1] * (year+
                                                        correction_year))
 
     def count_EoL(model, condition):
@@ -1583,7 +1592,11 @@ class ABM_CE_PV(Model):
                     agent.unique_id:
                 count += (-1 * agent.scd_hand_price) / model.num_refurbishers
             elif condition == "year":
-                count = 2020 + model.clock
+                count = model.current_date.year
+            elif condition == "month":
+                count = model.current_date.month
+            elif condition == "quarter":
+                count = (model.current_date.month - 1) // 3 + 1
             elif condition == "weight":
                 count = model.dynamic_product_average_wght
             elif condition == "recycled_mat_volume" and model.num_consumers + \
@@ -1616,6 +1629,35 @@ class ABM_CE_PV(Model):
                                          model.past_sold_repaired_waste
             model.past_sold_repaired_waste = count2
         return count
+    
+    @property
+    def current_date(self):
+        """
+        Returns the current date based on the model's clock and timestep
+        """
+        if self.timestep == TIMESTEP.ANNUAL:
+            return datetime(year=2020 + self.clock, month=1, day=1)
+        elif self.timestep == TIMESTEP.MONTHLY:
+            return datetime(year=2020 + (self.clock // 12), month=(self.clock % 12) + 1, day=1)
+        elif self.timestep == TIMESTEP.QUARTERLY:
+            return datetime(year=2020 + (self.clock // 4), month=((self.clock % 4) * 3) + 1, day=1)
+        else:
+            raise ValueError("Unsupported timestep. Use ANNUAL, MONTHLY, or QUARTERLY.")
+        
+    def get_temporal_data(self):
+        """
+        Returns the current date in a format suitable for temporal data
+        collection.
+        """
+        temporal_data = {
+            "Year": lambda c: self.report_output("year"),
+        }
+
+        if self.timestep == TIMESTEP.MONTHLY:
+            temporal_data["Month"] = lambda c: self.report_output("month")
+        elif self.timestep == TIMESTEP.QUARTERLY:
+            temporal_data["Quarter"] = lambda c: self.report_output("quarter")
+        return temporal_data
 
     def pv_ice_mat_factor(self):
         """
@@ -1623,12 +1665,12 @@ class ABM_CE_PV(Model):
         average mass of the panels for the last "stored" years.
         """
         pv_ice_mat_subset = self.pvice_mat_factor[
-            self.pvice_mat_factor['year'] == (2020 + self.clock)]
+            self.pvice_mat_factor['date'] == self.current_date]
         self.weight_factor = pv_ice_mat_subset['total_massperm2'].iloc[0]
-        past_storage = max(0, (2020 + self.clock - self.max_storage[1]))
+        past_storage = max(0, (self.current_date.year - self.max_storage[1]))
         pv_ice_mat_subset_stored_years = self.pvice_mat_factor[
-            (self.pvice_mat_factor['year'] >= past_storage) &
-            (self.pvice_mat_factor['year'] < 2020 + self.clock)]
+            (self.pvice_mat_factor['year'] >= past_storage) & 
+            (self.pvice_mat_factor['date'] < self.current_date)]
         self.avg_weight_factor_stored_pv = pv_ice_mat_subset_stored_years[
             'total_massperm2'].mean()
 

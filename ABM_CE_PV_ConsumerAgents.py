@@ -15,6 +15,7 @@ from collections import OrderedDict
 from scipy.stats import truncnorm
 import operator
 from math import e
+from utils import transform_timeseries_timestep
 
 
 
@@ -158,13 +159,17 @@ class Consumers(Agent):
         self.data_out_pca['Yearly_Sum_Power_atEOL'] /= self.agents_per_pca
         self.data_out_pca['Yearly_Sum_Area_atEOL'] /= self.agents_per_pca
         # ! modified the initial number of products & prepare pvice outputs
+        self.data_out_pca = transform_timeseries_timestep(
+            self.data_out_pca, self.model.timestep)
         self.data_in_pca = pd.read_csv(
             "datain_95-by-35.Adv_" + self.pca + "_.csv")
         self.data_in_pca['new_Installed_Capacity_[MW]'] /= self.agents_per_pca
         self.data_in_pca['new_Installed_Capacity_[MW]'] *= 1E6
+        self.data_in_pca = transform_timeseries_timestep(
+            self.data_in_pca, self.model.timestep)
         subset_df_cap = self.data_in_pca.copy()
         subset_df_cap = subset_df_cap[
-            subset_df_cap['year'] < (2020 + self.model.clock)]
+            subset_df_cap['year'] < (self.model.current_date.year)]
         self.number_product = subset_df_cap[
             'new_Installed_Capacity_[MW]'].to_list()
 
@@ -391,7 +396,7 @@ class Consumers(Agent):
 
         subset_df_cap = self.data_in_pca.copy()
         subset_df_cap = subset_df_cap[
-            subset_df_cap['year'] == (2020 + self.model.clock)]
+            subset_df_cap['date'] == self.model.current_date]
         additional_capacity = subset_df_cap[
             'new_Installed_Capacity_[MW]'].iloc[0]
         self.model.pca_install[self.pca] += additional_capacity
@@ -483,13 +488,13 @@ class Consumers(Agent):
             self.model.pca_tot_waste_m2[self.pca] += yearly_waste_m2
         else:
             yearly_waste = yearly_waste_file[
-                yearly_waste_file['year'] == (2020 + self.model.clock)]
+                yearly_waste_file['date'] == self.model.current_date]
             self.number_product_EoL = yearly_waste[
                 'Yearly_Sum_Power_atEOL'].iloc[0] * (1 - self.used_new_ratio)
             self.number_used_product_EoL = yearly_waste[
                 'Yearly_Sum_Power_atEOL'].iloc[0] * self.used_new_ratio
             yearly_waste_m2 = yearly_waste_file[
-                yearly_waste_file['year'] == (2020 + self.model.clock)]
+                yearly_waste_file['date'] == self.model.current_date]
             self.number_product_EoL_m2 = yearly_waste_m2[
                 'Yearly_Sum_Area_atEOL'].iloc[0] * (1 - self.used_new_ratio)
             self.number_used_product_EoL_m2 = yearly_waste[
@@ -506,7 +511,7 @@ class Consumers(Agent):
 
         subset_df_remaining_cap = self.data_out_pca.copy()
         subset_df_remaining_cap = subset_df_remaining_cap[
-            subset_df_remaining_cap['year'] <= (2020 + self.model.clock)]
+            subset_df_remaining_cap['date'] <= self.model.current_date]
         self.new_products = [
             x * (1 - self.used_new_ratio) for x in subset_df_remaining_cap[
                 'Effective_Capacity_[W]'].tolist()]
@@ -673,7 +678,7 @@ class Consumers(Agent):
                 self.model.all_EoL_pathways, self.w_sn_reuse, self.pbc_reuse,
                 self.w_pbc_reuse, self.attitude_levels_purchase,
                 self.attitude_level_reuse, self.w_a_reuse)
-        if self.model.seeding["Seeding"] and self.model.clock >= \
+        if self.model.seeding["Seeding"] and self.model.clock// self.model.timestep.value >= \
                 self.model.seeding["Year"]:
             for consumer in range(self.model.seeding["number_seed"]):
                 if self.unique_id == \
@@ -702,7 +707,7 @@ class Consumers(Agent):
         and attributed to the chosen EoL pathway
         """
         limited_paths = self.model.all_EoL_pathways.copy()
-        if self.model.seeding_recyc["Seeding"] and self.model.clock >= \
+        if self.model.seeding_recyc["Seeding"] and self.model.clock // self.model.timestep.value >= \
                 self.model.seeding_recyc["Year"]:
             for consumer in range(self.model.seeding_recyc["number_seed"]):
                 if self.unique_id == \
@@ -760,17 +765,17 @@ class Consumers(Agent):
         # self.number_new_prod_repaired = sum([x * y for x in
         # yearly_converting_factor_list and y in self.waste]) +
         # average_converting_factor * storage
-        past_storage = max(0, (2020 + self.model.clock - self.max_storage))
+        past_storage = max(0, (self.model.current_date.year - self.max_storage))
         pv_ice_mat_subset_stored_years = self.model.pvice_mat_factor[
             (self.model.pvice_mat_factor['year'] >= past_storage) &
-            (self.model.pvice_mat_factor['year'] <= 2020 + self.model.clock)]
+            (self.model.pvice_mat_factor['date'] <= self.model.current_date)]
         avg_weight_factor_stored_pv = pv_ice_mat_subset_stored_years[
             'total_massperm2'].mean()
 
         original_df = self.data_out_pca.copy()
         original_df = original_df[
             (original_df['year'] >= past_storage) &
-            (original_df['year'] <= 2020 + self.model.clock)]
+            (original_df['date'] <= self.model.current_date)]
         waste_in_w = original_df['Yearly_Sum_Power_atEOL'].mean()
         waste_in_m2 = original_df['Yearly_Sum_Area_atEOL'].mean()
         waste_w_to_m2_factor = waste_in_m2 / waste_in_w
@@ -856,14 +861,14 @@ class Consumers(Agent):
         module was manufactured and the average weight-to-power ratio at that
         time. The model from IRENA-IEA 2016 is used.
         """
-        past_storage = max(0, (2020 + self.model.clock - self.max_storage))
+        past_storage = max(0, (self.model.current_date.year - self.max_storage))
         pv_ice_mat_subset_stored_years = self.model.pvice_mat_factor[
             (self.model.pvice_mat_factor['year'] >= past_storage) &
-            (self.model.pvice_mat_factor['year'] <= 2020 + self.model.clock)]
+            (self.model.pvice_mat_factor['date'] <= self.model.current_date)]
         original_df = self.data_out_pca.copy()
         original_df = original_df[
             (original_df['year'] >= past_storage) &
-            (original_df['year'] <= 2020 + self.model.clock)]
+            (original_df['date'] <= self.model.current_date)]
         waste_in_w = original_df['Yearly_Sum_Power_atEOL'].mean()
         waste_in_m2 = original_df['Yearly_Sum_Area_atEOL'].mean()
         waste_w_to_m2_factor = waste_in_m2 / waste_in_w
@@ -873,12 +878,12 @@ class Consumers(Agent):
 
         len_product_as_function = len(product_as_function)
         pvice_mat_factor_copy = self.model.pvice_mat_factor[
-            self.model.pvice_mat_factor['year'] <= 2020 + self.model.clock]
+            self.model.pvice_mat_factor['date'] <= self.model.current_date]
         conversion_factors = \
             pvice_mat_factor_copy['total_massperm2'].to_list()
         conversion_factors = conversion_factors[-len_product_as_function:]
         data_out_pca_copy = self.data_out_pca[
-            self.data_out_pca['year'] <= 2020 + self.model.clock]
+            self.data_out_pca['date'] <= self.model.current_date]
         waste_in_w_list = \
             data_out_pca_copy['Yearly_Sum_Power_atEOL'].to_list()
         waste_in_m2_list = \
@@ -903,12 +908,13 @@ class Consumers(Agent):
         elif self.purchase_choice == "used":
             self.product_years_storage.append("hoard")
         count = 0
+        max_storage_period = self.max_storage * self.model.timestep.value
         for i in range(len(self.product_years_storage)):
             if self.product_years_storage[i] == "hoard":
                 count += 1
-            elif count <= self.max_storage:
+            elif count <= max_storage_period:
                 count = 0
-        if count > self.max_storage:
+        if count > max_storage_period:
             self.product_years_storage = []
             self.product_storage_to_other = self.number_product_hoarded
             self.number_product_hoarded = 0
@@ -963,7 +969,7 @@ class Consumers(Agent):
         self.product_storage_to_other_ref = 0
         self.update_transport_costs()
         # Update product growth from a list:
-        if self.model.clock > self.model.growth_threshold:
+        if self.model.clock // self.model.timestep.value > self.model.growth_threshold:
             self.product_growth = self.product_growth_list[1]
         self.update_product_stock()
         self.yearly_prod_n_waste()
