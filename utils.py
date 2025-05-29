@@ -115,22 +115,3 @@ def transform_pca_timeseries_timestep(
     df_expanded = df_expanded.drop(columns=['offset'])
 
     return df_expanded
-
-
-    # def group_and_expand(sub_df):
-    #     sub_df = sub_df.copy()
-    #     rows = []
-
-    #     for _, row in sub_df.iterrows():
-    #         year = row['year']
-    #         start_date = pd.to_datetime(f"{year}-01-01")
-    #         date_range = pd.date_range(start=start_date, periods=periods, freq=freq)
-    #         for date in date_range:
-    #             new_row = row.copy()
-    #             new_row['date'] = date
-    #             new_row.update({col: row[col] / periods for col in sub_df.columns if col not in group_keys + ['year']})
-    #             rows.append(new_row)
-    #     return pd.DataFrame(rows)
-    # expanded_df = df.groupby(group_keys).apply(group_and_expand).reset_index(drop=True)
-    
-    # return expanded_df
