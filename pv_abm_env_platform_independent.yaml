@@ -1,0 +1,11 @@
+name: pv_abm
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - mesa=3.2.0
+  - salib=1.5.1
+  - networkx=3.4.2
+  - matplotlib=3.10.0
+  - geopy=2.4.1
+  - openpyxl=3.1.5
