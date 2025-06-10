@@ -477,7 +477,7 @@ class Consumers(Agent):
                 1 - self.used_new_ratio)
             self.number_used_product_EoL = yearly_waste * self.used_new_ratio
             yearly_waste_m2 = yearly_waste_file[
-                yearly_waste_file['year'] <= (2020 + self.model.clock)]
+                yearly_waste_file['date'] <= self.model.current_date]
             yearly_waste_m2 = sum(
                 yearly_waste_m2['Yearly_Sum_Area_atEOL'].tolist())
             self.number_product_EoL_m2 = yearly_waste_m2 * (
