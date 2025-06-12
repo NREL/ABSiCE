@@ -8,10 +8,10 @@ Run - batch of simulations with final state of outputs
 """
 
 from ABM_CE_PV_Model import *
-from mesa.batchrunner import BatchRunner
-from mesa.batchrunner import BatchRunnerMP
+import mesa
 from SALib.sample import saltelli
 from copy import deepcopy
+import pandas as pd
 import time
 import os
 
@@ -179,105 +179,102 @@ if __name__ == '__main__':
             for var_p in variable_params.values():
                 tot_run *= len(var_p)
             print("Total number of run:", tot_run)
-            batch_run = BatchRunnerMP(
+            results = mesa.batch_run(
                 ABM_CE_PV,
+                parameters={**fixed_params, **variable_params},
                 nr_processes=6,
-                variable_parameters=variable_params,
-                fixed_parameters=fixed_params,
                 iterations=30,
                 max_steps=last_step,
-                model_reporters={
-                        "Year": lambda c: ABM_CE_PV.report_output(c, "year"),
-                        "Agents repairing": lambda c:
-                        ABM_CE_PV.count_EoL(c, "repairing"),
-                        "Agents selling": lambda c:
-                        ABM_CE_PV.count_EoL(c, "selling"),
-                        "Agents recycling": lambda c:
-                        ABM_CE_PV.count_EoL(c, "recycling"),
-                        "Agents landfilling": lambda c:
-                        ABM_CE_PV.count_EoL(c, "landfilling"),
-                        "Agents storing": lambda c:
-                        ABM_CE_PV.count_EoL(c, "hoarding"),
-                        "Agents buying new": lambda c:
-                        ABM_CE_PV.count_EoL(c, "buy_new"),
-                        "Agents buying used": lambda c:
-                        ABM_CE_PV.count_EoL(c, "buy_used"),
-                        "Agents buying certified": lambda c:
-                        ABM_CE_PV.count_EoL(c, "certified"),
-                        "Total product": lambda c:
-                        ABM_CE_PV.report_output(c, "product_stock"),
-                        "New product": lambda c:
-                        ABM_CE_PV.report_output(c, "product_stock_new"),
-                        "Used product": lambda c:
-                        ABM_CE_PV.report_output(c, "product_stock_used"),
-                        "New product_mass": lambda c:
-                        ABM_CE_PV.report_output(c, "prod_stock_new_mass"),
-                        "Used product_mass": lambda c:
-                        ABM_CE_PV.report_output(c, "prod_stock_used_mass"),
-                        "End-of-life - repaired": lambda c:
-                        ABM_CE_PV.report_output(c, "product_repaired"),
-                        "End-of-life - sold": lambda c:
-                        ABM_CE_PV.report_output(c, "product_sold"),
-                        "End-of-life - recycled": lambda c:
-                        ABM_CE_PV.report_output(c, "product_recycled"),
-                        "End-of-life - landfilled": lambda c:
-                        ABM_CE_PV.report_output(c, "product_landfilled"),
-                        "End-of-life - stored": lambda c:
-                        ABM_CE_PV.report_output(c, "product_hoarded"),
-                        "eol - new repaired weight": lambda c:
-                        ABM_CE_PV.report_output(c, "product_new_repaired"),
-                        "eol - new sold weight": lambda c:
-                        ABM_CE_PV.report_output(c, "product_new_sold"),
-                        "eol - new recycled weight": lambda c:
-                        ABM_CE_PV.report_output(c, "product_new_recycled"),
-                        "eol - new landfilled weight": lambda c:
-                        ABM_CE_PV.report_output(c, "product_new_landfilled"),
-                        "eol - new stored weight": lambda c:
-                        ABM_CE_PV.report_output(c, "product_new_hoarded"),
-                        "eol - used repaired weight": lambda c:
-                        ABM_CE_PV.report_output(c, "product_used_repaired"),
-                        "eol - used sold weight": lambda c:
-                        ABM_CE_PV.report_output(c, "product_used_sold"),
-                        "eol - used recycled weight": lambda c:
-                        ABM_CE_PV.report_output(c, "product_used_recycled"),
-                        "eol - used landfilled weight": lambda c:
-                        ABM_CE_PV.report_output(c, "product_used_landfilled"),
-                        "eol - used stored weight": lambda c:
-                        ABM_CE_PV.report_output(c, "product_used_hoarded"),
-                        "Average landfilling cost": lambda c:
-                        ABM_CE_PV.report_output(c, "average_landfill_cost"),
-                        "Average storing cost": lambda c:
-                        ABM_CE_PV.report_output(c, "average_hoarding_cost"),
-                        "Average recycling cost": lambda c:
-                        ABM_CE_PV.report_output(c, "average_recycling_cost"),
-                        "Average repairing cost": lambda c:
-                        ABM_CE_PV.report_output(c, "average_repairing_cost"),
-                        "Average selling cost": lambda c:
-                        ABM_CE_PV.report_output(
-                            c, "average_second_hand_price"),
-                        "Recycled material volume": lambda c:
-                        ABM_CE_PV.report_output(c, "recycled_mat_volume"),
-                        "Recycled material value": lambda c:
-                        ABM_CE_PV.report_output(c, "recycled_mat_value"),
-                        "Producer costs": lambda c:
-                        ABM_CE_PV.report_output(c, "producer_costs"),
-                        "Consumer costs": lambda c:
-                        ABM_CE_PV.report_output(c, "consumer_costs"),
-                        "Recycler costs": lambda c:
-                        ABM_CE_PV.report_output(c, "recycler_costs"),
-                        "Refurbisher costs": lambda c:
-                        ABM_CE_PV.report_output(c, "refurbisher_costs"),
-                        "Refurbisher costs w margins": lambda c:
-                        ABM_CE_PV.report_output(c,
-                            "refurbisher_costs_w_margins"),
-                        "Waste (kg) by pca": lambda c: 
-                            str(getattr(c, 'pca_outputs')),
-                        "Waste (kg) refurbishers": lambda c: 
-                            str(getattr(c, 'refurbisher_outputs_kg'))})
-            batch_run.run_all()
-            run_data = batch_run.get_model_vars_dataframe()
+                #  model_reporters={
+                #     "Year": lambda c: ABM_CE_PV.report_output(c, "year"),
+                #     "Agents repairing": lambda c:
+                #     ABM_CE_PV.count_EoL(c, "repairing"),
+                #     "Agents selling": lambda c:
+                #     ABM_CE_PV.count_EoL(c, "selling"),
+                #     "Agents recycling": lambda c:
+                #     ABM_CE_PV.count_EoL(c, "recycling"),
+                #     "Agents landfilling": lambda c:
+                #     ABM_CE_PV.count_EoL(c, "landfilling"),
+                #     "Agents storing": lambda c:
+                #     ABM_CE_PV.count_EoL(c, "hoarding"),
+                #     "Agents buying new": lambda c:
+                #     ABM_CE_PV.count_EoL(c, "buy_new"),
+                #     "Agents buying used": lambda c:
+                #     ABM_CE_PV.count_EoL(c, "buy_used"),
+                #     "Agents buying certified": lambda c:
+                #     ABM_CE_PV.count_EoL(c, "certified"),
+                #     "Total product": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_stock"),
+                #     "New product": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_stock_new"),
+                #     "Used product": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_stock_used"),
+                #     "New product_mass": lambda c:
+                #     ABM_CE_PV.report_output(c, "prod_stock_new_mass"),
+                #     "Used product_mass": lambda c:
+                #     ABM_CE_PV.report_output(c, "prod_stock_used_mass"),
+                #     "End-of-life - repaired": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_repaired"),
+                #     "End-of-life - sold": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_sold"),
+                #     "End-of-life - recycled": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_recycled"),
+                #     "End-of-life - landfilled": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_landfilled"),
+                #     "End-of-life - stored": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_hoarded"),
+                #     "eol - new repaired weight": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_new_repaired"),
+                #     "eol - new sold weight": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_new_sold"),
+                #     "eol - new recycled weight": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_new_recycled"),
+                #     "eol - new landfilled weight": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_new_landfilled"),
+                #     "eol - new stored weight": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_new_hoarded"),
+                #     "eol - used repaired weight": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_used_repaired"),
+                #     "eol - used sold weight": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_used_sold"),
+                #     "eol - used recycled weight": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_used_recycled"),
+                #     "eol - used landfilled weight": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_used_landfilled"),
+                #     "eol - used stored weight": lambda c:
+                #     ABM_CE_PV.report_output(c, "product_used_hoarded"),
+                #     "Average landfilling cost": lambda c:
+                #     ABM_CE_PV.report_output(c, "average_landfill_cost"),
+                #     "Average storing cost": lambda c:
+                #     ABM_CE_PV.report_output(c, "average_hoarding_cost"),
+                #     "Average recycling cost": lambda c:
+                #     ABM_CE_PV.report_output(c, "average_recycling_cost"),
+                #     "Average repairing cost": lambda c:
+                #     ABM_CE_PV.report_output(c, "average_repairing_cost"),
+                #     "Average selling cost": lambda c:
+                #     ABM_CE_PV.report_output(c,
+                #                             "average_second_hand_price"),
+                #     "Recycled material volume": lambda c:
+                #     ABM_CE_PV.report_output(c, "recycled_mat_volume"),
+                #     "Recycled material value": lambda c:
+                #     ABM_CE_PV.report_output(c, "recycled_mat_value"),
+                #     "Producer costs": lambda c:
+                #     ABM_CE_PV.report_output(c, "producer_costs"),
+                #     "Consumer costs": lambda c:
+                #     ABM_CE_PV.report_output(c, "consumer_costs"),
+                #     "Recycler costs": lambda c:
+                #     ABM_CE_PV.report_output(c, "recycler_costs"),
+                #     "Refurbisher costs": lambda c:
+                #     ABM_CE_PV.report_output(c, "refurbisher_costs"),
+                #     "Refurbisher costs w margins": lambda c:
+                #     ABM_CE_PV.report_output(c, "refurbisher_costs_w_margins")}) 
+            )
+            run_data = pd.DataFrame(results)
             os.chdir('../../../')
-            run_data.to_csv("results\\BatchRun%s.csv" % i)
+            if not os.path.exists("results"):
+                os.makedirs("results")
+            run_data.to_csv(os.path.join(
+                "results", "BatchRun%s.csv" % i))
             os.chdir('../../../')
     else:
         list_variables = \
@@ -338,98 +335,103 @@ if __name__ == '__main__':
                     fixed_params[variable_to_change] = -1 * value_to_change
             variable_params = {"seed": list(range(0, 6))}
             fixed_params.pop("seed")
-            batch_run = BatchRunnerMP(
-                ABM_CE_PV, nr_processes=6,
-                variable_parameters=variable_params,
-                fixed_parameters=fixed_params,
+            results = mesa.batch_run(
+                ABM_CE_PV, 
+                parameters={**fixed_params, **variable_params},
+                nr_processes=6,
                 iterations=1,
                 max_steps=last_step,
-                model_reporters={
-                    "Year": lambda c: ABM_CE_PV.report_output(c, "year"),
-                    "Agents repairing": lambda c:
-                    ABM_CE_PV.count_EoL(c, "repairing"),
-                    "Agents selling": lambda c:
-                    ABM_CE_PV.count_EoL(c, "selling"),
-                    "Agents recycling": lambda c:
-                    ABM_CE_PV.count_EoL(c, "recycling"),
-                    "Agents landfilling": lambda c:
-                    ABM_CE_PV.count_EoL(c, "landfilling"),
-                    "Agents storing": lambda c:
-                    ABM_CE_PV.count_EoL(c, "hoarding"),
-                    "Agents buying new": lambda c:
-                    ABM_CE_PV.count_EoL(c, "buy_new"),
-                    "Agents buying used": lambda c:
-                    ABM_CE_PV.count_EoL(c, "buy_used"),
-                    "Agents buying certified": lambda c:
-                    ABM_CE_PV.count_EoL(c, "certified"),
-                    "Total product": lambda c:
-                    ABM_CE_PV.report_output(c, "product_stock"),
-                    "New product": lambda c:
-                    ABM_CE_PV.report_output(c, "product_stock_new"),
-                    "Used product": lambda c:
-                    ABM_CE_PV.report_output(c, "product_stock_used"),
-                    "New product_mass": lambda c:
-                    ABM_CE_PV.report_output(c, "prod_stock_new_mass"),
-                    "Used product_mass": lambda c:
-                    ABM_CE_PV.report_output(c, "prod_stock_used_mass"),
-                    "End-of-life - repaired": lambda c:
-                    ABM_CE_PV.report_output(c, "product_repaired"),
-                    "End-of-life - sold": lambda c:
-                    ABM_CE_PV.report_output(c, "product_sold"),
-                    "End-of-life - recycled": lambda c:
-                    ABM_CE_PV.report_output(c, "product_recycled"),
-                    "End-of-life - landfilled": lambda c:
-                    ABM_CE_PV.report_output(c, "product_landfilled"),
-                    "End-of-life - stored": lambda c:
-                    ABM_CE_PV.report_output(c, "product_hoarded"),
-                    "eol - new repaired weight": lambda c:
-                    ABM_CE_PV.report_output(c, "product_new_repaired"),
-                    "eol - new sold weight": lambda c:
-                    ABM_CE_PV.report_output(c, "product_new_sold"),
-                    "eol - new recycled weight": lambda c:
-                    ABM_CE_PV.report_output(c, "product_new_recycled"),
-                    "eol - new landfilled weight": lambda c:
-                    ABM_CE_PV.report_output(c, "product_new_landfilled"),
-                    "eol - new stored weight": lambda c:
-                    ABM_CE_PV.report_output(c, "product_new_hoarded"),
-                    "eol - used repaired weight": lambda c:
-                    ABM_CE_PV.report_output(c, "product_used_repaired"),
-                    "eol - used sold weight": lambda c:
-                    ABM_CE_PV.report_output(c, "product_used_sold"),
-                    "eol - used recycled weight": lambda c:
-                    ABM_CE_PV.report_output(c, "product_used_recycled"),
-                    "eol - used landfilled weight": lambda c:
-                    ABM_CE_PV.report_output(c, "product_used_landfilled"),
-                    "eol - used stored weight": lambda c:
-                    ABM_CE_PV.report_output(c, "product_used_hoarded"),
-                    "Average landfilling cost": lambda c:
-                    ABM_CE_PV.report_output(c, "average_landfill_cost"),
-                    "Average storing cost": lambda c:
-                    ABM_CE_PV.report_output(c, "average_hoarding_cost"),
-                    "Average recycling cost": lambda c:
-                    ABM_CE_PV.report_output(c, "average_recycling_cost"),
-                    "Average repairing cost": lambda c:
-                    ABM_CE_PV.report_output(c, "average_repairing_cost"),
-                    "Average selling cost": lambda c:
-                    ABM_CE_PV.report_output(c,
-                                            "average_second_hand_price"),
-                    "Recycled material volume": lambda c:
-                    ABM_CE_PV.report_output(c, "recycled_mat_volume"),
-                    "Recycled material value": lambda c:
-                    ABM_CE_PV.report_output(c, "recycled_mat_value"),
-                    "Producer costs": lambda c:
-                    ABM_CE_PV.report_output(c, "producer_costs"),
-                    "Consumer costs": lambda c:
-                    ABM_CE_PV.report_output(c, "consumer_costs"),
-                    "Recycler costs": lambda c:
-                    ABM_CE_PV.report_output(c, "recycler_costs"),
-                    "Refurbisher costs": lambda c:
-                    ABM_CE_PV.report_output(c, "refurbisher_costs"),
-                    "Refurbisher costs w margins": lambda c:
-                    ABM_CE_PV.report_output(c, "refurbisher_costs_w_margins")})
+                # model_reporters={
+                #         "Year": lambda c: ABM_CE_PV.report_output(c, "year"),
+                #         "Agents repairing": lambda c:
+                #         ABM_CE_PV.count_EoL(c, "repairing"),
+                #         "Agents selling": lambda c:
+                #         ABM_CE_PV.count_EoL(c, "selling"),
+                #         "Agents recycling": lambda c:
+                #         ABM_CE_PV.count_EoL(c, "recycling"),
+                #         "Agents landfilling": lambda c:
+                #         ABM_CE_PV.count_EoL(c, "landfilling"),
+                #         "Agents storing": lambda c:
+                #         ABM_CE_PV.count_EoL(c, "hoarding"),
+                #         "Agents buying new": lambda c:
+                #         ABM_CE_PV.count_EoL(c, "buy_new"),
+                #         "Agents buying used": lambda c:
+                #         ABM_CE_PV.count_EoL(c, "buy_used"),
+                #         "Agents buying certified": lambda c:
+                #         ABM_CE_PV.count_EoL(c, "certified"),
+                #         "Total product": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_stock"),
+                #         "New product": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_stock_new"),
+                #         "Used product": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_stock_used"),
+                #         "New product_mass": lambda c:
+                #         ABM_CE_PV.report_output(c, "prod_stock_new_mass"),
+                #         "Used product_mass": lambda c:
+                #         ABM_CE_PV.report_output(c, "prod_stock_used_mass"),
+                #         "End-of-life - repaired": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_repaired"),
+                #         "End-of-life - sold": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_sold"),
+                #         "End-of-life - recycled": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_recycled"),
+                #         "End-of-life - landfilled": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_landfilled"),
+                #         "End-of-life - stored": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_hoarded"),
+                #         "eol - new repaired weight": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_new_repaired"),
+                #         "eol - new sold weight": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_new_sold"),
+                #         "eol - new recycled weight": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_new_recycled"),
+                #         "eol - new landfilled weight": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_new_landfilled"),
+                #         "eol - new stored weight": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_new_hoarded"),
+                #         "eol - used repaired weight": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_used_repaired"),
+                #         "eol - used sold weight": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_used_sold"),
+                #         "eol - used recycled weight": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_used_recycled"),
+                #         "eol - used landfilled weight": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_used_landfilled"),
+                #         "eol - used stored weight": lambda c:
+                #         ABM_CE_PV.report_output(c, "product_used_hoarded"),
+                #         "Average landfilling cost": lambda c:
+                #         ABM_CE_PV.report_output(c, "average_landfill_cost"),
+                #         "Average storing cost": lambda c:
+                #         ABM_CE_PV.report_output(c, "average_hoarding_cost"),
+                #         "Average recycling cost": lambda c:
+                #         ABM_CE_PV.report_output(c, "average_recycling_cost"),
+                #         "Average repairing cost": lambda c:
+                #         ABM_CE_PV.report_output(c, "average_repairing_cost"),
+                #         "Average selling cost": lambda c:
+                #         ABM_CE_PV.report_output(
+                #             c, "average_second_hand_price"),
+                #         "Recycled material volume": lambda c:
+                #         ABM_CE_PV.report_output(c, "recycled_mat_volume"),
+                #         "Recycled material value": lambda c:
+                #         ABM_CE_PV.report_output(c, "recycled_mat_value"),
+                #         "Producer costs": lambda c:
+                #         ABM_CE_PV.report_output(c, "producer_costs"),
+                #         "Consumer costs": lambda c:
+                #         ABM_CE_PV.report_output(c, "consumer_costs"),
+                #         "Recycler costs": lambda c:
+                #         ABM_CE_PV.report_output(c, "recycler_costs"),
+                #         "Refurbisher costs": lambda c:
+                #         ABM_CE_PV.report_output(c, "refurbisher_costs"),
+                #         "Refurbisher costs w margins": lambda c:
+                #         ABM_CE_PV.report_output(c,
+                #             "refurbisher_costs_w_margins"),
+                #         "Waste (kg) by pca": lambda c: 
+                #             str(getattr(c, 'pca_outputs')),
+                #         "Waste (kg) refurbishers": lambda c: 
+                #             str(getattr(c, 'refurbisher_outputs_kg'))}
+            )
             # Original code modified to get multiprocessing
-            batch_run.run_all()
-            run_data = batch_run.get_model_vars_dataframe()
+            run_data = pd.DataFrame(results)
             for k in range(X.shape[1]):
                 run_data["x_%s" % k] = X[i][k]
             appended_data.append(run_data)
@@ -472,7 +474,10 @@ if __name__ == '__main__':
         data_out = appended_data.filter(["seed", "x_0", "x_1", "x_2", "x_3",
                                          "x_4", "x_5", "Y1", "Y2",
                                          "Y3", "Y4", "Y5", "Y6"], axis=1)
-        data_out.to_csv("results\\DataML.csv")
+        if not os.path.exists("results"):
+            os.makedirs("results")
+        data_out.to_csv(os.path.join(
+            "results", "DataML.csv"))
     t1 = time.time()
     print(t1 - t0)
     print("Done!")

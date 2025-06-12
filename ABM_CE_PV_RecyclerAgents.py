@@ -34,7 +34,8 @@ class Recyclers(Agent):
         """
         Creation of new recycler agent
         """
-        super().__init__(unique_id, model)
+        super().__init__(model)
+        self.unique_id = unique_id
         self.original_recycling_cost = np.random.triangular(
             original_recycling_cost[0], original_recycling_cost[2],
             original_recycling_cost[1])
@@ -78,7 +79,7 @@ class Recyclers(Agent):
         Update consumers' amount of recycled waste.
         """
         if self.unique_id == self.model.num_consumers:
-            for agent in self.model.schedule.agents:
+            for agent in self.model.agents:
                 if agent.unique_id < self.model.num_consumers:
                     agent.update_yearly_recycled_waste(False)
 
@@ -92,7 +93,7 @@ class Recyclers(Agent):
         self.total_repairable_volume = 0
         tot_waste_sold = 0
         new_installed_capacity = 0
-        for agent in self.model.schedule.agents:
+        for agent in self.model.agents:
             if agent.unique_id < self.model.num_consumers and \
                     agent.EoL_pathway == "sell":
                 tot_waste_sold += agent.number_product_EoL
@@ -103,7 +104,7 @@ class Recyclers(Agent):
             / self.model.num_consumers * new_installed_capacity
         tot_waste_sold += self.model.yearly_repaired_waste
         if tot_waste_sold < used_vol_purchased:
-            for agent in self.model.schedule.agents:
+            for agent in self.model.agents:
                 if agent.unique_id < self.model.num_consumers and \
                         agent.recycling_facility_id == self.unique_id:
                     self.recycler_total_volume += agent.yearly_recycled_waste
@@ -118,7 +119,7 @@ class Recyclers(Agent):
                         self.recycling_volume = self.recycler_total_volume
                         self.repairable_volume = 0
         else:
-            for agent in self.model.schedule.agents:
+            for agent in self.model.agents:
                 if agent.unique_id < self.model.num_consumers and \
                         agent.recycling_facility_id == self.unique_id:
                     self.recycler_total_volume += agent.yearly_recycled_waste
@@ -151,7 +152,7 @@ class Recyclers(Agent):
         repairable products are not included.
         """
         revenue = 0
-        for agent in self.model.schedule.agents:
+        for agent in self.model.agents:
             if self.model.num_consumers + self.model.num_recyclers <= \
                     agent.unique_id < self.model.num_consumers + \
                     self.model.num_prod_n_recyc:
