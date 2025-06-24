@@ -15,6 +15,15 @@ from itertools import product
 from utils import TIMESTEP
 
 
+# Calibrated parameters (new values stay in ranges reported in the
+# literature):
+# w_sn_eol=0.23, (previously 0.27)
+# w_a_eol=0.5, (previously 0.39)
+# recycling_learning_shape_factor=-0.3, (previously -0.39)
+# att_distrib_param_eol=[0.805, 0.10]) (previously [0.544, 0.09])
+# Default values have been modified, no need to modify them in
+# functions below.
+
 def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
     """
     Run model several times and collect outputs at each time steps. Creates
@@ -26,50 +35,12 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         # j = j + 43
         t0 = time.time()
         number_steps = get_number_of_steps(number_steps, timestep)
-        if j < 1:
+        if j < 15:
             model = ABM_CE_PV(
-                seed=(j), last_step=number_steps,
-                sa_landfill_costs=(True, 0.0000),
-                file_name={'Landfill data': "Landfills_data_SA.csv",
-                            'PCA-landfill distances':
-                                "pca_landfills_distances_SA.csv"},
-                init_eol_rate={"repair": 1E-6, "sell": 1E-6,
-                                "recycle": 1E-6, "landfill": 1,
-                                "hoard": 1E-6},
-                recycling_learning_shape_factor=-0.0,
-                original_recycling_cost=[0.0134-1E-6, 0.0134+1E-6, 0.0134],
-                # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
-                # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064]
-                # original_recycling_cost=[1E-12, 3E-12, 2E-12],
-                # transportation_cost=1E-6)
-                # transportation_cost=0.25)
-                w_sn_eol=0,
-                w_pbc_eol=1,
-                w_a_eol=0,
-                timestep=timestep,
-                )
-        elif j < 2:
+                seed=(j), last_step=number_steps)  # baseline
+        elif j < 3-:
             model = ABM_CE_PV(
-                seed=(j - 1), last_step=number_steps,
-                sa_landfill_costs=(True, 0.0077),
-                # sa_landfill_costs=(True, 0.0038),
-                file_name={'Landfill data': "Landfills_data_SA.csv",
-                            'PCA-landfill distances':
-                                "pca_landfills_distances_SA.csv"},
-                init_eol_rate={"repair": 1E-6, "sell": 1E-6,
-                                "recycle": 1E-6, "landfill": 1,
-                                "hoard": 1E-6},
-                recycling_learning_shape_factor=-0.0,
-                original_recycling_cost=[0.0134-1E-6, 0.0134+1E-6, 0.0134],
-                # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
-                # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
-                # original_recycling_cost=[1E-12, 3E-12, 2E-12],
-                # transportation_cost=0.5,
-                # transportation_cost=0.75)
-                w_sn_eol=0,
-                w_pbc_eol=1,
-                w_a_eol=0,
-                timestep=timestep,)
+                seed=(j - 15), last_step=number_steps)  # this can be used for scenario analysis
         elif j < 3:
             model = ABM_CE_PV(
                 seed=(j - 2), last_step=number_steps,
