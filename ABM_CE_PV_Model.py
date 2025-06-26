@@ -235,6 +235,7 @@ class ABM_CE_PV(Model):
                  pca_scenario=False,
                  geopy=False,
                  calculate_distances=False,
+                 rtn = False,
                  last_step=31,
                  sa_landfill_costs=(False, 0.0037),
                  file_name={'Landfill data': "Landfills_data.csv",
@@ -493,7 +494,7 @@ class ABM_CE_PV(Model):
         baseline = r1.scenario['US'].dataIn_m
         baseline = baseline.drop(columns=['new_Installed_Capacity_[MW]'])
         baseline.set_index('year', inplace=True)
-        baseline.index = pd.PeriodIndex(baseline.index, freq='A')  # A -- Annual
+        baseline.index = pd.PeriodIndex(baseline.index, freq='Y')  # Y -- Annual
         baseline.head()
 
 
@@ -755,8 +756,14 @@ class ABM_CE_PV(Model):
                 return 6371 * c  # Radius of the Earth in kilometers
 
             # Load the data for PCAs and recyclers from CSV files
+            if rtn:
+                # If using the RTN model results from Texas A&M University
+                # load the recycler data from the RTN model
+                recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "RTN", "recycler_data.csv"))
+            else:
+                recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "TEMP", 
+                                                     "recycler_data.csv"))
             pca_data = pd.read_csv("../../../TEMP/pca_longlat.csv")  # Replace with your PCA data file
-            recycler_data = pd.read_csv("../../../TEMP/recycler_data.csv")  # Replace with your recycler data file
             landfills_data = pd.read_csv("../../../TEMP/" +
                                          self.file_names['Landfill data'])
 
@@ -795,11 +802,22 @@ class ABM_CE_PV(Model):
                                     pca_row['PCA']] = distance2
 
             # Save the distances to a CSV file
-            distance_df.to_csv("../../../TEMP/pca_recycler_distances.csv")
+            if rtn:
+                # If using the RTN model results from Texas A&M University
+                # save the distances to the RTN model folder
+                distance_df.to_csv(os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
+            else:
+                distance_df.to_csv("../../../TEMP/pca_recycler_distances.csv")
             distance_df2.to_csv("../../../TEMP/" +
                                 self.file_names['PCA-landfill distances'])
 
-        self.recycler_distance_df = pd.read_csv(
+        if rtn:
+            # If using the RTN model results from Texas A&M University
+            # load the recycling costs from the RTN model
+            self.recycler_distance_df = pd.read_csv(
+                os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
+        else:
+            self.recycler_distance_df = pd.read_csv(
             '../../../TEMP/pca_recycler_distances.csv')
         self.landfill_distance_df = pd.read_csv(
             '../../../TEMP/' + self.file_names['PCA-landfill distances'])
@@ -812,6 +830,14 @@ class ABM_CE_PV(Model):
             self.correct_mat_factor, self.timestep, scale=False)
         
         self.data = pd.read_excel(reedsFile)  # this is the pca file
+        self.recycling_costs_df = pd.DataFrame()
+        if rtn:
+            self.recycling_costs_df = pd.read_csv(
+                os.path.join(os.path.dirname(__file__), "RTN", "RecyclingCostsbyYearPCA.csv"))
+            # If using the RTN model results from Texas A&M University
+            # filter the data to include only PCAs that are in the recycling costs DataFrame
+            self.data = self.data[self.data['PCA'].isin(
+                self.recycling_costs_df['PCA'].unique())]
         self.agent_pca_map = self.create_agent_pca_map(num_consumers)
         self.pv_ice_yearly_waste = 0
 
@@ -915,6 +941,11 @@ class ABM_CE_PV(Model):
         self.pca_tot_waste_w = {}
         self.pca_tot_waste_m2 = {}
         for pca in PCAs:
+            # If using the RTN model results from Texas A&M University
+            # check if the PCA is in the recycling costs DataFrame
+            if rtn:
+                if pca not in self.recycling_costs_df['PCA'].unique():
+                    continue
             pathway_dict = {}
             for pathway in self.all_EoL_pathways.keys():
                 pathway_dict[pathway] = 0
@@ -1094,6 +1125,7 @@ class ABM_CE_PV(Model):
                 self.grid.place_agent(a, node)
             elif node < self.num_recyclers + self.num_consumers:
                 b = Recyclers(node, self, self.original_recycling_cost,
+                              self.recycling_costs_df,
                               init_eol_rate,
                               recycling_learning_shape_factor)
                 self.grid.place_agent(b, node)

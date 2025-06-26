@@ -37,8 +37,8 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         number_steps = get_number_of_steps(number_steps, timestep)
         if j < 15:
             model = ABM_CE_PV(
-                seed=(j), last_step=number_steps)  # baseline
-        elif j < 3-:
+                seed=(j), transportation_cost=0, rtn=True, last_step=number_steps)  # baseline
+        elif j < 3:
             model = ABM_CE_PV(
                 seed=(j - 15), last_step=number_steps)  # this can be used for scenario analysis
         elif j < 3:
@@ -741,6 +741,6 @@ def get_number_of_steps(number_steps: int, timestep: TIMESTEP):
     else:
         raise ValueError("Unsupported timestep: {}".format(timestep))
 
-run_model(15, 15)
+run_model(15, 10)
 # run_batch(40, 31, list1=['a', 'b', 'c'],list2=['d', 'e', 'f'],
 #          list3=['x', 'y', 'z'])
