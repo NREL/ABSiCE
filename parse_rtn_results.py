@@ -84,7 +84,7 @@ df["Flow"] = pd.to_numeric(df["Flow"])
 df["Year"] = df["Year"].astype(int)
 df = df.groupby(["Year", "Recycler Name"]).sum(numeric_only=True).reset_index()
 df = pd.merge(df, total_cost_df, how='left', on=["Year", "Recycler Name"])
-df["Cost"] = df["TotalCost"] / df["Flow"] * 0.0077 * 1000  # Convert to $/kg
+df["Cost"] = df["TotalCost"] / df["Flow"] * 0.0077  # Convert to $/W
 df = df[["Year", "Recycler Name", "Cost", "Flow"]]
 df.to_csv(os.path.join("RTN", "RecyclingCosts.csv"), index=False)
 
