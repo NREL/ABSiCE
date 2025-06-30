@@ -129,7 +129,7 @@ class Consumers(Agent):
         pca_recyc_transp_dist = pca_recyc_transp_dist.to_list()
         self.pca_recyc_transp_dist = min(pca_recyc_transp_dist)
         self.pca_recyc_transp_cost = self.pca_recyc_transp_dist * \
-            self.model.transportation_cost / 1E3 
+            self.model.get_transportation_cost() / 1E3 
             # ! remove weight * \ self.model.dynamic_product_average_wght
         # ! TODO: change landfill costs
         pca_landfill_transp_dist = self.model.landfill_distance_df.copy()
@@ -272,7 +272,7 @@ class Consumers(Agent):
             #      self.model.transportation_cost, 
             #      self.model.dynamic_product_average_wght)
         self.pca_recyc_transp_cost = self.pca_recyc_transp_dist * \
-            self.model.transportation_cost / 1E3 
+            self.model.get_transportation_cost() / 1E3 
             # ! remove weight * \ self.model.dynamic_product_average_wght
         self.pca_landfill_transp_cost = self.pca_landfill_transp_dist * \
             self.model.transportation_cost / 1E3 

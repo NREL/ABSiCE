@@ -450,6 +450,7 @@ class ABM_CE_PV(Model):
         # random.seed(self.seed)
         self.seed = seed
         self.timestep = timestep
+        self.rtn = rtn
 
         #Set path for data saving
         testfolder = str(Path().resolve() / 'PV_ICE' / 'TEMP' / 'PCA')
@@ -756,7 +757,7 @@ class ABM_CE_PV(Model):
                 return 6371 * c  # Radius of the Earth in kilometers
 
             # Load the data for PCAs and recyclers from CSV files
-            if rtn:
+            if self.rtn:
                 # If using the RTN model results from Texas A&M University
                 # load the recycler data from the RTN model
                 recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "RTN", "recycler_data.csv"))
@@ -802,7 +803,7 @@ class ABM_CE_PV(Model):
                                     pca_row['PCA']] = distance2
 
             # Save the distances to a CSV file
-            if rtn:
+            if self.rtn:
                 # If using the RTN model results from Texas A&M University
                 # save the distances to the RTN model folder
                 distance_df.to_csv(os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
@@ -811,7 +812,7 @@ class ABM_CE_PV(Model):
             distance_df2.to_csv("../../../TEMP/" +
                                 self.file_names['PCA-landfill distances'])
 
-        if rtn:
+        if self.rtn:
             # If using the RTN model results from Texas A&M University
             # load the recycling costs from the RTN model
             self.recycler_distance_df = pd.read_csv(
@@ -831,7 +832,7 @@ class ABM_CE_PV(Model):
         
         self.data = pd.read_excel(reedsFile)  # this is the pca file
         self.recycling_costs_df = pd.DataFrame()
-        if rtn:
+        if self.rtn:
             self.recycling_costs_df = pd.read_csv(
                 os.path.join(os.path.dirname(__file__), "RTN", "RecyclingCostsbyYearPCA.csv"))
             # If using the RTN model results from Texas A&M University
@@ -943,7 +944,7 @@ class ABM_CE_PV(Model):
         for pca in PCAs:
             # If using the RTN model results from Texas A&M University
             # check if the PCA is in the recycling costs DataFrame
-            if rtn:
+            if self.rtn:
                 if pca not in self.recycling_costs_df['PCA'].unique():
                     continue
             pathway_dict = {}
@@ -1705,6 +1706,24 @@ class ABM_CE_PV(Model):
             (self.pvice_mat_factor['date'] < self.current_date)]
         self.avg_weight_factor_stored_pv = pv_ice_mat_subset_stored_years[
             'total_massperm2'].mean()
+    def get_transportation_cost(self):
+        """
+        Returns the transportation cost based on the current date and
+        the rtn flag.
+        If the RTN model costs are enabled, it checks if the current year
+        is within the range of the recycling costs DataFrame. If it is,
+        it returns 0, since the transportation costs are accounted for
+        in the recycling costs. Otherwise, it returns the transportation cost.
+        If the RTN model costs are not enabled, it returns the transportation cost.
+        """
+        if self.rtn:
+            min_year = self.recycling_costs_df['Year'].min()
+            max_year = self.recycling_costs_df['Year'].max()
+            if self.current_date.year >= min_year and \
+                    self.current_date.year <= max_year:
+                return 0
+            
+        return self.transportation_cost
 
     def step(self):
         """
