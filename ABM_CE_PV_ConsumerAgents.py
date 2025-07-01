@@ -931,7 +931,7 @@ class Consumers(Agent):
         for agent in self.model.agents:
             if agent.unique_id == self.recycling_facility_id:
                 self.perceived_behavioral_control[2] = (
-                    agent.get_recycling_cost() +
+                    agent.recycling_cost +
                     self.pca_recyc_transp_cost * 0.0077)  # ! Multiply
                 # ! by average mass per watt instead of dynamic
             elif agent.unique_id == self.refurbisher_id:
