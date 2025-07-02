@@ -165,7 +165,7 @@ class Recyclers(Agent):
         Account for the learning effect: recyclers and refurbishers improve
         their recycling and repairing processes respectively
         """
-        if volume > 0 and original_volume > 0:
+        if volume > 0:
             potential_recycling_cost = original_cost * \
                                        (volume / original_volume) ** \
                                        shape_factor
@@ -193,7 +193,7 @@ class Recyclers(Agent):
         revenue /= self.model.num_recyclers
         self.recycler_costs += \
             ((self.recycling_volume + self.model.installer_recycled_amount) *
-             self.get_recycling_cost() - revenue)
+             self.recycling_cost - revenue)
 
     def step(self):
         """
