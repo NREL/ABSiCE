@@ -832,7 +832,7 @@ class ABM_CE_PV(Model):
         
         self.data = pd.read_excel(reedsFile)  # this is the pca file
         self.recycling_costs_df = pd.DataFrame()
-        if self.rtn:
+        if True:
             self.recycling_costs_df = pd.read_csv(
                 os.path.join(os.path.dirname(__file__), "RTN", "RecyclingCostsbyYearPCA.csv"))
             # If using the RTN model results from Texas A&M University
@@ -944,7 +944,7 @@ class ABM_CE_PV(Model):
         for pca in PCAs:
             # If using the RTN model results from Texas A&M University
             # check if the PCA is in the recycling costs DataFrame
-            if self.rtn:
+            if True:
                 if pca not in self.recycling_costs_df['PCA'].unique():
                     continue
             pathway_dict = {}

@@ -37,7 +37,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         number_steps = get_number_of_steps(number_steps, timestep)
         if j < 15:
             model = ABM_CE_PV(
-                seed=(j), rtn=True, last_step=number_steps)  # baseline
+                seed=(j), rtn=True, recycling_learning_shape_factor = -0.3, last_step=number_steps)  # baseline
         elif j < 3:
             model = ABM_CE_PV(
                 seed=(j - 15), last_step=number_steps)  # this can be used for scenario analysis
