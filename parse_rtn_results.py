@@ -48,31 +48,31 @@ total_cost_df = pd.DataFrame(
             "Okon Recycling",
         ],
         "TotalCost": [ 
-            77057.16,
-            99800.68,
-            135819.24,
-            208813.94,
-            295921.76,
-            2716.85,
+            26075.10,
+            34812.11,
+            55102.68,
+            62479.24,
+            120970.14,
+            2204.46,
             3411.23,
             3026.45,
-            5601.80,
-            6286.21,
+            3184.96,
+            3686.52,
             0.0,
             0.0,
             0.0,
             0.0,
             0.0,
-            10111.38,
-            11508.60,
-            12416.88,
-            14802.11,
-            16144.91,
+            5001.27,
+            6143.46,
+            7674.18,
+            8787.76,
+            15318.02,
         ]
     }
 )
 
-df = pd.read_excel(os.path.join("..", "solar.case.study.xlsx"))
+df = pd.read_excel(os.path.join("..", "solar.case.study.R1.xlsx"))
 df[["Recycler", "Flow"]] = df["Unnamed: 0"].str.split(":", expand=True)
 df = df[["Recycler", "Flow"]]
 df["Recycler"] = df["Recycler"].apply(ast.literal_eval)
