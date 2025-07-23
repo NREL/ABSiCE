@@ -15,7 +15,7 @@ from collections import OrderedDict
 from scipy.stats import truncnorm
 import operator
 from math import e
-from utils import transform_timeseries_timestep
+from utils import transform_timeseries_timestep, GeneratorSize
 
 
 
@@ -98,6 +98,7 @@ class Consumers(Agent):
         self.number_product_recycled = 0
         self.number_product_landfilled = 0
         self.number_product_hoarded = 0
+        self.number_product_hoarded_hazardous = 0
         self.number_new_prod_repaired = 0
         self.number_new_prod_sold = 0
         self.number_new_prod_recycled = 0
@@ -112,6 +113,7 @@ class Consumers(Agent):
         self.product_years_storage = []
         self.max_storage = np.random.triangular(max_storage[0], max_storage[2],
                                                 max_storage[1])
+        self.max_storage_kg = None  # Will be set later based on generator size
         self.number_product_new = 0
         self.number_product_used = 0
         self.number_product_certified = 0
@@ -119,6 +121,8 @@ class Consumers(Agent):
         self.used_EoL_pathway = self.EoL_pathway
         self.purchase_choice = self.initial_choice(
             self.model.init_purchase_choice)
+        self.generator_size = GeneratorSize.VERY_SMALL  # Default size
+        self.hazardous = False  # Default value, will be set later
 
         # ! This increases model resolution nothing to do here for now
         self.pca = self.model.agent_pca_map[self.unique_id][0]
@@ -209,6 +213,12 @@ class Consumers(Agent):
             model.num_recyclers)
         self.refurbisher_id = model.num_consumers + model.num_prod_n_recyc + \
             random.randrange(model.num_refurbishers)
+        # todo: see if this can be stored in the model.
+        for id, state in self.model.regulator_state_map.items():
+            if state == self.state:
+                self.regulator_id = id
+                break
+            
         # self.landfill_cost = random.choice(landfill_cost)
         # self.landfill_cost = np.random.triangular(
         #   landfill_cost[0], landfill_cost[2], landfill_cost[1])
@@ -603,7 +613,8 @@ class Consumers(Agent):
         total_volume_refurbished = 0
         for agent in self.model.agents:
             if self.model.num_consumers + self.model.num_prod_n_recyc <= \
-                    agent.unique_id:
+                    agent.unique_id < self.model.num_consumers + \
+                    self.model.num_prod_n_recyc + self.model.num_refurbishers:
                 total_volume_refurbished += agent.refurbished_volume
             if agent.unique_id < self.model.num_consumers:
                 total_waste += agent.number_product_EoL
@@ -715,6 +726,7 @@ class Consumers(Agent):
                     self.perceived_behavioral_control[2] *= \
                         self.model.seeding_recyc["discount"]
         if product_type == "new":
+            self.hazardous_waste_management()
             self.storage_management(limited_paths)
             self.EoL_pathway = \
                 self.tpb_decision(
@@ -921,6 +933,58 @@ class Consumers(Agent):
             self.number_used_prod_hoarded = 0
             self.number_new_prod_hoarded = 0
             limited_paths["hoard"] = False
+            print(f"Storage limit exceeded for agent {self.unique_id}. "
+                    f"Storage period exceeded: {count} years, "
+                    f"max storage period: {max_storage_period} years.")
+        elif self.max_storage_kg is not None:
+            # Check if the total mass of stored products per month exceeds
+            # the maximum storage capacity in kg.
+            total_mass_stored = [0] * len(self.product_years_storage)
+            total_mass_stored[-1] = self.number_product_hoarded
+            total_mass_stored = self.mass_per_function_model(total_mass_stored)
+            
+            total_mass_stored_month = total_mass_stored / self.number_of_months if self.number_of_months > 0 else 0
+            if total_mass_stored_month > self.max_storage_kg:
+                self.product_years_storage = []
+                self.product_storage_to_other = self.number_product_hoarded
+                self.number_product_hoarded = 0
+                self.number_used_prod_hoarded = 0
+                self.number_new_prod_hoarded = 0
+                limited_paths["hoard"] = False
+                print(f"Storage limit exceeded for agent {self.unique_id}. "
+                      f"Total mass stored: {total_mass_stored_month} kg, "
+                      f"max storage: {self.max_storage_kg} kg.")
+
+    def get_hoarding_cost(self):
+        """
+        Get the cost of hoarding based on if the waste is hazardous
+        or not. If the waste is hazardous, the cost is higher.
+        """
+        if self.hazardous:
+            return self.hoarding_cost * 2 # placeholder for hazardous hoarding cost
+        else:
+            return self.hoarding_cost
+        
+    def get_landfill_cost(self):
+        """
+        get the cost of landfill based on if the waste is hazardous
+        or not. If the waste is hazardous, then get the cost from the
+        hazardous landfill site, otherwise get the cost
+        from the regular landfill site.
+        """
+        if self.hazardous:
+            return self.landfill_cost * 2 # placeholder for hazardous landfill cost
+        else:
+            return self.landfill_cost
+        
+    @property
+    def number_of_months(self):
+        """
+        Calculate the number of months since the start of the simulation.
+        """
+        return (self.model.current_date.year - 2020) * 12 + \
+               self.model.current_date.month - 1
+
 
     def update_perceived_behavioral_control(self):
         """
@@ -942,10 +1006,10 @@ class Consumers(Agent):
                 self.pbc_reuse[1] = agent.scd_hand_price
         self.pbc_reuse[0] = self.model.fsthand_mkt_pric
         self.perceived_behavioral_control[3] = (
-            self.landfill_cost +
+            self.get_landfill_cost() +
             self.pca_landfill_transp_cost * 0.0077) # ! Multiply
                 # ! by average mass per watt instead of dynamic
-        self.perceived_behavioral_control[4] = self.hoarding_cost
+        self.perceived_behavioral_control[4] = self.get_hoarding_cost()
 
     def product_mass_output_metrics(self):
         """
@@ -959,6 +1023,101 @@ class Consumers(Agent):
             self.mass_per_function_model(last_capacity_new)
         self.used_products_mass += \
             self.mass_per_function_model(last_capacity_used)
+        
+    def get_generator_size_from_waste(self, waste_kg: float, thresholds: dict) -> GeneratorSize:
+        """
+        Get the generator size based on the waste amount and thresholds.
+        :param waste_kg: The amount of waste in kg.
+        :param thresholds: A dictionary mapping generator sizes to their thresholds.
+        :return: The generator size that can handle the given waste amount.
+        :raises ValueError: If no suitable generator size is found.
+        """
+
+        new_generator_size = None
+        new_generator_max_storage = None
+
+        unlimited_generator_size = None
+
+        for generator_size, threshold in thresholds.items():
+            if threshold.max_storage_kg is not None:
+                if new_generator_size is None: # First valid generator size
+                    new_generator_size = generator_size
+                    new_generator_max_storage = threshold.max_storage_kg
+                elif new_generator_max_storage < waste_kg <= threshold.max_storage_kg: # waste fits in this generator size
+                    new_generator_size = generator_size
+                    new_generator_max_storage = threshold.max_storage_kg
+            else:
+                unlimited_generator_size = generator_size # This generator size has no storage limit
+        
+        # If no generator size was found that can handle the waste amount,
+        # check if there is an unlimited generator size available.
+        # If so, use that size.
+        # If not, raise an error.
+        if new_generator_size is None:
+            if unlimited_generator_size is not None:
+                new_generator_size = unlimited_generator_size
+                new_generator_max_storage = None
+            else:
+                raise ValueError("No suitable generator size found for the given waste amount.")
+        
+        return new_generator_size
+            
+        
+    def update_generator_size(self, regulator_thresholds: dict):
+        """
+        Update the generator size based on the total waste generated
+        in the current period and the threshold limits set by the regulator.
+        It uses the total waste generated per month to determine the generator size.
+        :param regulator_thresholds: A dictionary mapping generator sizes to their thresholds.
+        """
+        if self.hazardous:
+            max_storage_kg = regulator_thresholds[self.generator_size].max_storage_kg
+            if max_storage_kg is not None:
+                hazardous_waste_mass = [0] * len(self.new_products_hard_copy)
+                hazardous_waste_mass[-1] = self.tot_prod_EoL
+                hazardous_waste_mass_month = self.mass_per_function_model(hazardous_waste_mass) / self.number_of_months if self.number_of_months > 0 else 0
+                if hazardous_waste_mass_month > max_storage_kg:
+                    self.generator_size = self.get_generator_size_from_waste(
+                        hazardous_waste_mass_month, regulator_thresholds)
+                    print(f"Consumer {self.unique_id} updated generator size to {self.generator_size} due to hazardous waste mass per month{hazardous_waste_mass_month} exceeding max storage {max_storage_kg}.")
+                            
+    def hazardous_waste_management(self):
+        """
+        determine if the waste generated is hazardous
+        depending on the regulatory policy in place.
+        If the waste is hazardous, update the generator size
+        based on the thresholds set by the regulator.
+        Update the storage limits based on the generator size.
+        This method is called when the end-of-life pathway is one of
+        "recycle", "landfill", or "hoard", since waste generated
+        is not deemed hazardous in the "repair" or "sell" pathways.
+        """
+        for agent in self.model.agents:
+            if agent.unique_id == self.regulator_id:
+                if agent.is_exclusion_applicable() or agent.is_alternative_management_standard_applicable():
+                    self.hazardous = False
+                else:
+                    # If the TCLP test is applicable, check if the waste is hazardous
+                    # based on the TCLP test results.
+                    self.hazardous = self.model.tclp_test()
+                    # If the waste is hazardous, update the generator size based on the thresholds
+                    self.update_generator_size(agent.thresholds)
+                    self.update_storage_limits(agent.thresholds)
+                    self.update_perceived_behavioral_control()
+                    if self.hazardous:
+                        print(f"Consumer {self.unique_id} has hazardous waste. Generator size: {self.generator_size}, Max storage: {self.max_storage_kg}.")
+
+    def update_storage_limits(self, regulator_thresholds: dict):
+        """
+        Update the storage limits based on the generator size
+        and the thresholds set by the regulator.
+        :param regulator_thresholds: A dictionary mapping generator sizes to their thresholds.
+        """
+        if self.hazardous:
+            if regulator_thresholds[self.generator_size].max_storage_years is not None:
+                self.max_storage = regulator_thresholds[self.generator_size].max_storage_years
+            if regulator_thresholds[self.generator_size].max_storage_kg is not None:
+                self.max_storage_kg = regulator_thresholds[self.generator_size].max_storage_kg     
 
     def step(self):
         """
