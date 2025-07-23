@@ -86,6 +86,7 @@ from ABM_CE_PV_ConsumerAgents import Consumers
 from ABM_CE_PV_RecyclerAgents import Recyclers
 from ABM_CE_PV_RefurbisherAgents import Refurbishers
 from ABM_CE_PV_ProducerAgents import Producers
+from ABM_CE_PV_RegulatorAgents import Regulators
 from mesa.space import NetworkGrid
 from mesa.datacollection import DataCollector
 import networkx as nx
@@ -1007,6 +1008,10 @@ class ABM_CE_PV(Model):
         self.recycling_process_change()
         self.product_growth = product_growth
         self.growth_threshold = growth_threshold
+        # Initialize Regulator parameters
+        unique_states = self.data.loc[:, 'State'].unique().tolist()
+        self.num_regulators = len(unique_states)
+        self.regulator_state_map = self.create_regulator_state_map()
         # Builds graph and defines scheduler
         self.H1 = self.init_network(self.consumers_network_type,
                                     self.num_consumers,
@@ -1017,8 +1022,11 @@ class ABM_CE_PV(Model):
                                     rewiring_prob)
         self.H3 = self.init_network("complete graph", self.num_refurbishers,
                                     "NaN", rewiring_prob)
+        self.H4 = self.init_network("complete graph", self.num_regulators,
+                                    "NaN", rewiring_prob)
         self.G = nx.disjoint_union(self.H1, self.H2)
         self.G = nx.disjoint_union(self.G, self.H3)
+        self.G = nx.disjoint_union(self.G, self.H4)
         self.grid = NetworkGrid(self.G)
         # Compute distance for the repair, sell, recycle, landfill and storage
         # pathways. Assumptions: 1) Only certain states have recycling
@@ -1078,7 +1086,6 @@ class ABM_CE_PV(Model):
         # ! within states
         original_repairing_cost = [x + self.transportation_cost_rpr_ldf for
                                    x in original_repairing_cost]
-
         # Create agents, G nodes labels are equal to agents' unique_ID
         for node in self.G.nodes():
             if node < self.num_consumers:
@@ -1100,15 +1107,19 @@ class ABM_CE_PV(Model):
             elif node < self.num_prod_n_recyc + self.num_consumers:
                 c = Producers(node, self, scd_mat_prices, virgin_mat_prices)
                 self.grid.place_agent(c, node)
-            else:
+            elif node < self.num_prod_n_recyc + self.num_consumers + \
+                    self.num_refurbishers:
                 d = Refurbishers(node, self, original_repairing_cost,
                                  init_eol_rate,
                                  repairing_learning_shape_factor,
                                  scndhand_mkt_pric_rate, refurbisher_margin,
                                  max_storage)
                 self.grid.place_agent(d, node)
+            else:
+                e = Regulators(node, self)
+                self.grid.place_agent(e, node)
         # Draw initial graph
-        # nx.draw(self.G, with_labels=True)
+        nx.draw(self.G, with_labels=True)
         # plt.show()
 
         # Defines reporters and set up data collector
@@ -1291,6 +1302,19 @@ class ABM_CE_PV(Model):
                 agent_id += 1
 
         return agents
+    
+    def create_regulator_state_map(self):
+        """
+        Create a mapping of regulator agent ids to their respective states.
+        """
+        unique_states = self.data['State'].unique().tolist()
+        regulator_state_map = {}
+        agent_id = self.num_prod_n_recyc + self.num_consumers + \
+            self.num_refurbishers
+        for state in unique_states:
+            regulator_state_map[agent_id] = state
+            agent_id += 1
+        return regulator_state_map
 
     def shortest_paths(self, target_states, distances_to_target):
         """
@@ -1584,12 +1608,15 @@ class ABM_CE_PV(Model):
                     <= agent.unique_id < model.num_consumers + \
                     model.num_recyclers:
                 count += agent.recycling_cost / model.num_recyclers
-            elif condition == "average_repairing_cost" and model.num_consumers\
-                    + model.num_prod_n_recyc <= agent.unique_id:
+            elif condition == "average_repairing_cost" and \
+                model.num_consumers + model.num_prod_n_recyc <= \
+                    agent.unique_id < model.num_consumers + \
+                        model.num_prod_n_recyc + model.num_refurbishers:
                 count += agent.repairing_cost / model.num_refurbishers
             elif condition == "average_second_hand_price" and \
                     model.num_consumers + model.num_prod_n_recyc <= \
-                    agent.unique_id:
+                        agent.unique_id < model.num_consumers + \
+                            model.num_prod_n_recyc + model.num_refurbishers:
                 count += (-1 * agent.scd_hand_price) / model.num_refurbishers
             elif condition == "year":
                 count = model.current_date.year
@@ -1618,11 +1645,14 @@ class ABM_CE_PV(Model):
                     model.num_recyclers:
                 count += agent.recycler_costs
             elif condition == "refurbisher_costs" and model.num_consumers + \
-                    model.num_prod_n_recyc <= agent.unique_id:
+                    model.num_prod_n_recyc <= agent.unique_id \
+                    < model.num_consumers + model.num_prod_n_recyc + \
+                    model.num_refurbishers:
                 count += agent.refurbisher_costs
             elif condition == "refurbisher_costs_w_margins" and \
                 model.num_consumers + model.num_prod_n_recyc \
-                    <= agent.unique_id:
+                    <= agent.unique_id < model.num_consumers + \
+                    model.num_prod_n_recyc + model.num_refurbishers:
                 count += agent.refurbisher_costs_w_margins
         if condition == "product_sold":
             model.sold_repaired_waste += count2 - \
@@ -1673,6 +1703,15 @@ class ABM_CE_PV(Model):
             (self.pvice_mat_factor['date'] < self.current_date)]
         self.avg_weight_factor_stored_pv = pv_ice_mat_subset_stored_years[
             'total_massperm2'].mean()
+    
+    @staticmethod
+    def tclp_test():
+        """
+        Check if the product is hazardous based on the
+        Toxicity Characteristic Leaching Procedure (TCLP) test.
+        """
+
+        return random.gauss(0, 1) > 0.5  # Placeholder for actual logic
 
     def step(self):
         """
