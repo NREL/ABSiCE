@@ -1096,11 +1096,7 @@ class Consumers(Agent):
                 new_generator_size = unlimited_generator_size
                 new_generator_max_waste = None
             else:
-                raise ValueError("No suitable generator size found for the given waste amount.")
-
-        if new_generator_size != self.generator_size:
-            print(f"Generator size updated from {self.generator_size} to {new_generator_size} for waste amount {waste_kg} kg") 
-            print(f"given max waste generation limit {thresholds[new_generator_size].waste_generation_limit_kg} kg.")                        
+                raise ValueError("No suitable generator size found for the given waste amount.")                    
         
         return new_generator_size
             

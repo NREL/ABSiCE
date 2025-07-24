@@ -51,7 +51,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                     "hoard": True
                     }
                 )  # baseline
-        elif j < 3-:
+        elif j < 3:
             model = ABM_CE_PV(
                 seed=(j - 15), last_step=number_steps)  # this can be used for scenario analysis
         elif j < 3:
