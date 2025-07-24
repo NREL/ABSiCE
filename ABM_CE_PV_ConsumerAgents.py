@@ -1072,18 +1072,18 @@ class Consumers(Agent):
         """
 
         new_generator_size = None
-        new_generator_max_storage = None
+        new_generator_max_waste = None
 
         unlimited_generator_size = None
 
         for generator_size, threshold in thresholds.items():
-            if threshold.max_storage_kg is not None:
+            if threshold.waste_generation_limit_kg is not None:
                 if new_generator_size is None: # First valid generator size
                     new_generator_size = generator_size
-                    new_generator_max_storage = threshold.max_storage_kg
-                elif new_generator_max_storage < waste_kg <= threshold.max_storage_kg: # waste fits in this generator size
+                    new_generator_max_waste = threshold.waste_generation_limit_kg
+                elif new_generator_max_waste < waste_kg <= threshold.waste_generation_limit_kg: # waste fits in this generator size
                     new_generator_size = generator_size
-                    new_generator_max_storage = threshold.max_storage_kg
+                    new_generator_max_waste = threshold.waste_generation_limit_kg
             else:
                 unlimited_generator_size = generator_size # This generator size has no storage limit
         
@@ -1091,12 +1091,16 @@ class Consumers(Agent):
         # check if there is an unlimited generator size available.
         # If so, use that size.
         # If not, raise an error.
-        if waste_kg > new_generator_max_storage:
+        if waste_kg > thresholds[new_generator_size].waste_generation_limit_kg:
             if unlimited_generator_size is not None:
                 new_generator_size = unlimited_generator_size
-                new_generator_max_storage = None
+                new_generator_max_waste = None
             else:
-                raise ValueError("No suitable generator size found for the given waste amount.")                        
+                raise ValueError("No suitable generator size found for the given waste amount.")
+
+        if new_generator_size != self.generator_size:
+            print(f"Generator size updated from {self.generator_size} to {new_generator_size} for waste amount {waste_kg} kg") 
+            print(f"given max waste generation limit {thresholds[new_generator_size].waste_generation_limit_kg} kg.")                        
         
         return new_generator_size
             
