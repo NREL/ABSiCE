@@ -40,6 +40,10 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                 init_eol_rate={"repair": 1E-6, "sell": 1E-6,
                                 "recycle": 1E-6, "landfill": 1,
                                 "hoard": 1E-6},
+                all_EoL_pathways={"repair": False, "sell": False,
+                                                "recycle": True,
+                                                "landfill": True,
+                                                "hoard": True},
                 recycling_learning_shape_factor=-0.0,
                 original_recycling_cost=[0.0134-1E-6, 0.0134+1E-6, 0.0134],
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
@@ -774,6 +778,6 @@ def get_number_of_steps(number_steps: int, timestep: TIMESTEP):
     else:
         raise ValueError("Unsupported timestep: {}".format(timestep))
 
-run_model(1, 30)
+run_model(15, 15)
 # run_batch(40, 31, list1=['a', 'b', 'c'],list2=['d', 'e', 'f'],
 #          list3=['x', 'y', 'z'])
