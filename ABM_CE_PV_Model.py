@@ -1012,6 +1012,9 @@ class ABM_CE_PV(Model):
         unique_states = self.data.loc[:, 'State'].unique().tolist()
         self.num_regulators = len(unique_states)
         self.regulator_state_map = self.create_regulator_state_map()
+        # Create a map of agents to their unique IDs
+        # This is used to access agents by their unique ID
+        self.agent_map = {}
         # Builds graph and defines scheduler
         self.H1 = self.init_network(self.consumers_network_type,
                                     self.num_consumers,
@@ -1099,14 +1102,17 @@ class ABM_CE_PV(Model):
                               product_distribution)
                 # Add the agent to the node
                 self.grid.place_agent(a, node)
+                self.agent_map[node] = a
             elif node < self.num_recyclers + self.num_consumers:
                 b = Recyclers(node, self, self.original_recycling_cost,
                               init_eol_rate,
                               recycling_learning_shape_factor)
                 self.grid.place_agent(b, node)
+                self.agent_map[node] = b
             elif node < self.num_prod_n_recyc + self.num_consumers:
                 c = Producers(node, self, scd_mat_prices, virgin_mat_prices)
                 self.grid.place_agent(c, node)
+                self.agent_map[node] = c
             elif node < self.num_prod_n_recyc + self.num_consumers + \
                     self.num_refurbishers:
                 d = Refurbishers(node, self, original_repairing_cost,
@@ -1115,9 +1121,11 @@ class ABM_CE_PV(Model):
                                  scndhand_mkt_pric_rate, refurbisher_margin,
                                  max_storage)
                 self.grid.place_agent(d, node)
+                self.agent_map[node] = d
             else:
                 e = Regulators(node, self)
                 self.grid.place_agent(e, node)
+                self.agent_map[node] = e
         # Draw initial graph
         nx.draw(self.G, with_labels=True)
         # plt.show()

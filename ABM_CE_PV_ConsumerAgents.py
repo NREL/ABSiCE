@@ -111,9 +111,11 @@ class Consumers(Agent):
         self.number_used_prod_hoarded = 0
         self.product_storage_to_other = 0
         self.product_years_storage = []
+        self.product_years_storage_hazardous = []
         self.max_storage = np.random.triangular(max_storage[0], max_storage[2],
                                                 max_storage[1])
-        self.max_storage_kg = None  # Will be set later based on generator size
+        self.max_storage_hazardous_years = self.max_storage  # Default value, will be set later based on generator size
+        self.max_storage_hazardous_kg = None  # Will be set later based on generator size
         self.number_product_new = 0
         self.number_product_used = 0
         self.number_product_certified = 0
@@ -853,6 +855,8 @@ class Consumers(Agent):
                 self.number_used_prod_hoarded += used_eol_vol
             self.model.pca_outputs[self.pca][eol_pathway] += (new_eol_vol +
                                                               used_eol_vol)
+            if self.hazardous:
+                self.number_product_hoarded_hazardous += managed_waste
         if self.unique_id == 0:
             test = 0
             for value in self.model.pca_outputs[self.pca].values():
@@ -933,27 +937,61 @@ class Consumers(Agent):
             self.number_used_prod_hoarded = 0
             self.number_new_prod_hoarded = 0
             limited_paths["hoard"] = False
-            print(f"Storage limit exceeded for agent {self.unique_id}. "
-                    f"Storage period exceeded: {count} years, "
-                    f"max storage period: {max_storage_period} years.")
-        elif self.max_storage_kg is not None:
-            # Check if the total mass of stored products per month exceeds
-            # the maximum storage capacity in kg.
-            total_mass_stored = [0] * len(self.product_years_storage)
-            total_mass_stored[-1] = self.number_product_hoarded
-            total_mass_stored = self.mass_per_function_model(total_mass_stored)
+
+        self.update_product_storage_hazardous() 
+        if self.is_hazardous_waste_storage_limit_exceeded():
+            # This is to prevent
+            # double counting of hazardous products since
+            # number_product_hoarded_hazardous is included in
+            # number_product_hoarded
+            if self.product_storage_to_other == 0:
+                self.product_storage_to_other = self.number_product_hoarded_hazardous
+            self.number_product_hoarded_hazardous = 0
+            self.product_years_storage_hazardous = []
+            limited_paths["hoard"] = False
+
+    def update_product_storage_hazardous(self): 
+        """
+        Update the storage of hazardous products based on the purchase choice.
+        """
+        if self.hazardous:
+            # product is not hazardous if purchase choice is used
+            if self.purchase_choice == "new":
+                self.product_years_storage_hazardous.append(self.EoL_pathway)
+            elif self.purchase_choice == "used":
+                self.product_years_storage_hazardous.append("hoard")
+        else:
+            self.product_years_storage_hazardous.append("na")
+    
+    def is_hazardous_waste_storage_limit_exceeded(self):
+        """
+        Check if the storage limit for hazardous waste is exceeded based on
+        the number of years the product has been stored and the maximum
+        storage period defined in the model.
+        returns True if the limit is exceeded, False otherwise.
+        """
+        if self.hazardous:
+            count = 0
+            max_storage_period = self.max_storage_hazardous_years * self.model.timestep.value
+            for eol in self.product_years_storage_hazardous:
+                if eol == "hoard":
+                    count += 1
+                elif count <= max_storage_period:
+                    count = 0
+            if count > max_storage_period:
+                return True
+            elif self.max_storage_hazardous_kg is not None:
+                # Check if the total mass of stored products per month exceeds
+                # the maximum storage capacity in kg.
+                total_mass_stored = [0] * len(self.product_years_storage_hazardous)
+                total_mass_stored[-1] = self.number_product_hoarded_hazardous
+                total_mass_stored = self.mass_per_function_model(total_mass_stored)
+                
+                total_mass_stored_month = total_mass_stored / self.number_of_months if self.number_of_months > 0 else 0
+                if total_mass_stored_month > self.max_storage_hazardous_kg:
+                    return True
+        return False
             
-            total_mass_stored_month = total_mass_stored / self.number_of_months if self.number_of_months > 0 else 0
-            if total_mass_stored_month > self.max_storage_kg:
-                self.product_years_storage = []
-                self.product_storage_to_other = self.number_product_hoarded
-                self.number_product_hoarded = 0
-                self.number_used_prod_hoarded = 0
-                self.number_new_prod_hoarded = 0
-                limited_paths["hoard"] = False
-                print(f"Storage limit exceeded for agent {self.unique_id}. "
-                      f"Total mass stored: {total_mass_stored_month} kg, "
-                      f"max storage: {self.max_storage_kg} kg.")
 
     def get_hoarding_cost(self):
         """
@@ -1053,12 +1091,12 @@ class Consumers(Agent):
         # check if there is an unlimited generator size available.
         # If so, use that size.
         # If not, raise an error.
-        if new_generator_size is None:
+        if waste_kg > new_generator_max_storage:
             if unlimited_generator_size is not None:
                 new_generator_size = unlimited_generator_size
                 new_generator_max_storage = None
             else:
-                raise ValueError("No suitable generator size found for the given waste amount.")
+                raise ValueError("No suitable generator size found for the given waste amount.")                        
         
         return new_generator_size
             
@@ -1071,16 +1109,12 @@ class Consumers(Agent):
         :param regulator_thresholds: A dictionary mapping generator sizes to their thresholds.
         """
         if self.hazardous:
-            max_storage_kg = regulator_thresholds[self.generator_size].max_storage_kg
-            if max_storage_kg is not None:
-                hazardous_waste_mass = [0] * len(self.new_products_hard_copy)
-                hazardous_waste_mass[-1] = self.tot_prod_EoL
-                hazardous_waste_mass_month = self.mass_per_function_model(hazardous_waste_mass) / self.number_of_months if self.number_of_months > 0 else 0
-                if hazardous_waste_mass_month > max_storage_kg:
-                    self.generator_size = self.get_generator_size_from_waste(
-                        hazardous_waste_mass_month, regulator_thresholds)
-                    print(f"Consumer {self.unique_id} updated generator size to {self.generator_size} due to hazardous waste mass per month{hazardous_waste_mass_month} exceeding max storage {max_storage_kg}.")
-                            
+            hazardous_waste_mass = [0] * len(self.new_products_hard_copy)
+            hazardous_waste_mass[-1] = self.tot_prod_EoL
+            hazardous_waste_mass_month = self.mass_per_function_model(hazardous_waste_mass) / self.number_of_months if self.number_of_months > 0 else 0
+            self.generator_size = self.get_generator_size_from_waste(
+            hazardous_waste_mass_month, regulator_thresholds)
+            
     def hazardous_waste_management(self):
         """
         determine if the waste generated is hazardous
@@ -1088,24 +1122,18 @@ class Consumers(Agent):
         If the waste is hazardous, update the generator size
         based on the thresholds set by the regulator.
         Update the storage limits based on the generator size.
-        This method is called when the end-of-life pathway is one of
-        "recycle", "landfill", or "hoard", since waste generated
-        is not deemed hazardous in the "repair" or "sell" pathways.
         """
-        for agent in self.model.agents:
-            if agent.unique_id == self.regulator_id:
-                if agent.is_exclusion_applicable() or agent.is_alternative_management_standard_applicable():
-                    self.hazardous = False
-                else:
-                    # If the TCLP test is applicable, check if the waste is hazardous
-                    # based on the TCLP test results.
-                    self.hazardous = self.model.tclp_test()
-                    # If the waste is hazardous, update the generator size based on the thresholds
-                    self.update_generator_size(agent.thresholds)
-                    self.update_storage_limits(agent.thresholds)
-                    self.update_perceived_behavioral_control()
-                    if self.hazardous:
-                        print(f"Consumer {self.unique_id} has hazardous waste. Generator size: {self.generator_size}, Max storage: {self.max_storage_kg}.")
+        agent = self.model.agent_map[self.regulator_id]
+        if agent.is_exclusion_applicable() or agent.is_alternative_management_standard_applicable():
+            self.hazardous = False
+        else:
+            # If the TCLP test is applicable, check if the waste is hazardous
+            # based on the TCLP test results.
+            self.hazardous = self.model.tclp_test()
+            # If the waste is hazardous, update the generator size based on the thresholds
+            self.update_generator_size(agent.thresholds)
+            self.update_storage_limits(agent.thresholds)
+            self.update_perceived_behavioral_control()
 
     def update_storage_limits(self, regulator_thresholds: dict):
         """
@@ -1115,9 +1143,9 @@ class Consumers(Agent):
         """
         if self.hazardous:
             if regulator_thresholds[self.generator_size].max_storage_years is not None:
-                self.max_storage = regulator_thresholds[self.generator_size].max_storage_years
+                self.max_storage_hazardous_years = regulator_thresholds[self.generator_size].max_storage_years
             if regulator_thresholds[self.generator_size].max_storage_kg is not None:
-                self.max_storage_kg = regulator_thresholds[self.generator_size].max_storage_kg     
+                self.max_storage_hazardous_kg = regulator_thresholds[self.generator_size].max_storage_kg     
 
     def step(self):
         """
