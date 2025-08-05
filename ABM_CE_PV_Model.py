@@ -150,6 +150,9 @@ class ABM_CE_PV(Model):
                      0.0039, 0.0045, 0.0055, 0.0050, 0.0049, 0.0044, 0.0044,
                      0.0039, 0.0033, 0.0030, 0.0041, 0.0050, 0.0040, 0.0040,
                      0.0038, 0.0033],
+                 hazardous_waste_management_cost={"repair": 0.0, "sell": 0.0,
+                                                    "recycle": 0.0, "landfill": 300.0,
+                                                    "hoard": 120.0}, # $/ton
                  theory_of_planned_behavior={
                      "residential": True, "commercial": True, "utility": True},
                  w_sn_eol=0.23,
@@ -240,7 +243,10 @@ class ABM_CE_PV(Model):
                  sa_landfill_costs=(False, 0.0037),
                  file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
-                                "pca_landfills_distances.csv"}):
+                                "pca_landfills_distances.csv",
+                            'Hazardous landfill data': "Landfills_data_SA.csv",
+                            'Hazardous PCA-landfill distances':
+                                "pca_landfills_distances_SA.csv"},):
 
         """Initiate model.
 
@@ -809,6 +815,11 @@ class ABM_CE_PV(Model):
         self.correct_mat_factor = pd.read_csv(
             '../../../TEMP/correct_mat_factor.csv')
         
+        self.hazardous_landfill_distance_df = pd.read_csv(
+            '../../../TEMP/' + self.file_names['Hazardous PCA-landfill distances'])
+        self.hazardous_landfill_cost_df = pd.read_csv(
+            '../../../TEMP/' + self.file_names['Hazardous landfill data'])
+
         self.correct_mat_factor = transform_timeseries_timestep(
             self.correct_mat_factor, self.timestep, scale=False)
         
@@ -833,6 +844,7 @@ class ABM_CE_PV(Model):
         self.clock = 0
         self.last_step = last_step
         self.sa_landfill_costs = sa_landfill_costs
+        self.hazardous_waste_management_cost = hazardous_waste_management_cost
 
         # ! Initialize model with PV_ICE historical installed cap
         # self.total_number_product = total_number_product
