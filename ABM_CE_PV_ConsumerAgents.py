@@ -159,6 +159,25 @@ class Consumers(Agent):
                 self.model.dynamic_product_average_wght  # $/W
         # self.init_landfill_cost = self.landfill_cost
 
+        # initialize hazardous landfill costs and distances
+        pca_hazardous_landfill_transp_dist = \
+            self.model.hazardous_landfill_distance_df.copy()
+        pca_hazardous_landfill_transp_dist = \
+            pca_hazardous_landfill_transp_dist[self.pca].to_list()
+        self.pca_hazardous_landfill_transp_dist = \
+            min(pca_hazardous_landfill_transp_dist)
+        self.pca_hazardous_landfill_transp_cost = \
+            self.pca_hazardous_landfill_transp_dist * \
+            self.model.transportation_cost / 1E3
+        self.hazardous_landfill_name = \
+            self.model.hazardous_landfill_distance_df.loc[
+                self.model.hazardous_landfill_distance_df[self.pca] ==
+                self.pca_hazardous_landfill_transp_dist, 'Facility Name'].iloc[0]
+        hazardous_landfills_data = self.model.hazardous_landfill_cost_df.copy()
+        self.hazardous_landfill_cost = hazardous_landfills_data.loc[
+            hazardous_landfills_data['Facility Name'] == self.hazardous_landfill_name,
+            '$/ Ton'].iloc[0]  # in $/ton
+
         # ! prepare pvice waste outputs
         self.data_out_pca = pd.read_csv(
             "dataOut_95-by-35.Adv_" + self.pca + "_.csv")
@@ -287,7 +306,11 @@ class Consumers(Agent):
             self.model.transportation_cost / 1E3 
             # ! remove weight * \ self.model.dynamic_product_average_wght
         self.pca_landfill_transp_cost = self.pca_landfill_transp_dist * \
-            self.model.transportation_cost / 1E3 
+            self.model.transportation_cost / 1E3
+
+        self.hazardous_pca_hazardous_landfill_transp_cost = \
+            self.pca_hazardous_landfill_transp_dist * \
+            self.model.transportation_cost / 1E3
             # ! remove weight * \ self.model.dynamic_product_average_wght
         # self.landfill_cost = \
         #    self.init_landfill_cost + \
@@ -999,7 +1022,8 @@ class Consumers(Agent):
         or not. If the waste is hazardous, the cost is higher.
         """
         if self.hazardous:
-            return self.hoarding_cost * 2 # placeholder for hazardous hoarding cost
+            return self.hoarding_cost + \
+                   self.model.hazardous_waste_management_cost['hoard'] / 1E3 * self.model.dynamic_product_average_wght
         else:
             return self.hoarding_cost
         
@@ -1011,9 +1035,22 @@ class Consumers(Agent):
         from the regular landfill site.
         """
         if self.hazardous:
-            return self.landfill_cost * 2 # placeholder for hazardous landfill cost
+            return self.hazardous_landfill_cost + \
+                   self.model.hazardous_waste_management_cost['landfill'] / 1E3 * self.model.dynamic_product_average_wght
         else:
             return self.landfill_cost
+        
+    def get_pca_landfill_transp_cost(self):
+        """
+        Get the transportation cost for landfill based on if the waste is
+        hazardous or not. If the waste is hazardous, then get the cost from
+        the hazardous landfill site, otherwise get the cost from the regular
+        landfill site.
+        """
+        if self.hazardous:
+            return self.pca_hazardous_landfill_transp_cost
+        else:
+            return self.pca_landfill_transp_cost
         
     @property
     def number_of_months(self):
@@ -1045,7 +1082,7 @@ class Consumers(Agent):
         self.pbc_reuse[0] = self.model.fsthand_mkt_pric
         self.perceived_behavioral_control[3] = (
             self.get_landfill_cost() +
-            self.pca_landfill_transp_cost * 0.0077) # ! Multiply
+            self.get_pca_landfill_transp_cost() * 0.0077) # ! Multiply
                 # ! by average mass per watt instead of dynamic
         self.perceived_behavioral_control[4] = self.get_hoarding_cost()
 
