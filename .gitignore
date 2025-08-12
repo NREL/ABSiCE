@@ -5,3 +5,4 @@ venv/
 tempfile.py
 Landfills_data.csv
 TEMP/Landfills_data.csv
+.DS_Store

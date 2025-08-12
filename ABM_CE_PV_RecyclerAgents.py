@@ -21,6 +21,11 @@ class Recyclers(Agent):
         model (see ABM_CE_PV_Model)
         original_recycling_cost (a list for a triangular distribution) ($/fu) (
             default=[0.106, 0.128, 0.117]). From EPRI 2018.
+        recycling_costs_df (dataframe with recycling costs for each recycling
+            facility, year, and pca category). The dataframe is used to
+            update the recycling costs of recyclers. If the pca is not
+            available, the recycling costs are updated using the
+            original_recycling_cost.
         init_eol_rate (dictionary with initial end-of-life (EOL) ratios),
             (default={"repair": 0.005, "sell": 0.02, "recycle": 0.1,
             "landfill": 0.4375, "hoard": 0.4375}). From Monteiro Lunardi
@@ -30,6 +35,7 @@ class Recyclers(Agent):
     """
 
     def __init__(self, unique_id, model, original_recycling_cost,
+                 recycling_costs_df,
                  init_eol_rate, recycling_learning_shape_factor):
         """
         Creation of new recycler agent
@@ -39,6 +45,7 @@ class Recyclers(Agent):
         self.original_recycling_cost = np.random.triangular(
             original_recycling_cost[0], original_recycling_cost[2],
             original_recycling_cost[1])
+        self.recycling_costs_df = recycling_costs_df
         self.original_fraction_recycled_waste = init_eol_rate["recycle"]
         self.recycling_learning_shape_factor = recycling_learning_shape_factor
         self.recycling_cost = self.original_recycling_cost
@@ -62,17 +69,40 @@ class Recyclers(Agent):
         self.recycler_costs = 0
         self.recycler_name = self.model.recycler_names.pop()
 
-    def update_transport_recycling_costs(self):
+    # def update_transport_recycling_costs(self):
+    #     """
+    #     Update transportation costs according to the (evolving) mass of waste.
+    #     Here, an average distance between all origins and targets is assumed.
+    #     """
+    #     self.recycling_cost = \
+    #         self.recycling_cost + \
+    #         (self.model.dynamic_product_average_wght -
+    #          self.model.product_average_wght) * \
+    #         self.model.transportation_cost / 1E3 * \
+    #         self.model.mn_mx_av_distance_to_recycler[2]
+        
+    def get_recycling_cost(self):
         """
-        Update transportation costs according to the (evolving) mass of waste.
-        Here, an average distance between all origins and targets is assumed.
+        Get the recycling cost of the recycler.
+        Either from the recycling costs dataframe or the original recycling cost.
         """
-        self.recycling_cost = \
-            self.recycling_cost + \
-            (self.model.dynamic_product_average_wght -
-             self.model.product_average_wght) * \
-            self.model.transportation_cost / 1E3 * \
-            self.model.mn_mx_av_distance_to_recycler[2]
+        if self.model.rtn:
+            # Get the recycling cost from the dataframe for the current year and recycler name
+            recycling_cost_row = self.recycling_costs_df[
+                (self.recycling_costs_df['Year'] == self.model.current_date.year) &
+                (self.recycling_costs_df['Recycler Name'] == self.recycler_name)
+            ]
+            # If the row is not empty, return the recycling cost
+            # Otherwise, return the original recycling cost
+            if not recycling_cost_row.empty:
+                if np.isnan(recycling_cost_row['Cost'].values[0]):
+                    print(f"Warning: Recycling cost for {self.recycler_name} in {self.model.current_date.year} is NaN. Using infinity as cost.")
+                    recycling_cost = np.inf
+                else:
+                    recycling_cost = recycling_cost_row['Cost'].values[0]
+                return recycling_cost 
+                  
+        return self.original_recycling_cost
 
     def update_recycled_waste(self):
         """
@@ -135,7 +165,7 @@ class Recyclers(Agent):
         Account for the learning effect: recyclers and refurbishers improve
         their recycling and repairing processes respectively
         """
-        if volume > 0:
+        if volume > 0 and original_volume > 0:
             potential_recycling_cost = original_cost * \
                                        (volume / original_volume) ** \
                                        shape_factor
@@ -173,7 +203,7 @@ class Recyclers(Agent):
         self.triage()
         self.recycling_cost = self.learning_curve_function(
             self.original_recycling_volume, self.recycling_volume,
-            self.original_recycling_cost,
+            self.get_recycling_cost(),
             self.recycling_learning_shape_factor)
         # ! we do not use this function anymore, distance now use the
         # ! pca-recycler data frame
