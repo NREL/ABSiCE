@@ -235,6 +235,7 @@ class ABM_CE_PV(Model):
                  pca_scenario=False,
                  geopy=False,
                  calculate_distances=False,
+                 rtn = False,
                  last_step=31,
                  sa_landfill_costs=(False, 0.0037),
                  file_name={'Landfill data': "Landfills_data.csv",
@@ -449,6 +450,7 @@ class ABM_CE_PV(Model):
         # random.seed(self.seed)
         self.seed = seed
         self.timestep = timestep
+        self.rtn = rtn
 
         #Set path for data saving
         testfolder = str(Path().resolve() / 'PV_ICE' / 'TEMP' / 'PCA')
@@ -493,7 +495,7 @@ class ABM_CE_PV(Model):
         baseline = r1.scenario['US'].dataIn_m
         baseline = baseline.drop(columns=['new_Installed_Capacity_[MW]'])
         baseline.set_index('year', inplace=True)
-        baseline.index = pd.PeriodIndex(baseline.index, freq='A')  # A -- Annual
+        baseline.index = pd.PeriodIndex(baseline.index, freq='Y')  # Y -- Annual
         baseline.head()
 
 
@@ -755,8 +757,14 @@ class ABM_CE_PV(Model):
                 return 6371 * c  # Radius of the Earth in kilometers
 
             # Load the data for PCAs and recyclers from CSV files
+            if self.rtn:
+                # If using the RTN model results from Texas A&M University
+                # load the recycler data from the RTN model
+                recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "RTN", "recycler_data.csv"))
+            else:
+                recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "TEMP", 
+                                                     "recycler_data.csv"))
             pca_data = pd.read_csv("../../../TEMP/pca_longlat.csv")  # Replace with your PCA data file
-            recycler_data = pd.read_csv("../../../TEMP/recycler_data.csv")  # Replace with your recycler data file
             landfills_data = pd.read_csv("../../../TEMP/" +
                                          self.file_names['Landfill data'])
 
@@ -795,11 +803,22 @@ class ABM_CE_PV(Model):
                                     pca_row['PCA']] = distance2
 
             # Save the distances to a CSV file
-            distance_df.to_csv("../../../TEMP/pca_recycler_distances.csv")
+            if self.rtn:
+                # If using the RTN model results from Texas A&M University
+                # save the distances to the RTN model folder
+                distance_df.to_csv(os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
+            else:
+                distance_df.to_csv("../../../TEMP/pca_recycler_distances.csv")
             distance_df2.to_csv("../../../TEMP/" +
                                 self.file_names['PCA-landfill distances'])
 
-        self.recycler_distance_df = pd.read_csv(
+        if self.rtn:
+            # If using the RTN model results from Texas A&M University
+            # load the recycling costs from the RTN model
+            self.recycler_distance_df = pd.read_csv(
+                os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
+        else:
+            self.recycler_distance_df = pd.read_csv(
             '../../../TEMP/pca_recycler_distances.csv')
         self.landfill_distance_df = pd.read_csv(
             '../../../TEMP/' + self.file_names['PCA-landfill distances'])
@@ -812,6 +831,14 @@ class ABM_CE_PV(Model):
             self.correct_mat_factor, self.timestep, scale=False)
         
         self.data = pd.read_excel(reedsFile)  # this is the pca file
+        self.recycling_costs_df = pd.DataFrame()
+        if True:
+            self.recycling_costs_df = pd.read_csv(
+                os.path.join(os.path.dirname(__file__), "RTN", "RecyclingCostsbyYearPCA.csv"))
+            # If using the RTN model results from Texas A&M University
+            # filter the data to include only PCAs that are in the recycling costs DataFrame
+            self.data = self.data[self.data['PCA'].isin(
+                self.recycling_costs_df['PCA'].unique())]
         self.agent_pca_map = self.create_agent_pca_map(num_consumers)
         self.pv_ice_yearly_waste = 0
 
@@ -915,6 +942,11 @@ class ABM_CE_PV(Model):
         self.pca_tot_waste_w = {}
         self.pca_tot_waste_m2 = {}
         for pca in PCAs:
+            # If using the RTN model results from Texas A&M University
+            # check if the PCA is in the recycling costs DataFrame
+            if True:
+                if pca not in self.recycling_costs_df['PCA'].unique():
+                    continue
             pathway_dict = {}
             for pathway in self.all_EoL_pathways.keys():
                 pathway_dict[pathway] = 0
@@ -1094,6 +1126,7 @@ class ABM_CE_PV(Model):
                 self.grid.place_agent(a, node)
             elif node < self.num_recyclers + self.num_consumers:
                 b = Recyclers(node, self, self.original_recycling_cost,
+                              self.recycling_costs_df,
                               init_eol_rate,
                               recycling_learning_shape_factor)
                 self.grid.place_agent(b, node)
@@ -1673,6 +1706,24 @@ class ABM_CE_PV(Model):
             (self.pvice_mat_factor['date'] < self.current_date)]
         self.avg_weight_factor_stored_pv = pv_ice_mat_subset_stored_years[
             'total_massperm2'].mean()
+    def get_transportation_cost(self):
+        """
+        Returns the transportation cost based on the current date and
+        the rtn flag.
+        If the RTN model costs are enabled, it checks if the current year
+        is within the range of the recycling costs DataFrame. If it is,
+        it returns 0, since the transportation costs are accounted for
+        in the recycling costs. Otherwise, it returns the transportation cost.
+        If the RTN model costs are not enabled, it returns the transportation cost.
+        """
+        if self.rtn:
+            min_year = self.recycling_costs_df['Year'].min()
+            max_year = self.recycling_costs_df['Year'].max()
+            if self.current_date.year >= min_year and \
+                    self.current_date.year <= max_year:
+                return 0
+            
+        return self.transportation_cost
 
     def step(self):
         """
