@@ -978,11 +978,7 @@ class Consumers(Agent):
         Update the storage of hazardous products based on the purchase choice.
         """
         if self.hazardous:
-            # product is not hazardous if purchase choice is used
-            if self.purchase_choice == "new":
-                self.product_years_storage_hazardous.append(self.EoL_pathway)
-            elif self.purchase_choice == "used":
-                self.product_years_storage_hazardous.append("hoard")
+            self.product_years_storage_hazardous.append(self.EoL_pathway)
         else:
             self.product_years_storage_hazardous.append("na")
     
