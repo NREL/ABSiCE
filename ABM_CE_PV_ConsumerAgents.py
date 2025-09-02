@@ -135,7 +135,7 @@ class Consumers(Agent):
         pca_recyc_transp_dist = pca_recyc_transp_dist.to_list()
         self.pca_recyc_transp_dist = min(pca_recyc_transp_dist)
         self.pca_recyc_transp_cost = self.pca_recyc_transp_dist * \
-            self.model.get_transportation_cost() / 1E3 
+            self.model.get_transportation_cost(self.hazardous) / 1E3
             # ! remove weight * \ self.model.dynamic_product_average_wght
         # ! TODO: change landfill costs
         pca_landfill_transp_dist = self.model.landfill_distance_df.copy()
@@ -143,7 +143,7 @@ class Consumers(Agent):
         pca_landfill_transp_dist = pca_landfill_transp_dist.to_list()
         self.pca_landfill_transp_dist = min(pca_landfill_transp_dist)
         self.pca_landfill_transp_cost = self.pca_landfill_transp_dist * \
-            self.model.transportation_cost / 1E3 
+            self.model.get_transportation_cost() / 1E3 
             # ! remove weight * \ self.model.dynamic_product_average_wght
         landfill_name = self.model.landfill_distance_df.loc[
             self.model.landfill_distance_df[self.pca] ==
@@ -168,7 +168,7 @@ class Consumers(Agent):
             min(pca_hazardous_landfill_transp_dist)
         self.pca_hazardous_landfill_transp_cost = \
             self.pca_hazardous_landfill_transp_dist * \
-            self.model.transportation_cost / 1E3
+            self.model.get_transportation_cost(True) / 1E3
         self.hazardous_landfill_name = \
             self.model.hazardous_landfill_distance_df.loc[
                 self.model.hazardous_landfill_distance_df[self.pca] ==
@@ -303,14 +303,14 @@ class Consumers(Agent):
             #      self.model.transportation_cost, 
             #      self.model.dynamic_product_average_wght)
         self.pca_recyc_transp_cost = self.pca_recyc_transp_dist * \
-            self.model.get_transportation_cost() / 1E3 
+            self.model.get_transportation_cost(self.hazardous) / 1E3
             # ! remove weight * \ self.model.dynamic_product_average_wght
         self.pca_landfill_transp_cost = self.pca_landfill_transp_dist * \
-            self.model.transportation_cost / 1E3
+            self.model.get_transportation_cost() / 1E3
 
-        self.hazardous_pca_hazardous_landfill_transp_cost = \
+        self.pca_hazardous_landfill_transp_cost = \
             self.pca_hazardous_landfill_transp_dist * \
-            self.model.transportation_cost / 1E3
+            self.model.get_transportation_cost(True) / 1E3
             # ! remove weight * \ self.model.dynamic_product_average_wght
         # self.landfill_cost = \
         #    self.init_landfill_cost + \
@@ -967,12 +967,7 @@ class Consumers(Agent):
 
         self.update_product_storage_hazardous() 
         if self.is_hazardous_waste_storage_limit_exceeded():
-            # This is to prevent
-            # double counting of hazardous products since
-            # number_product_hoarded_hazardous is included in
-            # number_product_hoarded
-            if self.product_storage_to_other == 0:
-                self.product_storage_to_other = self.number_product_hoarded_hazardous
+            print(f"Hazardous waste storage limit exceeded for {self.unique_id}")
             self.number_product_hoarded_hazardous = 0
             self.product_years_storage_hazardous = []
             limited_paths["hoard"] = False
@@ -1010,7 +1005,7 @@ class Consumers(Agent):
                 total_mass_stored[-1] = self.number_product_hoarded_hazardous
                 total_mass_stored = self.mass_per_function_model(total_mass_stored)
                 
-                total_mass_stored_month = total_mass_stored / self.number_of_months if self.number_of_months > 0 else 0
+                total_mass_stored_month = total_mass_stored / self.number_of_months if self.number_of_months > 0 else total_mass_stored
                 if total_mass_stored_month > self.max_storage_hazardous_kg:
                     return True
         return False
@@ -1148,7 +1143,7 @@ class Consumers(Agent):
         if self.hazardous:
             hazardous_waste_mass = [0] * len(self.new_products_hard_copy)
             hazardous_waste_mass[-1] = self.tot_prod_EoL
-            hazardous_waste_mass_month = self.mass_per_function_model(hazardous_waste_mass) / self.number_of_months if self.number_of_months > 0 else 0
+            hazardous_waste_mass_month = self.mass_per_function_model(hazardous_waste_mass) / self.number_of_months if self.number_of_months > 0 else self.mass_per_function_model(hazardous_waste_mass)
             self.generator_size = self.get_generator_size_from_waste(
             hazardous_waste_mass_month, regulator_thresholds)
             
@@ -1164,10 +1159,6 @@ class Consumers(Agent):
         if agent.is_exclusion_applicable(self.recycling_facility_id):
             # If the product is exempt from regulations, it is not hazardous
             # It is treated the same as non-hazardous waste
-            self.hazardous = False
-        elif agent.is_universal_waste_regulation_applicable():
-            # If the product is subject to universal waste regulations, it is not hazardous
-            # the storage limit is set to 1 year
             self.hazardous = False
         elif agent.is_universal_waste_regulation_applicable():
             # If the product is subject to universal waste regulations, it is not hazardous

@@ -224,7 +224,7 @@ class Refurbishers(Agent):
         tpb_scores[1] = -1 * self.scd_hand_price + \
             self.repairing_cost + \
             agent.random_interstate_distance * \
-            self.model.transportation_cost / 1E3 * \
+            self.model.get_transportation_cost() / 1E3 * \
             self.model.dynamic_product_average_wght
         pathways_and_BI = {
             list(self.model.all_EoL_pathways.keys())[i]:
@@ -477,7 +477,7 @@ class Refurbishers(Agent):
                 revenue = \
                     -1 * self.scd_hand_price + self.repairing_cost + \
                     agent.random_interstate_distance * \
-                    self.model.transportation_cost / 1E3 * \
+                    self.model.get_transportation_cost() / 1E3 * \
                     self.model.dynamic_product_average_wght
                 cost_recycling = agent.copy_perceived_behavioral_control[2]
                 cost_landfilling = \
