@@ -128,8 +128,8 @@ class ABM_CE_PV(Model):
                  consumers_distribution={"residential": 1,
                                          "commercial": 0., "utility": 0.},
                  init_eol_rate={"repair": 0.0, "sell": 0.0,
-                                "recycle": 0.1, "landfill": 0.9,
-                                "hoard": 0.0},
+                                "recycle": 0.1, "landfill": 0.8,
+                                "hoard": 0.1},
                  init_purchase_choice={"new": 0.9995, "used": 0.0005,
                                        "certified": 0},
                  total_number_product=[38, 38, 38, 38, 38, 38, 38, 139, 251,
@@ -1795,11 +1795,9 @@ class ABM_CE_PV(Model):
         Filters the landfills that accept solar waste based on the
         landfill_solar_waste_acceptance_ratio.
         """
-        print("before:", len(self.landfill_distance_df))
         all_site_indices = range(len(self.landfill_distance_df))
         valid_site_indices = random.sample(all_site_indices, int(len(all_site_indices) * self.landfill_solar_waste_acceptance_ratio))
         self.landfill_distance_df = self.landfill_distance_df.iloc[valid_site_indices].reset_index(drop=True)
-        print("after:", len(self.landfill_distance_df))
 
     @staticmethod
     def tclp_test():

@@ -967,7 +967,6 @@ class Consumers(Agent):
 
         self.update_product_storage_hazardous() 
         if self.is_hazardous_waste_storage_limit_exceeded():
-            print(f"Hazardous waste storage limit exceeded for {self.unique_id}")
             self.number_product_hoarded_hazardous = 0
             self.product_years_storage_hazardous = []
             limited_paths["hoard"] = False
