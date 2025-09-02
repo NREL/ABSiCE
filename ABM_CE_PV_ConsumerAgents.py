@@ -751,7 +751,11 @@ class Consumers(Agent):
                     self.perceived_behavioral_control[2] *= \
                         self.model.seeding_recyc["discount"]
         if product_type == "new":
-            self.hazardous_waste_management()
+            # If hazardous waste regulation is enabled, the agent
+            # will have to manage hazardous waste according to the
+            # regulatory policies governed by the regulator.
+            if self.model.hazardous_waste_regulation_enabled:
+                self.hazardous_waste_management()
             self.storage_management(limited_paths)
             self.EoL_pathway = \
                 self.tpb_decision(
@@ -1157,18 +1161,30 @@ class Consumers(Agent):
         Update the storage limits based on the generator size.
         """
         agent = self.model.agent_map[self.regulator_id]
-        if agent.is_exclusion_applicable() or agent.is_alternative_management_standard_applicable():
+        if agent.is_exclusion_applicable(self.recycling_facility_id):
+            # If the product is exempt from regulations, it is not hazardous
+            # It is treated the same as non-hazardous waste
             self.hazardous = False
+        elif agent.is_universal_waste_regulation_applicable():
+            # If the product is subject to universal waste regulations, it is not hazardous
+            # the storage limit is set to 1 year
+            self.hazardous = False
+        elif agent.is_universal_waste_regulation_applicable():
+            # If the product is subject to universal waste regulations, it is not hazardous
+            # but treated as universal waste
+            # the storage limit is set to 1 year
+            self.hazardous = False
+            self.max_storage = 1
         else:
             # If the TCLP test is applicable, check if the waste is hazardous
             # based on the TCLP test results.
             self.hazardous = self.model.tclp_test()
             # If the waste is hazardous, update the generator size based on the thresholds
             self.update_generator_size(agent.thresholds)
-            self.update_storage_limits(agent.thresholds)
+            self.update_hazardous_storage_limits(agent.thresholds)
             self.update_perceived_behavioral_control()
 
-    def update_storage_limits(self, regulator_thresholds: dict):
+    def update_hazardous_storage_limits(self, regulator_thresholds: dict):
         """
         Update the storage limits based on the generator size
         and the thresholds set by the regulator.
@@ -1178,7 +1194,7 @@ class Consumers(Agent):
             if regulator_thresholds[self.generator_size].max_storage_years is not None:
                 self.max_storage_hazardous_years = regulator_thresholds[self.generator_size].max_storage_years
             if regulator_thresholds[self.generator_size].max_storage_kg is not None:
-                self.max_storage_hazardous_kg = regulator_thresholds[self.generator_size].max_storage_kg     
+                self.max_storage_hazardous_kg = regulator_thresholds[self.generator_size].max_storage_kg
 
     def step(self):
         """
