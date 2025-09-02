@@ -9,6 +9,14 @@ class TIMESTEP(Enum):
     MONTHLY = 12
     QUARTERLY = 4
 
+class GeneratorSize(Enum):
+    """
+    Enum for different generator sizes.
+    """
+    VERY_SMALL = "very_small"
+    SMALL = "small"
+    LARGE = "large"
+
 def transform_timeseries_timestep(
     timeseries: pd.DataFrame, timestep: TIMESTEP, scale: bool = True
 ) -> pd.Series:

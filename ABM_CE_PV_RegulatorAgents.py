@@ -13,40 +13,7 @@ import pandas as pd
 from dataclasses import dataclass
 from utils import GeneratorSize
 from typing import Optional
-
-@dataclass
-class RegulatoryPolicy:
-    """
-    A class to represent the regulatory policies for PV waste management.
-    Attributes:
-        policy_type: The type of policy, e.g., "exclusions" or "alternative_management_standards".
-        states: A list of states where the policy applies.
-        duration: The duration for which the policy is applicable.
-
-    Methods:
-        is_applicable(state): Checks if the policy is applicable in the given state.
-    """
-
-    policy_type: str
-    states: list
-    duration: int
-
-    def is_applicable(self, state):
-        """
-        Check if the policy is applicable in the given state.
-        """
-        return state in self.states
-    
-    @classmethod
-    def from_dict(cls, policy_dict: dict):
-        """
-        Create a RegulatoryPolicy instance from a dictionary.
-        """
-        return cls(
-            policy_type=policy_dict.get("policy_type"),
-            states=policy_dict.get("states", []),
-            duration=policy_dict.get("duration", 15)
-        )
+import os
     
 @dataclass
 class GeneratorSizeThreshold:
@@ -67,115 +34,112 @@ class GeneratorSizeThreshold:
         """
         Create a GeneratorSizeThreshold instance from a dictionary.
         """
+        max_storage_kg = thresholds_dict.get("max_storage_kg")
+        max_storage_years = thresholds_dict.get("max_storage_years")
+        waste_generation_limit_kg = thresholds_dict.get("waste_generation_limit_kg")
         return cls(
-            max_storage_kg=thresholds_dict.get("max_storage_kg"),
-            max_storage_years=thresholds_dict.get("max_storage_years"),
-            waste_generation_limit_kg=thresholds_dict.get("waste_generation_limit_kg")
+            max_storage_kg=max_storage_kg if pd.notna(max_storage_kg) else None,
+            max_storage_years=max_storage_years if pd.notna(max_storage_years) else None,
+            waste_generation_limit_kg=waste_generation_limit_kg if pd.notna(waste_generation_limit_kg) else None
 
         )
 
 class Regulators(Agent):
     """
-    A regulator agent that sets the regulations for PV waste management.
+    A regulator agent that sets the regulations for PV waste management. It requires two csv files:
+    - policy_by_state.csv: Contains the regulatory policies applicable to each state.
+    - generator_threshold.csv: Contains the thresholds for different generator sizes.
     Attributes:
         unique_id: int - Unique identifier for the agent.
         model: Model - The model this agent belongs to.
-        regulatory_policy: list[RegulatoryPolicy] - A list of regulatory policies applicable to the agent.
-        thresholds: dict - A dictionary containing thresholds for different generator sizes.
+        policy_duration: list[dict] - A list of policy durations in years applicable to the agent.
+        For example, [{"policy_name": "policy1", "duration": 12}, {"policy_name": "policy2", "duration": 24}]
     """
 
     def __init__(self, 
                  unique_id: int, 
                  model: Model, 
-                 regulatory_policy: Optional[list[dict]] = None,
-                 thresholds: dict = {
-                     "very_small": {
-                            "max_storage_kg": 1000,
-                            "max_storage_years": None,
-                            "waste_generation_limit_kg": 100
-                        },
-                        "small": {
-                                "max_storage_kg": 6000,
-                                "max_storage_years": 0,
-                                "waste_generation_limit_kg": 1000
-                        },
-                        "large": {
-                            "max_storage_kg": None,
-                            "max_storage_years": 0,
-                            "waste_generation_limit_kg": None
-                        }
-                     }
-                     
+                 policy_duration: list[dict] = [],             
                  ):
         """
         Creation of new regulator agent
         """
         super().__init__(model)
         self.unique_id = unique_id
+        self.internal_clock = 0  # Internal clock to track policy duration
         self.regulator_state = self.model.regulator_state_map[unique_id]
-        self.regulatory_policy = []
-        if regulatory_policy is not None:
-            # Convert the list of dictionaries to RegulatoryPolicy instances
-            self.regulatory_policy = [RegulatoryPolicy.from_dict(policy) for policy in regulatory_policy]
-        self.current_regulatory_policy = None
-        if len(self.regulatory_policy) > 0:
-            self.current_regulatory_policy = self.regulatory_policy.pop(0)  # Get the first policy if available
-        self.internal_clock = 0  # Internal clock to track the duration of the current policy
+        self.regulatory_policy = pd.read_csv(os.path.join(os.path.dirname(__file__), "policy_regulation", "policy_by_state.csv"))
+        self.current_regulatory_policy = self.regulatory_policy[self.regulatory_policy['state'] == self.regulator_state]
+        self.policy_duration = policy_duration
         # Initialize thresholds for different generator sizes
-        self.thresholds = {
-            GeneratorSize.VERY_SMALL: GeneratorSizeThreshold.from_dict(thresholds.get(GeneratorSize.VERY_SMALL.value)),
-            GeneratorSize.SMALL: GeneratorSizeThreshold.from_dict(thresholds.get(GeneratorSize.SMALL.value)),
-            GeneratorSize.LARGE: GeneratorSizeThreshold.from_dict(thresholds.get(GeneratorSize.LARGE.value))
-        }
+        generator_threshold_df = pd.read_csv(os.path.join(os.path.dirname(__file__), "policy_regulation", "generator_threshold.csv"))
+        # Determine the applicable state for thresholds, defaulting to "FED" if not found
+        threshold_state = self.regulator_state if self.regulator_state in generator_threshold_df['state'].values else "FED"
+        thresholds = generator_threshold_df[generator_threshold_df['state'] == threshold_state].set_index('generator_size').to_dict(orient='index')
+        self.thresholds = {}
+        # Map generator sizes to their thresholds from the DataFrame
+        for size, thresh_dict in thresholds.items():
+            self.thresholds[GeneratorSize(size)] = GeneratorSizeThreshold.from_dict(thresh_dict)
 
-    def _is_transport_based_exclusion(self):
+    def _is_transfer_based_exclusion(self, recycler_id: int):
         """
-        Check if the product is exempt from regulations based on transport-based exclusions.
+        Check if the product is exempt from regulations based on transfer-based exclusions.
         """
-        return False # Placeholder for actual logic
+        if self.current_regulatory_policy is not None and self.current_regulatory_policy["transfer_based_exclusion"].values[0] == True:
+            if self.model.agent_map[recycler_id].hazardous:
+                # If the recycler is hazardous waste certified, transfer-based exclusion applies
+                print(f"Transfer-based exclusion applies for recycler {recycler_id}")
+                return True
+        return False  # No transport-based exclusion applies by default
     
     def _is_chemical_based_exclusion(self):
         """
         Check if the product is exempt from regulations based on chemical-based exclusions.
         """
-        return False # Placeholder for actual logic
+        return False  # From Taylor's study, unclear if this applies to PV modules, but included for completeness
 
+    def _is_verified_recycler_based_exclusion(self, recycler_id: int):
+        """
+        Check if the product is exempt from regulations based on verified recycler exclusions.
+        """
+        if self.current_regulatory_policy is not None and self.current_regulatory_policy["verified_recycler_exclusion"].values[0] == True:
+            if self.model.agent_map[recycler_id].verified:
+                # If the recycler is verified, exclusion applies
+                print(f"Verified recycler-based exclusion applies for recycler {recycler_id}")
+                return True
+        return False  # No verified recycler-based exclusion applies by default
 
-    def is_exclusion_applicable(self):
+    def is_exclusion_applicable(self, recycler_id: int):
         """
         Check if the product is exempt from regulations based on the state regulations.
         """
-        if self.current_regulatory_policy is not None and self.current_regulatory_policy.policy_type == "exclusions":
-            if self.current_regulatory_policy.is_applicable(self.regulator_state):
-                if self._is_transport_based_exclusion() or self._is_chemical_based_exclusion():
-                    return True
+        if self._is_transfer_based_exclusion(recycler_id) or self._is_chemical_based_exclusion() or self._is_verified_recycler_based_exclusion(recycler_id):
+            return True
         return False  # No exclusions apply by default
     
-    def is_alternative_management_standard_applicable(self):
+    def is_universal_waste_regulation_applicable(self):
         """
-        Check if the product is subject to alternative management standards based on the state regulations.
+        Check if the product is subject to universal waste regulations.
         """
-        if self.current_regulatory_policy is not None and self.current_regulatory_policy.policy_type == "alternative_management_standards":
-            if self.current_regulatory_policy.is_applicable(self.regulator_state):
-                return True
-        return False  # No alternative management standards apply by default
-    
+        if self.current_regulatory_policy is not None and self.current_regulatory_policy["universal_waste_regulation"].values[0] == True:
+            print(f"Universal waste regulation applies for recycler in state {self.regulator_state}")
+            return True
+        return False  # No universal waste regulations apply by default
+
     def check_and_update_regulations(self):
         """
         Check and update the regulatory policies based on the model's clock and the current policy duration.
         """
 
         if self.current_regulatory_policy is not None:
-            # Check if the current policy duration has expired
-            if self.internal_clock // self.model.timestep.value >= self.current_regulatory_policy.duration:
-                # Reset the internal clock
-                self.internal_clock = 0
-                # Check if there are more policies to apply
-                if len(self.regulatory_policy) > 0:
-                    self.current_regulatory_policy = self.regulatory_policy.pop(0)
-                else:
-                    self.current_regulatory_policy = None
-            
+            # Check if policies have expired
+            if len(self.policy_duration) > 0:
+                # Mark expired policies as inactive
+                for policy_name in self.policy_duration:
+                    if policy_name in self.current_regulatory_policy.columns:
+                        if self.internal_clock // self.model.timestep.value >= self.policy_duration[policy_name]:
+                            self.current_regulatory_policy[policy_name] = False
+                            self.internal_clock = 0
 
     def step(self):
         """

@@ -151,8 +151,8 @@ class ABM_CE_PV(Model):
                      0.0039, 0.0033, 0.0030, 0.0041, 0.0050, 0.0040, 0.0040,
                      0.0038, 0.0033],
                  hazardous_waste_management_cost={"repair": 0.0, "sell": 0.0,
-                                                    "recycle": 0.0, "landfill": 300.0,
-                                                    "hoard": 120.0}, # $/ton
+                                                    "recycle": 0.0, "landfill": 0.0,
+                                                    "hoard": 0.0}, # $/ton
                  theory_of_planned_behavior={
                      "residential": True, "commercial": True, "utility": True},
                  w_sn_eol=0.23,
@@ -216,6 +216,7 @@ class ABM_CE_PV(Model):
                      'Wisconsin', 'Ohio', 'Kentucky', 'South Carolina'],
                  # transportation_cost=0.0314,
                  transportation_cost=0.095,
+                 hazardous_transportation_cost=0.395, # $/ton-km
                  used_product_substitution_rate=[0.6, 1, 0.8],
                  imperfect_substitution=0,
                  epr_business_model=False,
@@ -240,6 +241,8 @@ class ABM_CE_PV(Model):
                  geopy=False,
                  calculate_distances=False,
                  rtn = False,
+                 hazardous_waste_regulation_enabled=False,
+                 landfill_solar_waste_acceptance_ratio=0.4,
                  last_step=31,
                  sa_landfill_costs=(False, 0.0037),
                  file_name={'Landfill data': "Landfills_data.csv",
@@ -440,6 +443,9 @@ class ABM_CE_PV(Model):
             seeding_recyc (dict, optional): seeding scenario for recycling
                 products. Defaults to {"Seeding": False, "Year": 10,
                 "number_seed": 50, "discount": 0.35}.
+            hazardous_waste_regulation_enabled: bool - Whether hazardous waste regulations are enabled.
+            landfill_solar_waste_acceptance_ratio: float - The ratio of landfills that accept solar waste. Defaults to 0.4.
+            as per research from Taylor Curtis.
         """
         # Set up variables
         # att_distrib_param_eol[0] = calibration_n_sensitivity
@@ -604,6 +610,14 @@ class ABM_CE_PV(Model):
 
         #     #### Create the 3 Scenarios and assign Baselines
 
+        if self.rtn:
+            # If using the RTN model results from Texas A&M University
+            # load the recycler data from the RTN model
+            self.recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "RTN", "recycler_data.csv"))
+        else:
+            self.recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "TEMP", 
+                                                    "recycler_data.csv"))
+
         if pca_scenario:
             i = 0
             r1 = PV_ICE.Simulation(name=SFscenarios[i], path=testfolder)
@@ -764,20 +778,13 @@ class ABM_CE_PV(Model):
                 return 6371 * c  # Radius of the Earth in kilometers
 
             # Load the data for PCAs and recyclers from CSV files
-            if self.rtn:
-                # If using the RTN model results from Texas A&M University
-                # load the recycler data from the RTN model
-                recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "RTN", "recycler_data.csv"))
-            else:
-                recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "TEMP", 
-                                                     "recycler_data.csv"))
             pca_data = pd.read_csv("../../../TEMP/pca_longlat.csv")  # Replace with your PCA data file
             landfills_data = pd.read_csv("../../../TEMP/" +
                                          self.file_names['Landfill data'])
 
             # Create an empty DataFrame to store distances
             distance_df = pd.DataFrame(columns=pca_data['PCA'],
-                                       index=recycler_data['Recycler Name'])
+                                       index=self.recycler_data['Recycler Name'])
             distance_df2 = pd.DataFrame(columns=pca_data['PCA'],
                                         index=landfills_data['Facility Name'])
 
@@ -786,7 +793,7 @@ class ABM_CE_PV(Model):
                 pca_lat = pca_row['Lat']
                 pca_lon = pca_row['Long']
 
-                for recycler_index, recycler_row in recycler_data.iterrows():
+                for recycler_index, recycler_row in self.recycler_data.iterrows():
                     recycler_lat = recycler_row['Latitude']
                     recycler_lon = recycler_row['Longitude']
                     distance = haversine(float(pca_lat), float(pca_lon),
@@ -844,7 +851,7 @@ class ABM_CE_PV(Model):
         
         self.data = pd.read_excel(reedsFile)  # this is the pca file
         self.recycling_costs_df = pd.DataFrame()
-        if True:
+        if self.rtn:
             self.recycling_costs_df = pd.read_csv(
                 os.path.join(os.path.dirname(__file__), "RTN", "RecyclingCostsbyYearPCA.csv"))
             # If using the RTN model results from Texas A&M University
@@ -872,6 +879,12 @@ class ABM_CE_PV(Model):
         self.last_step = last_step
         self.sa_landfill_costs = sa_landfill_costs
         self.hazardous_waste_management_cost = hazardous_waste_management_cost
+        self.hazardous_waste_regulation_enabled = hazardous_waste_regulation_enabled
+        # prune the list of landfills to those accepting solar waste using the acceptance ratio
+        # passed during initialization
+        self.landfill_solar_waste_acceptance_ratio = landfill_solar_waste_acceptance_ratio
+        if self.landfill_solar_waste_acceptance_ratio < 1.0:
+            self.filter_landfills_accepting_solar_waste()
 
         # ! Initialize model with PV_ICE historical installed cap
         # self.total_number_product = total_number_product
@@ -957,7 +970,7 @@ class ABM_CE_PV(Model):
         for pca in PCAs:
             # If using the RTN model results from Texas A&M University
             # check if the PCA is in the recycling costs DataFrame
-            if True:
+            if self.rtn:
                 if pca not in self.recycling_costs_df['PCA'].unique():
                     continue
             pathway_dict = {}
@@ -1021,6 +1034,7 @@ class ABM_CE_PV(Model):
         self.yearly_product_wght = pv_ice_product_average_wght
 
         self.transportation_cost = transportation_cost
+        self.hazardous_transportation_cost = hazardous_transportation_cost
         self.epr_business_model = epr_business_model
         # Here we keep the old code regarding landfill costs. This does not
         # affect the updates made during the NSF convergence project - phase I
@@ -1756,7 +1770,7 @@ class ABM_CE_PV(Model):
             (self.pvice_mat_factor['date'] < self.current_date)]
         self.avg_weight_factor_stored_pv = pv_ice_mat_subset_stored_years[
             'total_massperm2'].mean()
-    def get_transportation_cost(self):
+    def get_transportation_cost(self, hazardous: bool = False):
         """
         Returns the transportation cost based on the current date and
         the rtn flag.
@@ -1772,9 +1786,21 @@ class ABM_CE_PV(Model):
             if self.current_date.year >= min_year and \
                     self.current_date.year <= max_year:
                 return 0
-            
+        if hazardous:
+            return self.hazardous_transportation_cost
         return self.transportation_cost
     
+    def filter_landfills_accepting_solar_waste(self):
+        """
+        Filters the landfills that accept solar waste based on the
+        landfill_solar_waste_acceptance_ratio.
+        """
+        print("before:", len(self.landfill_distance_df))
+        all_site_indices = range(len(self.landfill_distance_df))
+        valid_site_indices = random.sample(all_site_indices, int(len(all_site_indices) * self.landfill_solar_waste_acceptance_ratio))
+        self.landfill_distance_df = self.landfill_distance_df.iloc[valid_site_indices].reset_index(drop=True)
+        print("after:", len(self.landfill_distance_df))
+
     @staticmethod
     def tclp_test():
         """
