@@ -206,7 +206,7 @@ class Producers(Agent):
             self.transport_cost_industrial_waste = \
                 self.yearly_industrial_waste_generated * \
                 ((self.model.yearly_product_wght *
-                  self.model.transportation_cost / 1E3 *
+                  self.model.get_transportation_cost() / 1E3 *
                   self.model.mean_distance_within_state) +
                  self.model.average_landfill_cost)
         elif self.material_produced == "Product":

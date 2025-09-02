@@ -88,7 +88,6 @@ class Regulators(Agent):
         if self.current_regulatory_policy is not None and self.current_regulatory_policy["transfer_based_exclusion"].values[0] == True:
             if self.model.agent_map[recycler_id].hazardous:
                 # If the recycler is hazardous waste certified, transfer-based exclusion applies
-                print(f"Transfer-based exclusion applies for recycler {recycler_id}")
                 return True
         return False  # No transport-based exclusion applies by default
     
@@ -105,7 +104,6 @@ class Regulators(Agent):
         if self.current_regulatory_policy is not None and self.current_regulatory_policy["verified_recycler_exclusion"].values[0] == True:
             if self.model.agent_map[recycler_id].verified:
                 # If the recycler is verified, exclusion applies
-                print(f"Verified recycler-based exclusion applies for recycler {recycler_id}")
                 return True
         return False  # No verified recycler-based exclusion applies by default
 
@@ -122,7 +120,6 @@ class Regulators(Agent):
         Check if the product is subject to universal waste regulations.
         """
         if self.current_regulatory_policy is not None and self.current_regulatory_policy["universal_waste_regulation"].values[0] == True:
-            print(f"Universal waste regulation applies for recycler in state {self.regulator_state}")
             return True
         return False  # No universal waste regulations apply by default
 
