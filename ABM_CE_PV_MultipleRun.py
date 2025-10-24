@@ -39,44 +39,20 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         # j = j + 43
         t0 = time.time()
         number_steps = get_number_of_steps(number_steps, timestep)
-        if j < 15:
+        if j < 10:
             model = ABM_CE_PV(
                 seed=(j), 
                 last_step=number_steps,
-                all_EoL_pathways={
-                    "repair": False, 
-                    "sell": False,
-                    "recycle": True,
-                    "landfill": True,
-                    "hoard": True
-                    },
                 hazardous_waste_regulation_enabled=False,
                 )  # baseline
-        elif j < 3:
+        elif j < 20:
             model = ABM_CE_PV(
-                seed=(j - 15), last_step=number_steps)  # this can be used for scenario analysis
-        elif j < 3:
+                seed=(j - 10), last_step=number_steps,
+                att_distrib_param_eol=[0.65, 0.1])  # this can be used for scenario analysis
+        elif j < 30:
             model = ABM_CE_PV(
-                seed=(j - 2), last_step=number_steps,
-                sa_landfill_costs=(True, 0.0134),
-                # sa_landfill_costs=(True, 0.0077),
-                file_name={'Landfill data': "Landfills_data_SA.csv",
-                            'PCA-landfill distances':
-                                "pca_landfills_distances_SA.csv"},
-                init_eol_rate={"repair": 1E-6, "sell": 1E-6,
-                                "recycle": 1E-6, "landfill": 1,
-                                "hoard": 1E-6},
-                recycling_learning_shape_factor=-0.0,
-                original_recycling_cost=[0.0134-1E-6, 0.0134+1E-6, 0.0134],
-                # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
-                # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
-                # original_recycling_cost=[1E-12, 3E-12, 2E-12],
-                # transportation_cost=1,
-                # transportation_cost=1.25)
-                w_sn_eol=0,
-                w_pbc_eol=1,
-                w_a_eol=0,
-                timestep=timestep,)
+                seed=(j - 20), last_step=number_steps,
+                att_distrib_param_eol=[0.5, 0.1])
         elif j < 4:
             model = ABM_CE_PV(
                 seed=(j - 3), last_step=number_steps,
@@ -755,6 +731,6 @@ def get_number_of_steps(number_steps: int, timestep: TIMESTEP):
     else:
         raise ValueError("Unsupported timestep: {}".format(timestep))
 
-run_model(15, 15)
+run_model(30, 30)
 # run_batch(40, 31, list1=['a', 'b', 'c'],list2=['d', 'e', 'f'],
 #          list3=['x', 'y', 'z'])
