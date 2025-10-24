@@ -43,7 +43,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
             model = ABM_CE_PV(
                 seed=(j), 
                 last_step=number_steps,
-                hazardous_waste_regulation_enabled=False,
+                hazardous_waste_regulation_enabled=True,
                 )  # baseline
         elif j < 20:
             model = ABM_CE_PV(

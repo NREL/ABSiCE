@@ -91,7 +91,7 @@ from mesa.space import NetworkGrid
 from mesa.datacollection import DataCollector
 import networkx as nx
 import numpy as np
-from math import e
+from math import e, gamma
 import pandas as pd
 import random
 import PV_ICE
@@ -235,6 +235,21 @@ class ABM_CE_PV(Model):
                  seeding_recyc={"Seeding": False,
                                 "Year": 10, "number_seed": 50,
                                 "discount": 0.35},
+                # parameters for TCLP model. The default values are taken from
+                # Li, F., Tatapudi, S. R., Shaw, S. L., Libby, C., Bicer, B., & TamizhMani, G. (2025). 
+                # Photovoltaic module leach testing: Database development and statistical analysis. 
+                # Journal of Environmental Management, 377, 124666.
+                 tclp_params = {
+                        "fresh_mean": 2.18,   # observed mean (mg/L Pb) for fresh modules
+                        "fresh_std": 0.86,    # observed std (mg/L Pb) for fresh modules
+                        "aged_mean": 3.20,    # observed mean (mg/L Pb) for field aged modules
+                        "aged_std": 1.33,     # observed std (mg/L Pb) for field aged modules
+                        "k": 0.30,            # rate of degradation
+                        "a50": 15,  # midpoint age
+                        "hazard_cutoff": 5.0, # mg/L Pb threshold for hazard classification as per EPA
+                        # Optional lower bound for std to avoid collapse
+                        "min_std": 0.05,
+                 },
                  pv_ice=False,
                  pca=False,
                  pca_scenario=False,
@@ -1048,6 +1063,7 @@ class ABM_CE_PV(Model):
         self.extended_tpb = extended_tpb
         self.seeding = seeding
         self.seeding_recyc = seeding_recyc
+        self.tclp_params = tclp_params
 
         self.all_gba = pd.read_excel(reedsFile)  #importing all grid balancing areas in an excel file
 
@@ -1799,14 +1815,56 @@ class ABM_CE_PV(Model):
         valid_site_indices = random.sample(all_site_indices, int(len(all_site_indices) * self.landfill_solar_waste_acceptance_ratio))
         self.landfill_distance_df = self.landfill_distance_df.iloc[valid_site_indices].reset_index(drop=True)
 
-    @staticmethod
-    def tclp_test():
-        """
-        Check if the product is hazardous based on the
-        Toxicity Characteristic Leaching Procedure (TCLP) test.
+    def tclp_test(self, start_year: int = 2020) -> bool:
+        """Age-varying (logistic) mean & std TCLP hazard classification.
+
+        compute an age-dependent mean and standard deviation
+        by smoothly interpolating between "fresh" and "aged"
+        parameters using a logistic weight w(age). Then,
+        sample a latent variable from a Weibull distribution
+        parameterized to match the interpolated mean and std.
+        Return True if the sampled latent value exceeds
+        the hazard cutoff.
+
+        This preserves gradual broadening of variance with age while avoiding
+        discrete mixture sampling.
+
+        Parameters
+        ----------
+        start_year : int
+            Year the module was installed.
+
+        Returns
+        -------
+        bool
+            True if sampled latent value > hazard_cutoff.
         """
 
-        return random.gauss(0, 1) > 0.5  # Placeholder for actual logic
+        module_age_years = self.current_date.year - start_year
+
+        fresh_mu = self.tclp_params["fresh_mean"]
+        fresh_sd = self.tclp_params["fresh_std"]
+        aged_mu  = self.tclp_params["aged_mean"]
+        aged_sd  = self.tclp_params["aged_std"]
+        k        = self.tclp_params["k"]
+        a50      = self.tclp_params["a50"]
+        cutoff   = self.tclp_params["hazard_cutoff"]
+        min_std  = self.tclp_params.get("min_std", 0.0)
+
+        # Logistic weight w(age) in [0,1]
+        w = 1.0 / (1.0 + e ** (-k * (module_age_years - a50)))
+
+        # Interpolated mean & std
+        mu_age = (1 - w) * fresh_mu + w * aged_mu
+        sd_age = (1 - w) * fresh_sd + w * aged_sd
+        sd_age = max(sd_age, min_std)
+
+        # Weibull shape parameters estimated from mean & std
+
+        weibull_shape = (sd_age / mu_age) ** -1.086
+        weibull_scale = mu_age / gamma(1 + 1 / weibull_shape)
+        latent = np.random.weibull(weibull_shape) * weibull_scale
+        return latent > cutoff
 
     def step(self):
         """
