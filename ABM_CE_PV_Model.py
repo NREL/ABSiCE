@@ -249,6 +249,7 @@ class ABM_CE_PV(Model):
                         "hazard_cutoff": 5.0, # mg/L Pb threshold for hazard classification as per EPA
                         # Optional lower bound for std to avoid collapse
                         "min_std": 0.05,
+                        "distribution": "weibull"  # distribution type: "normal" or "weibull"
                  },
                  pv_ice=False,
                  pca=False,
@@ -1859,11 +1860,15 @@ class ABM_CE_PV(Model):
         sd_age = (1 - w) * fresh_sd + w * aged_sd
         sd_age = max(sd_age, min_std)
 
-        # Weibull shape parameters estimated from mean & std
-
-        weibull_shape = (sd_age / mu_age) ** -1.086
-        weibull_scale = mu_age / gamma(1 + 1 / weibull_shape)
-        latent = np.random.weibull(weibull_shape) * weibull_scale
+        if self.tclp_params["distribution"] == "normal":
+            # Normal distribution sampling
+            latent = np.random.normal(mu_age, sd_age)
+            
+        elif self.tclp_params["distribution"] == "weibull":
+            # Weibull shape parameters estimated from mean & std
+            weibull_shape = (sd_age / mu_age) ** -1.086
+            weibull_scale = mu_age / gamma(1 + 1 / weibull_shape)
+            latent = np.random.weibull(weibull_shape) * weibull_scale
         return latent > cutoff
 
     def step(self):
