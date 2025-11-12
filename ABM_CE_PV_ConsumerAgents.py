@@ -148,10 +148,7 @@ class Consumers(Agent):
         landfill_name = self.model.landfill_distance_df.loc[
             self.model.landfill_distance_df[self.pca] ==
             self.pca_landfill_transp_dist, 'Facility Name'].iloc[0]
-        landfills_data = self.model.landfill_cost_df.copy()
-        self.landfill_cost = landfills_data.loc[
-            landfills_data['Facility Name'] == landfill_name,
-            '$/ Ton'].iloc[0]  # in $/ton
+        self.landfill_cost = self.get_initial_landfill_cost(landfill_name)
         if self.model.sa_landfill_costs[0]:
             self.landfill_cost = self.model.sa_landfill_costs[1]
         else:
@@ -1020,6 +1017,34 @@ class Consumers(Agent):
                    self.model.hazardous_waste_management_cost['hoard'] / 1E3 * self.model.dynamic_product_average_wght
         else:
             return self.hoarding_cost
+        
+    # make this method accessible from constructor
+    def get_initial_landfill_cost(self, landfill_name: str):
+        """
+        Get the initial cost of landfill based on the source of landfill
+        cost data. If the source is 'rtn', then get the cost from the rtn
+        model, otherwise get the cost from the regular landfill file.
+        """
+        if self.model.rtn:
+            landfill_cost_row = self.model.landfill_cost_df['Year'] == \
+                self.model.current_date.year & \
+                self.model.landfill_cost_df['Facility Name'] == landfill_name
+            if not landfill_cost_row.empty:
+                if np.isnan(
+                        landfill_cost_row['Cost'].values[0]):
+                    print(f"Warning: Landfill cost for {landfill_name} in {self.model.current_date.year} is NaN. Using infinity as cost.")
+                    landfill_cost = np.inf
+                else:
+                    landfill_cost = landfill_cost_row['Cost'].values[0]
+                return landfill_cost
+            else:
+                raise ValueError(f"Landfill cost data for {landfill_name} in {self.model.current_date.year} not found in RTN model.")
+        else:
+            landfill_cost = self.model.landfill_cost_df.loc[
+            self.model.landfill_cost_df['Facility Name'] == landfill_name,
+            '$/metric ton'].iloc[0]
+
+            return landfill_cost
         
     def get_landfill_cost(self):
         """

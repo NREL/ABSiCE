@@ -169,7 +169,7 @@ class ABM_CE_PV(Model):
                  att_distrib_param_eol= [0.595, 0.1], # [0.805, 0.09],
                  att_distrib_param_reuse=[0.01, 0.185], # [0.223, 0.262],
                  original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
-                 recycling_learning_shape_factor=-0.2, # -0.3,
+                 recycling_learning_shape_factor=-0.01, # -0.3,
                  repairability=0.55,
                  original_repairing_cost=[0.1, 0.45, 0.23],
                  repairing_learning_shape_factor=-0.31,
@@ -261,7 +261,7 @@ class ABM_CE_PV(Model):
                  landfill_solar_waste_acceptance_ratio=0.4,
                  last_step=31,
                  sa_landfill_costs=(False, 0.0037),
-                 file_name={'Landfill data': "Landfills_data.csv",
+                 file_name={'Landfill data': "Landfills_data_2023.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv",
                             'Hazardous landfill data': "Landfills_data_SA.csv",
@@ -837,23 +837,13 @@ class ABM_CE_PV(Model):
                 # If using the RTN model results from Texas A&M University
                 # save the distances to the RTN model folder
                 distance_df.to_csv(os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
+                distance_df2.to_csv(os.path.join(os.path.dirname(__file__), "RTN",
+                                                self.file_names['PCA-landfill distances']))
             else:
                 distance_df.to_csv("../../../TEMP/pca_recycler_distances.csv")
-            distance_df2.to_csv("../../../TEMP/" +
-                                self.file_names['PCA-landfill distances'])
+                distance_df2.to_csv("../../../TEMP/" +
+                                    self.file_names['PCA-landfill distances'])
 
-        if self.rtn:
-            # If using the RTN model results from Texas A&M University
-            # load the recycling costs from the RTN model
-            self.recycler_distance_df = pd.read_csv(
-                os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
-        else:
-            self.recycler_distance_df = pd.read_csv(
-            '../../../TEMP/pca_recycler_distances.csv')
-        self.landfill_distance_df = pd.read_csv(
-            '../../../TEMP/' + self.file_names['PCA-landfill distances'])
-        self.landfill_cost_df = pd.read_csv(
-            '../../../TEMP/' + self.file_names['Landfill data'])
         self.correct_mat_factor = pd.read_csv(
             '../../../TEMP/correct_mat_factor.csv')
         
@@ -866,14 +856,32 @@ class ABM_CE_PV(Model):
             self.correct_mat_factor, self.timestep, scale=False)
         
         self.data = pd.read_excel(reedsFile)  # this is the pca file
-        self.recycling_costs_df = pd.DataFrame()
         if self.rtn:
+            # If using the RTN model results from Texas A&M University
+            # load the recycling and landfill data from the RTN model
+            self.recycler_distance_df = pd.read_csv(
+                os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
             self.recycling_costs_df = pd.read_csv(
                 os.path.join(os.path.dirname(__file__), "RTN", "RecyclingCostsbyYearPCA.csv"))
+            self.landfill_distance_df = pd.read_csv(
+                os.path.join(os.path.dirname(__file__), "RTN",
+                             self.file_names['PCA-landfill distances']))
+            self.landfill_cost_df = pd.read_csv(
+                os.path.join(os.path.dirname(__file__), "RTN",
+                             self.file_names['Landfill data']))
             # If using the RTN model results from Texas A&M University
             # filter the data to include only PCAs that are in the recycling costs DataFrame
             self.data = self.data[self.data['PCA'].isin(
                 self.recycling_costs_df['PCA'].unique())]
+        else:
+            self.recycler_distance_df = pd.read_csv(
+            '../../../TEMP/pca_recycler_distances.csv')
+            self.recycling_costs_df = pd.DataFrame()
+            self.landfill_distance_df = pd.read_csv(
+                '../../../TEMP/' + self.file_names['PCA-landfill distances'])
+            self.landfill_cost_df = pd.read_csv(
+            '../../../TEMP/' + self.file_names['Landfill data'])
+            
         self.agent_pca_map = self.create_agent_pca_map(num_consumers)
         self.pv_ice_yearly_waste = 0
 
