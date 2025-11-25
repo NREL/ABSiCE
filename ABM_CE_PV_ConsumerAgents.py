@@ -15,7 +15,8 @@ from collections import OrderedDict
 from scipy.stats import truncnorm
 import operator
 from math import e
-from utils import transform_timeseries_timestep, GeneratorSize
+from utils import transform_timeseries_timestep, GeneratorSize, ConsumerAgentResolution
+import os
 
 
 
@@ -125,55 +126,23 @@ class Consumers(Agent):
             self.model.init_purchase_choice)
         self.generator_size = GeneratorSize.VERY_SMALL  # Default size
         self.hazardous = False  # Default value, will be set later
+        self.utility_scale_pv_contribution_factor = 1.0
+        self.capacity_contribution_factor = 1.0
 
-        # ! This increases model resolution nothing to do here for now
-        self.pca = self.model.agent_pca_map[self.unique_id][0]
-        self.state = self.model.agent_pca_map[self.unique_id][1]
-        self.agents_per_pca = self.model.agent_pca_map[self.unique_id][2]
-        pca_recyc_transp_dist = self.model.recycler_distance_df.copy()
-        pca_recyc_transp_dist = pca_recyc_transp_dist[self.pca]
-        pca_recyc_transp_dist = pca_recyc_transp_dist.to_list()
-        self.pca_recyc_transp_dist = min(pca_recyc_transp_dist)
-        self.pca_recyc_transp_cost = self.pca_recyc_transp_dist * \
-            self.model.get_transportation_cost(self.hazardous) / 1E3
-            # ! remove weight * \ self.model.dynamic_product_average_wght
-        # ! TODO: change landfill costs
-        pca_landfill_transp_dist = self.model.landfill_distance_df.copy()
-        pca_landfill_transp_dist = pca_landfill_transp_dist[self.pca]
-        pca_landfill_transp_dist = pca_landfill_transp_dist.to_list()
-        self.pca_landfill_transp_dist = min(pca_landfill_transp_dist)
-        self.pca_landfill_transp_cost = self.pca_landfill_transp_dist * \
-            self.model.get_transportation_cost() / 1E3 
-            # ! remove weight * \ self.model.dynamic_product_average_wght
-        landfill_name = self.model.landfill_distance_df.loc[
-            self.model.landfill_distance_df[self.pca] ==
-            self.pca_landfill_transp_dist, 'Facility Name'].iloc[0]
-        self.landfill_cost = self.get_initial_landfill_cost(landfill_name)
+        # ! This increases model resolution nothing to do here for now  
+        self.set_pca_state()
+        self.set_landfill_transport_distance_and_costs()
+        self.set_recycling_transport_distance_and_costs()
+        self.set_hazardous_landfill_transport_distance_and_costs()
+        self.landfill_name = self.get_landfill_name()
+        self.landfill_cost = self.get_initial_landfill_cost(self.landfill_name)
         if self.model.sa_landfill_costs[0]:
             self.landfill_cost = self.model.sa_landfill_costs[1]
         else:
             self.landfill_cost = self.landfill_cost / 1E3 * \
                 self.model.dynamic_product_average_wght  # $/W
         # self.init_landfill_cost = self.landfill_cost
-
-        # initialize hazardous landfill costs and distances
-        pca_hazardous_landfill_transp_dist = \
-            self.model.hazardous_landfill_distance_df.copy()
-        pca_hazardous_landfill_transp_dist = \
-            pca_hazardous_landfill_transp_dist[self.pca].to_list()
-        self.pca_hazardous_landfill_transp_dist = \
-            min(pca_hazardous_landfill_transp_dist)
-        self.pca_hazardous_landfill_transp_cost = \
-            self.pca_hazardous_landfill_transp_dist * \
-            self.model.get_transportation_cost(True) / 1E3
-        self.hazardous_landfill_name = \
-            self.model.hazardous_landfill_distance_df.loc[
-                self.model.hazardous_landfill_distance_df[self.pca] ==
-                self.pca_hazardous_landfill_transp_dist, 'Facility Name'].iloc[0]
-        hazardous_landfills_data = self.model.hazardous_landfill_cost_df.copy()
-        self.hazardous_landfill_cost = hazardous_landfills_data.loc[
-            hazardous_landfills_data['Facility Name'] == self.hazardous_landfill_name,
-            '$/ Ton'].iloc[0]  # in $/ton
+        self.set_contribution_factors()
 
         # ! prepare pvice waste outputs
         self.data_out_pca = pd.read_csv(
@@ -299,14 +268,14 @@ class Consumers(Agent):
             #print(self.unique_id, self.pca_recyc_transp_dist, 
             #      self.model.transportation_cost, 
             #      self.model.dynamic_product_average_wght)
-        self.pca_recyc_transp_cost = self.pca_recyc_transp_dist * \
+        self.recyc_transp_cost = self.recyc_transp_dist * \
             self.model.get_transportation_cost(self.hazardous) / 1E3
             # ! remove weight * \ self.model.dynamic_product_average_wght
-        self.pca_landfill_transp_cost = self.pca_landfill_transp_dist * \
+        self.landfill_transp_cost = self.landfill_transp_dist * \
             self.model.get_transportation_cost() / 1E3
 
-        self.pca_hazardous_landfill_transp_cost = \
-            self.pca_hazardous_landfill_transp_dist * \
+        self.hazardous_landfill_transp_cost = \
+            self.hazardous_landfill_transp_dist * \
             self.model.get_transportation_cost(True) / 1E3
             # ! remove weight * \ self.model.dynamic_product_average_wght
         # self.landfill_cost = \
@@ -536,10 +505,10 @@ class Consumers(Agent):
             self.model.pca_tot_waste_m2[self.pca] += yearly_waste_m2[
                 'Yearly_Sum_Area_atEOL'].iloc[0]
 
-        self.tot_prod_EoL = self.number_product_EoL + \
-            self.number_used_product_EoL
-        self.tot_prod_EoL_m2 = self.number_product_EoL_m2 + \
-            self.number_used_product_EoL_m2
+        self.tot_prod_EoL = (self.number_product_EoL + self.number_used_product_EoL) * \
+            self.capacity_contribution_factor * self.utility_scale_pv_contribution_factor
+        self.tot_prod_EoL_m2 = (self.number_product_EoL_m2 + self.number_used_product_EoL_m2) * \
+            self.capacity_contribution_factor * self.utility_scale_pv_contribution_factor
 
         subset_df_remaining_cap = self.data_out_pca.copy()
         subset_df_remaining_cap = subset_df_remaining_cap[
@@ -1042,8 +1011,7 @@ class Consumers(Agent):
         else:
             landfill_cost = self.model.landfill_cost_df.loc[
             self.model.landfill_cost_df['Facility Name'] == landfill_name,
-            '$/metric ton'].iloc[0]
-
+            '$/metric ton'].values[0]
             return landfill_cost
         
     def get_landfill_cost(self):
@@ -1059,6 +1027,18 @@ class Consumers(Agent):
         else:
             return self.landfill_cost
         
+    def set_pca_state(self):
+        if self.model.consumer_agent_resolution == ConsumerAgentResolution.PCA:
+            self.pca = self.model.agent_pca_map[self.unique_id][0]
+            self.state = self.model.agent_pca_map[self.unique_id][1]
+            self.agents_per_pca = self.model.agent_pca_map[self.unique_id][2]
+        elif self.model.consumer_agent_resolution == ConsumerAgentResolution.SITE:
+            self.pca = self.model.agent_site_map[self.unique_id][2]
+            self.state = self.model.agent_site_map[self.unique_id][3]
+            self.agents_per_pca = 1
+        else:
+            raise ValueError("Invalid consumer agent resolution.")
+        
     def get_pca_landfill_transp_cost(self):
         """
         Get the transportation cost for landfill based on if the waste is
@@ -1067,9 +1047,9 @@ class Consumers(Agent):
         landfill site.
         """
         if self.hazardous:
-            return self.pca_hazardous_landfill_transp_cost
+            return self.hazardous_landfill_transp_cost
         else:
-            return self.pca_landfill_transp_cost
+            return self.landfill_transp_cost
         
     @property
     def number_of_months(self):
@@ -1090,7 +1070,7 @@ class Consumers(Agent):
             if agent.unique_id == self.recycling_facility_id:
                 self.perceived_behavioral_control[2] = (
                     agent.recycling_cost +
-                    self.pca_recyc_transp_cost * 0.0077)  # ! Multiply
+                    self.recyc_transp_cost * 0.0077)  # ! Multiply
                 # ! by average mass per watt instead of dynamic
             elif agent.unique_id == self.refurbisher_id:
                 self.perceived_behavioral_control[0] = \
@@ -1210,6 +1190,95 @@ class Consumers(Agent):
                 self.max_storage_hazardous_years = regulator_thresholds[self.generator_size].max_storage_years
             if regulator_thresholds[self.generator_size].max_storage_kg is not None:
                 self.max_storage_hazardous_kg = regulator_thresholds[self.generator_size].max_storage_kg
+
+    def set_recycling_transport_distance_and_costs(self):
+
+        agent_identifier = str(self.get_agent_identifier())
+        
+        recyc_transp_dist = self.model.recycler_distance_df.copy()
+        recyc_transp_dist = recyc_transp_dist[agent_identifier]
+        recyc_transp_dist = recyc_transp_dist.to_list()
+        self.recyc_transp_dist = min(recyc_transp_dist)
+        self.recyc_transp_cost = self.recyc_transp_dist * \
+            self.model.get_transportation_cost(self.hazardous) / 1E3
+            # ! remove weight * \ self.model.dynamic_product_average_wght
+
+    def set_landfill_transport_distance_and_costs(self):
+
+        agent_identifier = str(self.get_agent_identifier())
+        
+        # ! TODO: change landfill costs
+        landfill_transp_dist = self.model.landfill_distance_df.copy()
+        landfill_transp_dist = landfill_transp_dist[agent_identifier]
+        landfill_transp_dist = landfill_transp_dist.to_list()
+        self.landfill_transp_dist = min(landfill_transp_dist)
+        self.landfill_transp_cost = self.landfill_transp_dist * \
+            self.model.get_transportation_cost() / 1E3 
+            # ! remove weight * \ self.model.dynamic_product_average_wght
+
+    def set_hazardous_landfill_transport_distance_and_costs(self):
+
+        agent_identifier = str(self.get_agent_identifier())
+        # initialize hazardous landfill costs and distances
+        hazardous_landfill_transp_dist = \
+            self.model.hazardous_landfill_distance_df.copy()
+        hazardous_landfill_transp_dist = \
+            hazardous_landfill_transp_dist[agent_identifier].to_list()
+        self.hazardous_landfill_transp_dist = \
+            min(hazardous_landfill_transp_dist)
+        self.hazardous_landfill_transp_cost = \
+            self.hazardous_landfill_transp_dist * \
+            self.model.get_transportation_cost(True) / 1E3
+        self.hazardous_landfill_name = \
+            self.model.hazardous_landfill_distance_df.loc[
+                self.model.hazardous_landfill_distance_df[agent_identifier] ==
+                self.hazardous_landfill_transp_dist, 'Facility Name'].iloc[0]
+        hazardous_landfills_data = self.model.hazardous_landfill_cost_df.copy()
+        self.hazardous_landfill_cost = hazardous_landfills_data.loc[
+            hazardous_landfills_data['Facility Name'] == self.hazardous_landfill_name,
+            '$/ Ton'].iloc[0]  # in $/ton
+        
+    def set_contribution_factors(self):
+        if self.model.consumer_agent_resolution == ConsumerAgentResolution.PCA:
+            self.utility_scale_pv_contribution_factor = 1
+            self.capacity_contribution_factor = 1
+        elif self.model.consumer_agent_resolution == ConsumerAgentResolution.SITE:
+            reeds_data = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                                    'ReEDS', 'StdScen24_annual_balancingAreas_Mid_Case_CO2e_95by2035.xlsx'))
+            row = reeds_data.loc[
+                reeds_data['r'] == self.pca]
+            # If no data found for the PCA, set contribution factor to 1. This
+            # assumes that all PV in the PCA is utility-scale.
+            if row.empty:
+                print(f"Warning: No ReEDS data found for PCA {self.pca}. Setting utility_scale_pv_contribution_factor to 1")
+                self.utility_scale_pv_contribution_factor = 1
+            else:
+                self.utility_scale_pv_contribution_factor = \
+                    row['upv_MW'].values[0] / (row['upv_MW'].values[0] + row['distpv_MW'].values[0])
+
+            agents_in_pca = self.model.uspvdb.loc[
+                self.model.uspvdb['PCA'] == self.pca]
+            total_capacity_in_pca = agents_in_pca['p_cap_ac'].sum()
+            agent_capacity = self.model.uspvdb.loc[
+                self.model.uspvdb['case_id'] == self.get_agent_identifier(), 'p_cap_ac'].values[0]
+            self.capacity_contribution_factor = agent_capacity / total_capacity_in_pca
+            
+        
+    def get_landfill_name(self) -> str:
+
+        agent_identifier = str(self.get_agent_identifier())
+        return self.model.landfill_distance_df.loc[
+                self.model.landfill_distance_df[agent_identifier] == 
+                self.landfill_transp_dist, 'Facility Name'].iloc[0]
+        
+    def get_agent_identifier(self) -> str:
+        
+        if self.model.consumer_agent_resolution == ConsumerAgentResolution.PCA:
+            return self.pca
+        elif self.model.consumer_agent_resolution == ConsumerAgentResolution.SITE:
+            return self.model.agent_site_map[self.unique_id][0]
+        else:
+            raise ValueError("Invalid consumer agent resolution.")
 
     def step(self):
         """

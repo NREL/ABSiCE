@@ -45,6 +45,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                 last_step=number_steps,
                 hazardous_waste_regulation_enabled=False,
                 landfill_solar_waste_acceptance_ratio=1.0,
+                calculate_distances=False,
                 )  # baseline
         elif j < 20:
             model = ABM_CE_PV(
@@ -732,6 +733,6 @@ def get_number_of_steps(number_steps: int, timestep: TIMESTEP):
     else:
         raise ValueError("Unsupported timestep: {}".format(timestep))
 
-run_model(15, 30)
+run_model(10, 30)
 # run_batch(40, 31, list1=['a', 'b', 'c'],list2=['d', 'e', 'f'],
 #          list3=['x', 'y', 'z'])

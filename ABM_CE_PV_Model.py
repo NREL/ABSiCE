@@ -102,7 +102,7 @@ from geopy.geocoders import Nominatim
 import time
 from math import radians, sin, cos, sqrt, atan2
 from pathlib import Path
-from utils import TIMESTEP, transform_timeseries_timestep, transform_pca_timeseries_timestep
+from utils import TIMESTEP, ConsumerAgentResolution, PCA_MISSING_VALUE, transform_timeseries_timestep, transform_pca_timeseries_timestep
 from datetime import datetime
 
 
@@ -116,6 +116,7 @@ class ABM_CE_PV(Model):
                  calibration_n_sensitivity_4=1,
                  calibration_n_sensitivity_5=1,
                  timestep=TIMESTEP.ANNUAL,
+                 consumer_agent_resolution=ConsumerAgentResolution.SITE,
                  num_consumers=1000,
                  consumers_node_degree=10,
                  consumers_network_type="small-world",
@@ -266,7 +267,9 @@ class ABM_CE_PV(Model):
                                 "pca_landfills_distances.csv",
                             'Hazardous landfill data': "Landfills_data_SA.csv",
                             'Hazardous PCA-landfill distances':
-                                "pca_landfills_distances_SA.csv"},):
+                                "pca_landfills_distances_SA.csv",
+                            'Site-landfill distances':
+                                "site_landfills_distances.csv",}):
 
         """Initiate model.
 
@@ -506,6 +509,13 @@ class ABM_CE_PV(Model):
         STATEs = list(rawdf.index.get_level_values('State').unique())
 
         self.file_names = file_name
+
+        # Consumer agent resolution determines what each consumer agent represents
+        self.consumer_agent_resolution = consumer_agent_resolution
+        if self.consumer_agent_resolution == ConsumerAgentResolution.SITE:
+            self.uspvdb = pd.read_excel(os.path.join(
+                os.path.dirname(__file__), 'USPVDB', 'uspvdb_v3_0_20250430_with_pca.xlsx'))
+            self.uspvdb = self.uspvdb[self.uspvdb['PCA'] != PCA_MISSING_VALUE]
 
         GISfile = os.path.join(SupportingMaterialFolder, 'gis_centroid_n.csv')
         GIS = pd.read_csv(GISfile)
@@ -793,62 +803,125 @@ class ABM_CE_PV(Model):
                 c = 2 * atan2(sqrt(a), sqrt(1 - a))
                 return 6371 * c  # Radius of the Earth in kilometers
 
-            # Load the data for PCAs and recyclers from CSV files
-            pca_data = pd.read_csv("../../../TEMP/pca_longlat.csv")  # Replace with your PCA data file
+            def haversine_vectorized(lat1: np.ndarray, lon1: np.ndarray, lat2: np.ndarray, lon2: np.ndarray) -> np.ndarray:
+                # Convert latitude and longitude from degrees to radians
+                lat1, lon1, lat2, lon2 = map(np.radians,
+                                             [lat1, lon1, lat2, lon2])
+
+                # Haversine formula
+                # Convert inputs to 2D arrays for broadcasting
+                # Let M and N be the lengths of lat1/lon1 and lat2/lon2 respectively
+                # Before broadcasting:
+                # lat1, lon1: shape (M,)
+                # lat2, lon2: shape (N,)
+                # After broadcasting: 
+                # lat2 and lon2 become shape (N, 1)
+                # Resulting distance matrix will have shape (N, M)
+                # This computes distances from each point in (lat2, lon2) to all points in (lat1, lon1)
+                dlon = lon2[:, np.newaxis] - lon1 
+                dlat = lat2[:, np.newaxis] - lat1 
+                a = np.sin(dlat / 2)**2 + np.cos(lat1[np.newaxis, :]) * np.cos(lat2[:, np.newaxis]) * \
+                    np.sin(dlon / 2)**2
+                c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+                return 6371 * c  # Radius of the Earth in kilometers
+            
             landfills_data = pd.read_csv("../../../TEMP/" +
-                                         self.file_names['Landfill data'])
+                                            self.file_names['Landfill data'])
+                
+            if self.consumer_agent_resolution == ConsumerAgentResolution.PCA:
+                # Load the data for PCAs and recyclers from CSV files
+                pca_data = pd.read_csv("../../../TEMP/pca_longlat.csv")  # Replace with your PCA data file
 
-            # Create an empty DataFrame to store distances
-            distance_df = pd.DataFrame(columns=pca_data['PCA'],
-                                       index=self.recycler_data['Recycler Name'])
-            distance_df2 = pd.DataFrame(columns=pca_data['PCA'],
-                                        index=landfills_data['Facility Name'])
+                # Create an empty DataFrame to store distances
+                distance_df = pd.DataFrame(columns=pca_data['PCA'],
+                                        index=self.recycler_data['Recycler Name'])
+                distance_df2 = pd.DataFrame(columns=pca_data['PCA'],
+                                            index=landfills_data['Facility Name'])
 
-            # Calculate distances between each PCA and each recycler
-            for pca_index, pca_row in pca_data.iterrows():
-                pca_lat = pca_row['Lat']
-                pca_lon = pca_row['Long']
+                # Calculate distances between each PCA and each recycler
+                for pca_index, pca_row in pca_data.iterrows():
+                    pca_lat = pca_row['Lat']
+                    pca_lon = pca_row['Long']
 
-                for recycler_index, recycler_row in self.recycler_data.iterrows():
-                    recycler_lat = recycler_row['Latitude']
-                    recycler_lon = recycler_row['Longitude']
-                    distance = haversine(float(pca_lat), float(pca_lon),
-                                         float(recycler_lat),
-                                         float(recycler_lon))
+                    for recycler_index, recycler_row in self.recycler_data.iterrows():
+                        recycler_lat = recycler_row['Latitude']
+                        recycler_lon = recycler_row['Longitude']
+                        distance = haversine(float(pca_lat), float(pca_lon),
+                                            float(recycler_lat),
+                                            float(recycler_lon))
 
-                    # Fill in the distance in the DataFrame
-                    distance_df.at[recycler_row['Recycler Name'],
-                                   pca_row['PCA']] = distance
+                        # Fill in the distance in the DataFrame
+                        distance_df.at[recycler_row['Recycler Name'],
+                                    pca_row['PCA']] = distance
 
-                for landfills_index, landfills_row in \
-                        landfills_data.iterrows():
-                    landfills_lat = landfills_row['Latitude']
-                    landfills_lon = landfills_row['Longitude']
+                    for landfills_index, landfills_row in \
+                            landfills_data.iterrows():
+                        landfills_lat = landfills_row['Latitude']
+                        landfills_lon = landfills_row['Longitude']
 
-                    distance2 = haversine(pca_lat, pca_lon,
-                                          landfills_lat, landfills_lon)
+                        distance2 = haversine(pca_lat, pca_lon,
+                                            landfills_lat, landfills_lon)
 
-                    # Fill in the distance in the DataFrame
-                    distance_df2.at[landfills_row['Facility Name'],
-                                    pca_row['PCA']] = distance2
+                        # Fill in the distance in the DataFrame
+                        distance_df2.at[landfills_row['Facility Name'],
+                                        pca_row['PCA']] = distance2
 
-            # Save the distances to a CSV file
-            if self.rtn:
-                # If using the RTN model results from Texas A&M University
-                # save the distances to the RTN model folder
-                distance_df.to_csv(os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
-                distance_df2.to_csv(os.path.join(os.path.dirname(__file__), "RTN",
-                                                self.file_names['PCA-landfill distances']))
-            else:
-                distance_df.to_csv("../../../TEMP/pca_recycler_distances.csv")
-                distance_df2.to_csv("../../../TEMP/" +
-                                    self.file_names['PCA-landfill distances'])
+                # Save the distances to a CSV file
+                if self.rtn:
+                    # If using the RTN model results from Texas A&M University
+                    # save the distances to the RTN model folder
+                    distance_df.to_csv(os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
+                    distance_df2.to_csv(os.path.join(os.path.dirname(__file__), "RTN",
+                                                    self.file_names['PCA-landfill distances']))
+                else:
+                    distance_df.to_csv("../../../TEMP/pca_recycler_distances.csv")
+                    distance_df2.to_csv("../../../TEMP/" +
+                                        self.file_names['PCA-landfill distances'])
+                
+            if self.consumer_agent_resolution == ConsumerAgentResolution.SITE:
+                uspvdb = pd.read_excel(os.path.join(
+                    os.path.dirname(__file__), 'USPVDB',
+                    'uspvdb_v3_0_20250430_with_pca.xlsx'))
+                uspvdb = uspvdb[uspvdb['PCA'] != PCA_MISSING_VALUE]
+
+                # Calculate distances between each site and each recycler and landfill
+                
+                site_lats = uspvdb['Latitude'].to_numpy().astype(float)
+                site_lons = uspvdb['Longitude'].to_numpy().astype(float)
+                recycler_lats = self.recycler_data['Latitude'].to_numpy().astype(float)
+                recycler_lons = self.recycler_data['Longitude'].to_numpy().astype(float)
+                landfill_lats = landfills_data['Latitude'].to_numpy().astype(float)
+                landfill_lons = landfills_data['Longitude'].to_numpy().astype(float)
+
+                distance_matrix_recycler = haversine_vectorized(
+                    site_lats, site_lons, recycler_lats, recycler_lons)
+                distance_matrix_landfill = haversine_vectorized(
+                    site_lats, site_lons, landfill_lats, landfill_lons)
+                
+                landfill_distance_df = pd.DataFrame(distance_matrix_landfill,
+                                                        index=landfills_data['Facility Name'],
+                                                        columns=uspvdb['case_id'])
+                                                    
+                site_recycler_distance_df = pd.DataFrame(distance_matrix_recycler,
+                                                        index=self.recycler_data['Recycler Name'],
+                                                        columns=uspvdb['case_id'])
+                site_recycler_distance_df.to_csv("../../../TEMP/site_recycler_distances.csv")
+                landfill_distance_df.to_csv("../../../TEMP/site_landfill_distances.csv")
+
+                hazardous_landfills_data = pd.read_csv("../../../TEMP/Landfills_data_SA.csv")
+                hazardous_landfill_lats = hazardous_landfills_data['Latitude'].to_numpy().astype(float)
+                hazardous_landfill_lons = hazardous_landfills_data['Longitude'].to_numpy().astype(float)
+                hazardous_landfill_distance_matrix = haversine_vectorized(
+                    site_lats, site_lons, hazardous_landfill_lats, hazardous_landfill_lons)
+                hazardous_landfill_distance_df = pd.DataFrame(hazardous_landfill_distance_matrix,
+                                                        index=hazardous_landfills_data['Facility Name'],
+                                                        columns=uspvdb['case_id'])
+                hazardous_landfill_distance_df.to_csv(
+                    os.path.join(
+                        os.path.dirname(__file__), "TEMP", 'hazardous_site_landfill_distances.csv'))
 
         self.correct_mat_factor = pd.read_csv(
-            '../../../TEMP/correct_mat_factor.csv')
-        
-        self.hazardous_landfill_distance_df = pd.read_csv(
-            '../../../TEMP/' + self.file_names['Hazardous PCA-landfill distances'])
+            '../../../TEMP/correct_mat_factor.csv')    
         self.hazardous_landfill_cost_df = pd.read_csv(
             '../../../TEMP/' + self.file_names['Hazardous landfill data'])
 
@@ -856,6 +929,7 @@ class ABM_CE_PV(Model):
             self.correct_mat_factor, self.timestep, scale=False)
         
         self.data = pd.read_excel(reedsFile)  # this is the pca file
+
         if self.rtn:
             # If using the RTN model results from Texas A&M University
             # load the recycling and landfill data from the RTN model
@@ -874,20 +948,36 @@ class ABM_CE_PV(Model):
             self.data = self.data[self.data['PCA'].isin(
                 self.recycling_costs_df['PCA'].unique())]
         else:
-            self.recycler_distance_df = pd.read_csv(
-            '../../../TEMP/pca_recycler_distances.csv')
+            if consumer_agent_resolution == ConsumerAgentResolution.PCA:
+
+                self.recycler_distance_df = pd.read_csv(
+                '../../../TEMP/pca_recycler_distances.csv')
+                self.landfill_distance_df = pd.read_csv(
+                    '../../../TEMP/' + self.file_names['PCA-landfill distances'])
+                self.hazardous_landfill_distance_df = pd.read_csv(
+            '../../../TEMP/' + self.file_names['Hazardous PCA-landfill distances'])
+                
+            elif consumer_agent_resolution == ConsumerAgentResolution.SITE:
+
+                self.recycler_distance_df = pd.read_csv(
+                '../../../TEMP/site_recycler_distances.csv')
+                self.landfill_distance_df = pd.read_csv(
+                    '../../../TEMP/site_landfill_distances.csv')
+                self.hazardous_landfill_distance_df = pd.read_csv(
+            '../../../TEMP/hazardous_site_landfill_distances.csv')
             self.recycling_costs_df = pd.DataFrame()
-            self.landfill_distance_df = pd.read_csv(
-                '../../../TEMP/' + self.file_names['PCA-landfill distances'])
             self.landfill_cost_df = pd.read_csv(
             '../../../TEMP/' + self.file_names['Landfill data'])
-            
-        self.agent_pca_map = self.create_agent_pca_map(num_consumers)
+
         self.pv_ice_yearly_waste = 0
 
-        self.num_consumers = num_consumers
+        self.num_consumers = self.get_num_consumers(num_consumers)
         self.consumers_node_degree = consumers_node_degree
         self.consumers_network_type = consumers_network_type
+        if self.consumer_agent_resolution is ConsumerAgentResolution.PCA:
+            self.agent_pca_map = self.create_agent_pca_map(self.num_consumers)
+        elif self.consumer_agent_resolution is ConsumerAgentResolution.SITE:
+            self.agent_site_map = self.create_agent_site_map()
         self.num_recyclers = len(self.recycler_distance_df[
             'Recycler Name'].unique())
         self.recycler_names = self.recycler_distance_df[
@@ -1082,9 +1172,9 @@ class ABM_CE_PV(Model):
         self.update_dynamic_lifetime()
         self.original_recycling_cost = original_recycling_cost
         self.recycling_process = recycling_process
-        self.list_consumer_id = list(range(num_consumers))
+        self.list_consumer_id = list(range(self.num_consumers))
         random.shuffle(self.list_consumer_id)
-        self.list_consumer_id_seed = list(range(num_consumers))
+        self.list_consumer_id_seed = list(range(self.num_consumers))
         random.shuffle(self.list_consumer_id_seed)
         # Change recovery fractions and recycling costs depending on recycling
         # process
@@ -1392,6 +1482,24 @@ class ABM_CE_PV(Model):
                 state = state_values.sample().iloc[0]
                 agents[agent_id] = (pca_value, state, agents_count)
                 agent_id += 1
+
+        return agents
+    
+    def create_agent_site_map(self):
+        case_ids = self.uspvdb['case_id'].unique()
+        agents = {}
+        agent_id = 0
+
+        for i, case_id in enumerate(case_ids):
+            site_name = self.uspvdb.loc[self.uspvdb['case_id'] == case_id,
+                                        'p_name'].iloc[0]
+            state_value = self.uspvdb.loc[self.uspvdb['case_id'] == case_id,
+                                           'p_state'].iloc[0]
+            pca_value = self.uspvdb.loc[self.uspvdb['p_name'] == site_name,
+                                        'PCA'].iloc[0]
+            agents[agent_id] = (case_id, site_name, pca_value, state_value)
+            agent_id += 1
+        print(f"Example agent-site mapping: {agents[0]}")
 
         return agents
     
@@ -1878,6 +1986,18 @@ class ABM_CE_PV(Model):
             weibull_scale = mu_age / gamma(1 + 1 / weibull_shape)
             latent = np.random.weibull(weibull_shape) * weibull_scale
         return latent > cutoff
+
+    def get_num_consumers(self, target_num_consumers: int) -> int:
+        """
+        Calculate the number of consumer agents based on the agent resolution.
+        """
+
+        if self.consumer_agent_resolution == ConsumerAgentResolution.PCA:
+            return target_num_consumers
+        elif self.consumer_agent_resolution == ConsumerAgentResolution.SITE:
+            return self.uspvdb.shape[0]
+        
+        raise ValueError("Invalid agent resolution specified.")
 
     def step(self):
         """
