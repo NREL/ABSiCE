@@ -82,7 +82,7 @@ outputs.
 #    if times allows
 
 from mesa import Model
-from ABM_CE_PV_ConsumerAgents import Consumers
+from ABM_CE_PV_ConsumerAgents import Consumers, report_output_consumer
 from ABM_CE_PV_RecyclerAgents import Recyclers
 from ABM_CE_PV_RefurbisherAgents import Refurbishers
 from ABM_CE_PV_ProducerAgents import Producers
@@ -117,6 +117,7 @@ class ABM_CE_PV(Model):
                  calibration_n_sensitivity_5=1,
                  timestep=TIMESTEP.ANNUAL,
                  consumer_agent_resolution=ConsumerAgentResolution.SITE,
+                 model_states=None,
                  num_consumers=1000,
                  consumers_node_degree=10,
                  consumers_network_type="small-world",
@@ -289,6 +290,9 @@ class ABM_CE_PV(Model):
             timestep (TIMESTEP, optional): time step of the model. Defaults to
                 TIMESTEP.ANNUAL. Scaling is applied linearly to the model data
                 to match the time step.
+            consumer_agent_resolution (ConsumerAgentResolution, optional): Determines the resolution of consumer agents in the model.
+                Defaults to ConsumerAgentResolution.PCA.
+            model_states (list, optional): list of US states to model. Defaults to None (which means all states).
             num_consumers (int, optional): number of consumers.
                 Defaults to 1000.
             consumers_node_degree (int, optional): average node degree in the
@@ -483,6 +487,7 @@ class ABM_CE_PV(Model):
         self.seed = seed
         self.timestep = timestep
         self.rtn = rtn
+        self.model_states = model_states
 
         #Set path for data saving
         testfolder = str(Path().resolve() / 'PV_ICE' / 'TEMP' / 'PCA')
@@ -512,10 +517,25 @@ class ABM_CE_PV(Model):
 
         # Consumer agent resolution determines what each consumer agent represents
         self.consumer_agent_resolution = consumer_agent_resolution
+        # Load the USPVDB and ReEDS data if using site-level consumer agents
+        # this is needed to map sites to PCAs and get the utility-scale PV contribution factors
+        # If using PCA-level consumer agents, need to load the pca_longlat file instead
         if self.consumer_agent_resolution == ConsumerAgentResolution.SITE:
             self.uspvdb = pd.read_excel(os.path.join(
                 os.path.dirname(__file__), 'USPVDB', 'uspvdb_v3_0_20250430_with_pca.xlsx'))
             self.uspvdb = self.uspvdb[self.uspvdb['PCA'] != PCA_MISSING_VALUE]
+
+            if self.model_states is not None:
+                self.uspvdb = self.uspvdb[self.uspvdb['p_state'].isin(self.model_states)]
+
+            self.reeds_data = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                                    'ReEDS', 'StdScen24_annual_balancingAreas_Mid_Case_CO2e_95by2035.xlsx'))
+            if self.model_states is not None:
+                self.reeds_data = self.reeds_data[self.reeds_data['state'].isin(self.model_states)]
+            # Pre-calculate utility-scale PV contribution factor for each PCA
+            self.reeds_data['utility_scale_pv_contribution_factor'] = \
+            self.reeds_data['upv_MW'] / (self.reeds_data['upv_MW'] +
+                                    self.reeds_data['distpv_MW'])
 
         GISfile = os.path.join(SupportingMaterialFolder, 'gis_centroid_n.csv')
         GIS = pd.read_csv(GISfile)
@@ -766,6 +786,10 @@ class ABM_CE_PV(Model):
                 self.df = self.df.join(self.year_column)
                 self.df.to_csv(output_filename, index=False)
 
+        # Load PCA data if needed for distance calculations and for consumer agent reporting
+        if self.consumer_agent_resolution == ConsumerAgentResolution.PCA:
+            self.pca_data = pd.read_csv("../../../TEMP/pca_longlat.csv")  # Replace with your PCA data file
+
         if pv_ice:
 
             testfolder = str(Path().resolve().parent.parent)
@@ -829,17 +853,15 @@ class ABM_CE_PV(Model):
                                             self.file_names['Landfill data'])
                 
             if self.consumer_agent_resolution == ConsumerAgentResolution.PCA:
-                # Load the data for PCAs and recyclers from CSV files
-                pca_data = pd.read_csv("../../../TEMP/pca_longlat.csv")  # Replace with your PCA data file
 
                 # Create an empty DataFrame to store distances
-                distance_df = pd.DataFrame(columns=pca_data['PCA'],
+                distance_df = pd.DataFrame(columns=self.pca_data['PCA'],
                                         index=self.recycler_data['Recycler Name'])
-                distance_df2 = pd.DataFrame(columns=pca_data['PCA'],
+                distance_df2 = pd.DataFrame(columns=self.pca_data['PCA'],
                                             index=landfills_data['Facility Name'])
 
                 # Calculate distances between each PCA and each recycler
-                for pca_index, pca_row in pca_data.iterrows():
+                for pca_index, pca_row in self.pca_data.iterrows():
                     pca_lat = pca_row['Lat']
                     pca_lon = pca_row['Long']
 
@@ -879,15 +901,11 @@ class ABM_CE_PV(Model):
                                         self.file_names['PCA-landfill distances'])
                 
             if self.consumer_agent_resolution == ConsumerAgentResolution.SITE:
-                uspvdb = pd.read_excel(os.path.join(
-                    os.path.dirname(__file__), 'USPVDB',
-                    'uspvdb_v3_0_20250430_with_pca.xlsx'))
-                uspvdb = uspvdb[uspvdb['PCA'] != PCA_MISSING_VALUE]
 
                 # Calculate distances between each site and each recycler and landfill
                 
-                site_lats = uspvdb['Latitude'].to_numpy().astype(float)
-                site_lons = uspvdb['Longitude'].to_numpy().astype(float)
+                site_lats = self.uspvdb['Latitude'].to_numpy().astype(float)
+                site_lons = self.uspvdb['Longitude'].to_numpy().astype(float)
                 recycler_lats = self.recycler_data['Latitude'].to_numpy().astype(float)
                 recycler_lons = self.recycler_data['Longitude'].to_numpy().astype(float)
                 landfill_lats = landfills_data['Latitude'].to_numpy().astype(float)
@@ -900,11 +918,11 @@ class ABM_CE_PV(Model):
                 
                 landfill_distance_df = pd.DataFrame(distance_matrix_landfill,
                                                         index=landfills_data['Facility Name'],
-                                                        columns=uspvdb['case_id'])
+                                                        columns=self.uspvdb['case_id'])
                                                     
                 site_recycler_distance_df = pd.DataFrame(distance_matrix_recycler,
                                                         index=self.recycler_data['Recycler Name'],
-                                                        columns=uspvdb['case_id'])
+                                                        columns=self.uspvdb['case_id'])
                 site_recycler_distance_df.to_csv("../../../TEMP/site_recycler_distances.csv")
                 landfill_distance_df.to_csv("../../../TEMP/site_landfill_distances.csv")
 
@@ -915,7 +933,7 @@ class ABM_CE_PV(Model):
                     site_lats, site_lons, hazardous_landfill_lats, hazardous_landfill_lons)
                 hazardous_landfill_distance_df = pd.DataFrame(hazardous_landfill_distance_matrix,
                                                         index=hazardous_landfills_data['Facility Name'],
-                                                        columns=uspvdb['case_id'])
+                                                        columns=self.uspvdb['case_id'])
                 hazardous_landfill_distance_df.to_csv(
                     os.path.join(
                         os.path.dirname(__file__), "TEMP", 'hazardous_site_landfill_distances.csv'))
@@ -930,6 +948,11 @@ class ABM_CE_PV(Model):
         
         self.data = pd.read_excel(reedsFile)  # this is the pca file
 
+        # Filter to only include specified model states
+        if self.model_states is not None:
+            print("Model will run for the following states:", self.model_states)
+            self.data = self.data[self.data['State'].isin(self.model_states)]
+
         if self.rtn:
             # If using the RTN model results from Texas A&M University
             # load the recycling and landfill data from the RTN model
@@ -943,10 +966,6 @@ class ABM_CE_PV(Model):
             self.landfill_cost_df = pd.read_csv(
                 os.path.join(os.path.dirname(__file__), "RTN",
                              self.file_names['Landfill data']))
-            # If using the RTN model results from Texas A&M University
-            # filter the data to include only PCAs that are in the recycling costs DataFrame
-            self.data = self.data[self.data['PCA'].isin(
-                self.recycling_costs_df['PCA'].unique())]
         else:
             if consumer_agent_resolution == ConsumerAgentResolution.PCA:
 
@@ -1007,7 +1026,11 @@ class ABM_CE_PV(Model):
         # self.pca = self.create_agents(num_consumers)[self.unique_id][0]
         all_pca_df_in = pd.DataFrame()
         all_pca_df_out = pd.DataFrame()
-        for pca in PCAs:
+        valid_pcas = PCAs
+        # Filter to only include specified model states
+        if self.model_states is not None:
+            valid_pcas = self.data[self.data['State'].isin(self.model_states)]['PCA'].unique().tolist()
+        for pca in valid_pcas:
             subset_df_init_cap = pd.read_csv(
                 "datain_95-by-35.Adv_" + pca + "_.csv")
             subset_df_init_cap['pca'] = pca
@@ -1081,12 +1104,7 @@ class ABM_CE_PV(Model):
         self.pca_install = {}
         self.pca_tot_waste_w = {}
         self.pca_tot_waste_m2 = {}
-        for pca in PCAs:
-            # If using the RTN model results from Texas A&M University
-            # check if the PCA is in the recycling costs DataFrame
-            if self.rtn:
-                if pca not in self.recycling_costs_df['PCA'].unique():
-                    continue
+        for pca in valid_pcas:
             pathway_dict = {}
             for pathway in self.all_EoL_pathways.keys():
                 pathway_dict[pathway] = 0
@@ -1307,8 +1325,6 @@ class ABM_CE_PV(Model):
         # Defines reporters and set up data collector
         ABM_CE_PV_model_reporters = {
             **self.get_temporal_data(),
-            "Average weight of waste": lambda c:
-            self.report_output("weight"),
             "Agents repairing": lambda c: self.count_EoL("repairing"),
             "Agents selling": lambda c: self.count_EoL("selling"),
             "Agents recycling": lambda c: self.count_EoL("recycling"),
@@ -1317,69 +1333,6 @@ class ABM_CE_PV(Model):
             "Agents buying new": lambda c: self.count_EoL("buy_new"),
             "Agents buying used": lambda c: self.count_EoL("buy_used"),
             "Agents buying certified": lambda c: self.count_EoL("certified"),
-            "Total product": lambda c:
-            self.report_output("product_stock"),
-            "New product": lambda c:
-            self.report_output("product_stock_new"),
-            "Used product": lambda c:
-            self.report_output("product_stock_used"),
-            "New product_mass": lambda c:
-            self.report_output("prod_stock_new_mass"),
-            "Used product_mass": lambda c:
-            self.report_output("prod_stock_used_mass"),
-            "End-of-life - repaired": lambda c:
-            self.report_output("product_repaired"),
-            "End-of-life - sold": lambda c: self.report_output("product_sold"),
-            "End-of-life - recycled": lambda c:
-            self.report_output("product_recycled"),
-            "End-of-life - landfilled": lambda c:
-            self.report_output("product_landfilled"),
-            "End-of-life - stored": lambda c:
-            self.report_output("product_hoarded"),
-            "eol - new repaired weight": lambda c:
-            self.report_output("product_new_repaired"),
-            "eol - new sold weight": lambda c:
-            self.report_output("product_new_sold"),
-            "eol - new recycled weight": lambda c:
-            self.report_output("product_new_recycled"),
-            "eol - new landfilled weight": lambda c:
-            self.report_output("product_new_landfilled"),
-            "eol - new stored weight": lambda c:
-            self.report_output("product_new_hoarded"),
-            "eol - used repaired weight": lambda c:
-            self.report_output("product_used_repaired"),
-            "eol - used sold weight": lambda c:
-            self.report_output("product_used_sold"),
-            "eol - used recycled weight": lambda c:
-            self.report_output("product_used_recycled"),
-            "eol - used landfilled weight": lambda c:
-            self.report_output("product_used_landfilled"),
-            "eol - used stored weight": lambda c:
-            self.report_output("product_used_hoarded"),
-            "Average landfilling cost": lambda c:
-            self.report_output("average_landfill_cost"),
-            "Average storing cost": lambda c:
-            self.report_output("average_hoarding_cost"),
-            "Average recycling cost": lambda c:
-            self.report_output("average_recycling_cost"),
-            "Average repairing cost": lambda c:
-            self.report_output("average_repairing_cost"),
-            "Average selling cost": lambda c:
-            self.report_output("average_second_hand_price"),
-            "Recycled material volume": lambda c:
-            self.report_output("recycled_mat_volume"),
-            "Recycled material value": lambda c:
-            self.report_output("recycled_mat_value"),
-            "Producer costs": lambda c:
-            self.report_output("producer_costs"),
-            "Consumer costs": lambda c:
-            self.report_output("consumer_costs"),
-            "Recycler costs": lambda c:
-            self.report_output("recycler_costs"),
-            "Refurbisher costs": lambda c:
-            self.report_output("refurbisher_costs"),
-            "Refurbisher costs w margins": lambda c:
-            self.report_output("refurbisher_costs_w_margins"),
             "Waste (kg) by pca": lambda c: str(self.pca_outputs),
             "Waste (kg) refurbishers": lambda c: str(
                 self.refurbisher_outputs_kg),
@@ -1388,49 +1341,30 @@ class ABM_CE_PV(Model):
             "Tot install (W) by pca": lambda c: str(self.pca_install),
             "Tot install (W) by pca TEST": lambda c: str(
                 self.pca_install_test)}
-
-        ABM_CE_PV_agent_reporters = {
-            **self.get_temporal_data(),
-            "Number_product_repaired":
-                lambda a: getattr(a, "number_product_repaired", None),
-            "Number_product_sold":
-                lambda a: getattr(a, "number_product_sold", None),
-            "Number_product_recycled":
-                lambda a: getattr(a, "number_product_recycled", None),
-            "Number_product_landfilled":
-                lambda a: getattr(a, "number_product_landfilled", None),
-            "Number_product_hoarded":
-                lambda a: getattr(a, "number_product_hoarded", None),
-            "Recycling":
-                lambda a: getattr(a, "EoL_pathway", None),
-            "Landfilling costs":
-                lambda a: getattr(a, "landfill_cost", None),
-            "Storing costs":
-                lambda a: getattr(a, "hoarding_cost", None),
-            "Recycling costs":
-                lambda a: getattr(a, "recycling_cost", None),
-            "Repairing costs":
-                lambda a: getattr(a, "repairing_cost", None),
-            "Selling costs":
-                lambda a: getattr(a, "scd_hand_price", None),
-            "Material produced":
-                lambda a: getattr(a, "material_produced", None),
-            "Recycled volume":
-                lambda a: getattr(a, "recycled_material_volume", None),
-            "Recycled value":
-                lambda a: getattr(a, "recycled_material_value", None),
-            "Producer costs":
-                lambda a: getattr(a, "producer_costs", None),
-            "Consumer costs":
-                lambda a: getattr(a, "consumer_costs", None),
-            "Recycler costs":
-                lambda a: getattr(a, "recycler_costs", None),
-            "Refurbisher costs":
-                lambda a: getattr(a, "refurbisher_costs", None)}
+        
+        ABM_CE_PV_agenttype_reporters = {
+            Consumers: {
+                **self.get_temporal_data(),
+                "PCA": lambda a: getattr(a, "pca", None),
+                "State": lambda a: getattr(a, "state", None),
+                "Name": lambda a: report_output_consumer(a, "name"),
+                "Latitude": lambda a: report_output_consumer(a, "latitude"),
+                "Longitude": lambda a: report_output_consumer(a, "longitude"),
+                "Waste Repair (Kg)": lambda a: report_output_consumer(a, "repair_kg"),
+                "Waste Sell (Kg)": lambda a: report_output_consumer(a, "sell_kg"),
+                "Waste Recycle (Kg)": lambda a: report_output_consumer(a, "recycle_kg"),
+                "Waste Landfill (Kg)": lambda a: report_output_consumer(a, "landfill_kg"),
+                "Waste Hoard (Kg)": lambda a: report_output_consumer(a, "hoard_kg"),
+                "Total Waste (W)": lambda a: report_output_consumer(a, "total_waste_W"),
+                "Total Waste (m2)": lambda a: report_output_consumer(a, "total_waste_m2"),
+                "Installed Capacity (W)": lambda a: report_output_consumer(a, "total_installed_capacity_W")
+            }
+        }
 
         self.datacollector = DataCollector(
             model_reporters=ABM_CE_PV_model_reporters,
-            agent_reporters=ABM_CE_PV_agent_reporters)
+            agenttype_reporters=ABM_CE_PV_agenttype_reporters
+        )
 
     # ## New edits
     def pv_ice_waste_calculation(self, clock, pv_ice_outputs):
@@ -1486,6 +1420,9 @@ class ABM_CE_PV(Model):
         return agents
     
     def create_agent_site_map(self):
+        """
+        Create a mapping of agent ids to their respective site names, PCA, and state.
+        """
         case_ids = self.uspvdb['case_id'].unique()
         agents = {}
         agent_id = 0
@@ -1499,7 +1436,6 @@ class ABM_CE_PV(Model):
                                         'PCA'].iloc[0]
             agents[agent_id] = (case_id, site_name, pca_value, state_value)
             agent_id += 1
-        print(f"Example agent-site mapping: {agents[0]}")
 
         return agents
     
