@@ -1355,7 +1355,10 @@ def report_output_consumer(agent: Consumers, field: str) -> any:
     :return: The value of the specified field.
     """
     if field == "name":
-        return agent.model.agent_site_map[agent.unique_id][1]
+        if agent.model.consumer_agent_resolution == ConsumerAgentResolution.PCA:
+            return f"{agent.pca}_{agent.unique_id}"
+        elif agent.model.consumer_agent_resolution == ConsumerAgentResolution.SITE:
+            return agent.model.agent_site_map[agent.unique_id][1]
     elif field in ["latitude", "longitude"]:
         lat, lon = agent._get_agent_lat_lon()
         return lat if field == "latitude" else lon
