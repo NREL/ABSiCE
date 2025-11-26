@@ -35,11 +35,11 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         number_steps (int): Number of steps in years.
         timestep (TIMESTEP): Time step of the simulation, default is annual.
         """
+    number_steps = get_number_of_steps(number_steps, timestep)
     for j in range(number_run):
         # Reinitialize model
         # j = j + 43
         t0 = time.time()
-        number_steps = get_number_of_steps(number_steps, timestep)
         if j < 10:
             model = ABM_CE_PV(
                 seed=(j), 
@@ -47,7 +47,8 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                 hazardous_waste_regulation_enabled=False,
                 landfill_solar_waste_acceptance_ratio=1.0,
                 calculate_distances=False,
-                model_states=['TX', 'AZ', 'NV', 'NM']
+                model_states=['TX', 'AZ', 'NV', 'NM'],
+                timestep=timestep,
                 )  # baseline
         elif j < 20:
             model = ABM_CE_PV(
@@ -567,12 +568,12 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
             model.step()
         # Get results in a pandas DataFrame
         results_model = model.datacollector.get_model_vars_dataframe()
-        results_agents = model.datacollector.get_agent_vars_dataframe()
+        # results_agents = model.datacollector.get_agent_vars_dataframe()
         results_agents_consumers = model.datacollector.get_agenttype_vars_dataframe(agent_type=Consumers)
         results_agents_consumers.reset_index(inplace=True)
         results_agents_consumers.drop(columns=['Step', 'AgentID'], inplace=True)
         # Draw figures
-        draw_graphs(False, False, model, results_agents, results_model)
+        # draw_graphs(False, False, model, results_agents, results_model)
         print("Run", j+1, "out of", number_run)
         t1 = time.time()
         print(t1 - t0)
@@ -740,6 +741,6 @@ def get_number_of_steps(number_steps: int, timestep: TIMESTEP):
     else:
         raise ValueError("Unsupported timestep: {}".format(timestep))
 
-run_model(10, 30)
+run_model(10, 15, timestep=TIMESTEP.ANNUAL)
 # run_batch(40, 31, list1=['a', 'b', 'c'],list2=['d', 'e', 'f'],
 #          list3=['x', 'y', 'z'])

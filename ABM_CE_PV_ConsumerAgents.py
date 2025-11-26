@@ -370,8 +370,10 @@ class Consumers(Agent):
         subset_df_cap = self.data_in_pca.copy()
         subset_df_cap = subset_df_cap[
             subset_df_cap['date'] == self.model.current_date]
+        # Multiply by the capacity contribution factor to account for the
+        # contribution of the agent based on its resolution (PCA or site-level).
         additional_capacity = subset_df_cap[
-            'new_Installed_Capacity_[MW]'].iloc[0]
+            'new_Installed_Capacity_[MW]'].iloc[0] * self.capacity_contribution_factor
         return additional_capacity
 
     def update_product_stock(self):
@@ -1268,7 +1270,7 @@ class Consumers(Agent):
                 (self.model.reeds_data['r'] == self.pca) & (self.model.reeds_data['t'] <= self.model.current_date.year)
             ]
             if row.empty:
-                print(f"Warning: No REEDS data found for PCA {self.pca} in year {self.model.current_date.year}. Setting contribution factors to 1")
+                # print(f"Warning: No REEDS data found for PCA {self.pca} in year {self.model.current_date.year}. Setting contribution factors to 1")
                 self.utility_scale_pv_contribution_factor = 1
             else:
                 self.utility_scale_pv_contribution_factor = row['utility_scale_pv_contribution_factor'].values[-1]
