@@ -94,6 +94,7 @@ class Consumers(Agent):
         self.number_product_EoL = 0
         self.number_used_product_EoL = 0
         self.tot_prod_EoL = 0
+        self.tot_prod_EoL_m2 = 0
         self.number_product_repaired = 0
         self.number_product_sold = 0
         self.number_product_recycled = 0
@@ -360,6 +361,19 @@ class Consumers(Agent):
             self.w_sn_eol = 0
             self.w_a_eol = 0
 
+    def get_additional_capacity(self) -> float:
+        """
+        Get additional capacity installed by the agent in the current time
+        step.
+        :return: Additional capacity installed (in W).
+        """
+        subset_df_cap = self.data_in_pca.copy()
+        subset_df_cap = subset_df_cap[
+            subset_df_cap['date'] == self.model.current_date]
+        additional_capacity = subset_df_cap[
+            'new_Installed_Capacity_[MW]'].iloc[0]
+        return additional_capacity
+
     def update_product_stock(self):
         """
         Update stock according to product growth and product failure
@@ -395,11 +409,7 @@ class Consumers(Agent):
         # subset_df_init_cap = self.model.df0[
         #     self.model.df0['year'] == 2020 + self.model.clock]
 
-        subset_df_cap = self.data_in_pca.copy()
-        subset_df_cap = subset_df_cap[
-            subset_df_cap['date'] == self.model.current_date]
-        additional_capacity = subset_df_cap[
-            'new_Installed_Capacity_[MW]'].iloc[0]
+        additional_capacity = self.get_additional_capacity()
         self.model.pca_install[self.pca] += additional_capacity
         self.model.pca_install_test += additional_capacity
         # ! Old code
@@ -1028,6 +1038,10 @@ class Consumers(Agent):
             return self.landfill_cost
         
     def set_pca_state(self):
+        """
+        Set the PCA and state for the consumer agent based on the
+        consumer agent resolution.
+        """
         if self.model.consumer_agent_resolution == ConsumerAgentResolution.PCA:
             self.pca = self.model.agent_pca_map[self.unique_id][0]
             self.state = self.model.agent_pca_map[self.unique_id][1]
@@ -1192,11 +1206,12 @@ class Consumers(Agent):
                 self.max_storage_hazardous_kg = regulator_thresholds[self.generator_size].max_storage_kg
 
     def set_recycling_transport_distance_and_costs(self):
+        """
+        Initialize recycling transportation costs and distances.
+        """
 
-        agent_identifier = str(self.get_agent_identifier())
-        
         recyc_transp_dist = self.model.recycler_distance_df.copy()
-        recyc_transp_dist = recyc_transp_dist[agent_identifier]
+        recyc_transp_dist = recyc_transp_dist[str(self.agent_identifier)]
         recyc_transp_dist = recyc_transp_dist.to_list()
         self.recyc_transp_dist = min(recyc_transp_dist)
         self.recyc_transp_cost = self.recyc_transp_dist * \
@@ -1204,12 +1219,13 @@ class Consumers(Agent):
             # ! remove weight * \ self.model.dynamic_product_average_wght
 
     def set_landfill_transport_distance_and_costs(self):
+        """
+        Initialize landfill transportation costs and distances.
+        """
 
-        agent_identifier = str(self.get_agent_identifier())
-        
         # ! TODO: change landfill costs
         landfill_transp_dist = self.model.landfill_distance_df.copy()
-        landfill_transp_dist = landfill_transp_dist[agent_identifier]
+        landfill_transp_dist = landfill_transp_dist[str(self.agent_identifier)]
         landfill_transp_dist = landfill_transp_dist.to_list()
         self.landfill_transp_dist = min(landfill_transp_dist)
         self.landfill_transp_cost = self.landfill_transp_dist * \
@@ -1217,13 +1233,13 @@ class Consumers(Agent):
             # ! remove weight * \ self.model.dynamic_product_average_wght
 
     def set_hazardous_landfill_transport_distance_and_costs(self):
-
-        agent_identifier = str(self.get_agent_identifier())
-        # initialize hazardous landfill costs and distances
+        """
+        Initialize hazardous landfill transportation costs and distances.
+        """
         hazardous_landfill_transp_dist = \
             self.model.hazardous_landfill_distance_df.copy()
         hazardous_landfill_transp_dist = \
-            hazardous_landfill_transp_dist[agent_identifier].to_list()
+            hazardous_landfill_transp_dist[str(self.agent_identifier)].to_list()
         self.hazardous_landfill_transp_dist = \
             min(hazardous_landfill_transp_dist)
         self.hazardous_landfill_transp_cost = \
@@ -1231,7 +1247,7 @@ class Consumers(Agent):
             self.model.get_transportation_cost(True) / 1E3
         self.hazardous_landfill_name = \
             self.model.hazardous_landfill_distance_df.loc[
-                self.model.hazardous_landfill_distance_df[agent_identifier] ==
+                self.model.hazardous_landfill_distance_df[str(self.agent_identifier)] ==
                 self.hazardous_landfill_transp_dist, 'Facility Name'].iloc[0]
         hazardous_landfills_data = self.model.hazardous_landfill_cost_df.copy()
         self.hazardous_landfill_cost = hazardous_landfills_data.loc[
@@ -1239,39 +1255,48 @@ class Consumers(Agent):
             '$/ Ton'].iloc[0]  # in $/ton
         
     def set_contribution_factors(self):
+        """
+        Set contribution factors based on consumer agent resolution. These
+        factors are used to adjust the impact of utility-scale PV and capacity
+        based on the agent's resolution level.
+        """
         if self.model.consumer_agent_resolution == ConsumerAgentResolution.PCA:
             self.utility_scale_pv_contribution_factor = 1
             self.capacity_contribution_factor = 1
         elif self.model.consumer_agent_resolution == ConsumerAgentResolution.SITE:
-            reeds_data = pd.read_excel(os.path.join(os.path.dirname(__file__),
-                                                    'ReEDS', 'StdScen24_annual_balancingAreas_Mid_Case_CO2e_95by2035.xlsx'))
-            row = reeds_data.loc[
-                reeds_data['r'] == self.pca]
-            # If no data found for the PCA, set contribution factor to 1. This
-            # assumes that all PV in the PCA is utility-scale.
+            row = self.model.reeds_data.loc[
+                (self.model.reeds_data['r'] == self.pca) & (self.model.reeds_data['t'] <= self.model.current_date.year)
+            ]
             if row.empty:
-                print(f"Warning: No ReEDS data found for PCA {self.pca}. Setting utility_scale_pv_contribution_factor to 1")
+                print(f"Warning: No REEDS data found for PCA {self.pca} in year {self.model.current_date.year}. Setting contribution factors to 1")
                 self.utility_scale_pv_contribution_factor = 1
             else:
-                self.utility_scale_pv_contribution_factor = \
-                    row['upv_MW'].values[0] / (row['upv_MW'].values[0] + row['distpv_MW'].values[0])
-
+                self.utility_scale_pv_contribution_factor = row['utility_scale_pv_contribution_factor'].values[-1]
             agents_in_pca = self.model.uspvdb.loc[
                 self.model.uspvdb['PCA'] == self.pca]
             total_capacity_in_pca = agents_in_pca['p_cap_ac'].sum()
             agent_capacity = self.model.uspvdb.loc[
-                self.model.uspvdb['case_id'] == self.get_agent_identifier(), 'p_cap_ac'].values[0]
+                self.model.uspvdb['case_id'] == self.agent_identifier, 'p_cap_ac'].values[0]
             self.capacity_contribution_factor = agent_capacity / total_capacity_in_pca
             
         
     def get_landfill_name(self) -> str:
-
-        agent_identifier = str(self.get_agent_identifier())
+        """
+        Get the name of the landfill based on the transportation distance from the landfill dataframe.
+        :return: The name of the landfill.
+        """
         return self.model.landfill_distance_df.loc[
-                self.model.landfill_distance_df[agent_identifier] == 
+                self.model.landfill_distance_df[str(self.agent_identifier)] ==
                 self.landfill_transp_dist, 'Facility Name'].iloc[0]
-        
-    def get_agent_identifier(self) -> str:
+
+    @property
+    def agent_identifier(self) -> str:
+        """
+        Get the agent identifier based on the consumer agent resolution. If
+        the resolution is PCA, return the PCA. If the resolution is SITE, return
+        the site case ID.
+        :return: The agent identifier.
+        """
         
         if self.model.consumer_agent_resolution == ConsumerAgentResolution.PCA:
             return self.pca
@@ -1279,6 +1304,25 @@ class Consumers(Agent):
             return self.model.agent_site_map[self.unique_id][0]
         else:
             raise ValueError("Invalid consumer agent resolution.")
+        
+    def _get_agent_lat_lon(self) -> tuple:
+        """
+        Get the latitude and longitude of the agent based on its identifier.
+        :return: A tuple containing the latitude and longitude of the agent.
+        """
+        if self.model.consumer_agent_resolution == ConsumerAgentResolution.PCA:
+            lat = self.model.pca_data.loc[
+                self.model.pca_data['PCA'] == self.agent_identifier, 'Lat'].values[0]
+            lon = self.model.pca_data.loc[
+                self.model.pca_data['PCA'] == self.agent_identifier, 'Long'].values[0]
+        elif self.model.consumer_agent_resolution == ConsumerAgentResolution.SITE:
+            lat = self.model.uspvdb.loc[
+                self.model.uspvdb['case_id'] == self.agent_identifier, 'Latitude'].values[0]
+            lon = self.model.uspvdb.loc[
+                self.model.uspvdb['case_id'] == self.agent_identifier, 'Longitude'].values[0]
+        else:
+            raise ValueError("Invalid consumer agent resolution.")
+        return lat, lon
 
     def step(self):
         """
@@ -1300,3 +1344,39 @@ class Consumers(Agent):
         self.update_product_eol("new")
         self.product_storage_to_other_ref = self.product_storage_to_other
         # self.update_product_eol("used")
+
+
+def report_output_consumer(agent: Consumers, field: str) -> any:
+    """
+    Report specific output field for the agent.
+    :param field: The field to report.
+    :return: The value of the specified field.
+    """
+    if field == "name":
+        return agent.model.agent_site_map[agent.unique_id][1]
+    elif field in ["latitude", "longitude"]:
+        lat, lon = agent._get_agent_lat_lon()
+        return lat if field == "latitude" else lon
+    elif field == "repair_kg":
+        return agent.number_new_prod_repaired + \
+                agent.number_used_prod_repaired
+    elif field == "sell_kg":
+        return agent.number_new_prod_sold + \
+                agent.number_used_prod_sold
+    elif field == "recycle_kg":
+        return agent.number_new_prod_recycled + \
+                agent.number_used_prod_recycled
+    elif field == "landfill_kg":
+        return agent.number_new_prod_landfilled + \
+                agent.number_used_prod_landfilled
+    elif field == "hoard_kg":
+        return agent.number_new_prod_hoarded + \
+                agent.number_used_prod_hoarded
+    elif field == "total_waste_W":
+        return agent.tot_prod_EoL
+    elif field == "total_waste_m2":
+        return agent.tot_prod_EoL_m2
+    elif field == "total_installed_capacity_W":
+        return agent.get_additional_capacity()
+    else:
+        raise ValueError(f"Field '{field}' not recognized for reporting.")

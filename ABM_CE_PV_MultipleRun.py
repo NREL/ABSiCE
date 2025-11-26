@@ -13,6 +13,7 @@ import time
 import os
 from itertools import product
 from utils import TIMESTEP
+from ABM_CE_PV_ConsumerAgents import Consumers
 
 
 # Calibrated parameters (new values stay in ranges reported in the
@@ -46,6 +47,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                 hazardous_waste_regulation_enabled=False,
                 landfill_solar_waste_acceptance_ratio=1.0,
                 calculate_distances=False,
+                model_states=['TX', 'AZ', 'NV', 'NM']
                 )  # baseline
         elif j < 20:
             model = ABM_CE_PV(
@@ -566,6 +568,9 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         # Get results in a pandas DataFrame
         results_model = model.datacollector.get_model_vars_dataframe()
         results_agents = model.datacollector.get_agent_vars_dataframe()
+        results_agents_consumers = model.datacollector.get_agenttype_vars_dataframe(agent_type=Consumers)
+        results_agents_consumers.reset_index(inplace=True)
+        results_agents_consumers.drop(columns=['Step', 'AgentID'], inplace=True)
         # Draw figures
         draw_graphs(False, False, model, results_agents, results_model)
         print("Run", j+1, "out of", number_run)
@@ -576,6 +581,8 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
             os.makedirs("results")
         results_model.to_csv(os.path.join(
             "results", "Results_model_run_%s.csv" % j))
+        results_agents_consumers.to_csv(os.path.join(
+            "results", "Results_agents_consumers_run_%s.csv" % j), index=False)
         # results_agents.to_csv("results\\Results_agents_run_%s.csv" % j)
 
 
