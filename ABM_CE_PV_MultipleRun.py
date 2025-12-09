@@ -48,6 +48,10 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                 landfill_solar_waste_acceptance_ratio=1.0,
                 calculate_distances=False,
                 model_states=['TX', 'AZ', 'NV', 'NM'],
+                solar_cycle=True,
+                landfill_data_params = {
+                    "landfill_volume_column": "Waste Business Journal Costs ($/metric tons)",
+                    "landfill_name_column": "Landfill Name"},
                 timestep=timestep,
                 )  # baseline
         elif j < 20:
@@ -741,6 +745,6 @@ def get_number_of_steps(number_steps: int, timestep: TIMESTEP):
     else:
         raise ValueError("Unsupported timestep: {}".format(timestep))
 
-run_model(10, 15, timestep=TIMESTEP.ANNUAL)
+run_model(10, 10, timestep=TIMESTEP.QUARTERLY)
 # run_batch(40, 31, list1=['a', 'b', 'c'],list2=['d', 'e', 'f'],
 #          list3=['x', 'y', 'z'])

@@ -130,6 +130,9 @@ class Consumers(Agent):
         self.utility_scale_pv_contribution_factor = 1.0
         self.capacity_contribution_factor = 1.0
 
+        # reporting variables
+        self.waste_kg_current_step = {}
+
         # ! This increases model resolution nothing to do here for now  
         self.set_pca_state()
         self.set_landfill_transport_distance_and_costs()
@@ -816,6 +819,8 @@ class Consumers(Agent):
                 self.number_used_prod_repaired += used_eol_vol
             self.model.pca_outputs[self.pca][eol_pathway] += (new_eol_vol +
                                                               used_eol_vol)
+            self.waste_kg_current_step[eol_pathway] = (new_eol_vol +
+                                                         used_eol_vol)
         elif eol_pathway == "sell":
             self.number_product_sold += managed_waste
             self.consumer_costs += managed_waste * \
@@ -826,6 +831,8 @@ class Consumers(Agent):
                 self.number_used_prod_sold += used_eol_vol
             self.model.pca_outputs[self.pca][eol_pathway] += (new_eol_vol +
                                                               used_eol_vol)
+            self.waste_kg_current_step[eol_pathway] = (new_eol_vol +
+                                                         used_eol_vol)
         elif eol_pathway == "recycle":
             self.number_product_recycled += managed_waste
             if not self.model.epr_business_model:
@@ -837,6 +844,8 @@ class Consumers(Agent):
                 self.number_used_prod_recycled += used_eol_vol
             self.model.pca_outputs[self.pca][eol_pathway] += (new_eol_vol +
                                                               used_eol_vol)
+            self.waste_kg_current_step[eol_pathway] = (new_eol_vol +
+                                                         used_eol_vol)
         elif eol_pathway == "landfill":
             self.number_product_landfilled += managed_waste
             self.consumer_costs += managed_waste * \
@@ -847,6 +856,8 @@ class Consumers(Agent):
                 self.number_used_prod_landfilled += used_eol_vol
             self.model.pca_outputs[self.pca][eol_pathway] += (new_eol_vol +
                                                               used_eol_vol)
+            self.waste_kg_current_step[eol_pathway] = (new_eol_vol +
+                                                         used_eol_vol)
         else:
             # managed_waste = self.number_product_EoL or
             # self.number_product_EoL + storage_to_others
@@ -860,6 +871,8 @@ class Consumers(Agent):
                 self.number_used_prod_hoarded += used_eol_vol
             self.model.pca_outputs[self.pca][eol_pathway] += (new_eol_vol +
                                                               used_eol_vol)
+            self.waste_kg_current_step[eol_pathway] = (new_eol_vol +
+                                                         used_eol_vol)
             if self.hazardous:
                 self.number_product_hoarded_hazardous += managed_waste
         if self.unique_id == 0:
@@ -1021,9 +1034,11 @@ class Consumers(Agent):
             else:
                 raise ValueError(f"Landfill cost data for {landfill_name} in {self.model.current_date.year} not found in RTN model.")
         else:
+            landfill_name_column = self.model.landfill_data_params['landfill_name_column']
+            landfill_volume_column = self.model.landfill_data_params['landfill_volume_column']
             landfill_cost = self.model.landfill_cost_df.loc[
-            self.model.landfill_cost_df['Facility Name'] == landfill_name,
-            '$/metric ton'].values[0]
+            self.model.landfill_cost_df[landfill_name_column] == landfill_name,
+            landfill_volume_column].values[0]
             return landfill_cost
         
     def get_landfill_cost(self):
@@ -1289,7 +1304,7 @@ class Consumers(Agent):
         """
         return self.model.landfill_distance_df.loc[
                 self.model.landfill_distance_df[str(self.agent_identifier)] ==
-                self.landfill_transp_dist, 'Facility Name'].iloc[0]
+                self.landfill_transp_dist, self.model.landfill_data_params['landfill_name_column']].iloc[0]
 
     @property
     def agent_identifier(self) -> str:
@@ -1363,20 +1378,15 @@ def report_output_consumer(agent: Consumers, field: str) -> any:
         lat, lon = agent._get_agent_lat_lon()
         return lat if field == "latitude" else lon
     elif field == "repair_kg":
-        return agent.number_new_prod_repaired + \
-                agent.number_used_prod_repaired
+        return agent.waste_kg_current_step.get("repair", 0)
     elif field == "sell_kg":
-        return agent.number_new_prod_sold + \
-                agent.number_used_prod_sold
+        return agent.waste_kg_current_step.get("sell", 0)
     elif field == "recycle_kg":
-        return agent.number_new_prod_recycled + \
-                agent.number_used_prod_recycled
+        return agent.waste_kg_current_step.get("recycle", 0)
     elif field == "landfill_kg":
-        return agent.number_new_prod_landfilled + \
-                agent.number_used_prod_landfilled
+        return agent.waste_kg_current_step.get("landfill", 0)
     elif field == "hoard_kg":
-        return agent.number_new_prod_hoarded + \
-                agent.number_used_prod_hoarded
+        return agent.waste_kg_current_step.get("hoard", 0)
     elif field == "total_waste_W":
         return agent.tot_prod_EoL
     elif field == "total_waste_m2":

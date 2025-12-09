@@ -259,6 +259,10 @@ class ABM_CE_PV(Model):
                  geopy=False,
                  calculate_distances=False,
                  rtn = False,
+                 solar_cycle =False,
+                 landfill_data_params = {
+                        "landfill_volume_column": "$/metric ton",
+                        "landfill_name_column": "Facility Name"},
                  hazardous_waste_regulation_enabled=False,
                  landfill_solar_waste_acceptance_ratio=0.4,
                  last_step=31,
@@ -469,6 +473,9 @@ class ABM_CE_PV(Model):
             hazardous_waste_regulation_enabled: bool - Whether hazardous waste regulations are enabled.
             landfill_solar_waste_acceptance_ratio: float - The ratio of landfills that accept solar waste. Defaults to 0.4.
             as per research from Taylor Curtis.
+            rtn: bool - Whether to use the TAMU transportation, recycling, and landfill cost data.
+            solar_cycle: bool - Whether to use the solar cycle landfill cost data.
+            landfill_data_params: dict - Parameters for landfill data.
         """
         # Set up variables
         # att_distrib_param_eol[0] = calibration_n_sensitivity
@@ -487,6 +494,8 @@ class ABM_CE_PV(Model):
         self.seed = seed
         self.timestep = timestep
         self.rtn = rtn
+        self.solar_cycle = solar_cycle
+        self.landfill_data_params = landfill_data_params
         self.model_states = model_states
 
         #Set path for data saving
@@ -849,8 +858,16 @@ class ABM_CE_PV(Model):
                 c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
                 return 6371 * c  # Radius of the Earth in kilometers
             
-            landfills_data = pd.read_csv("../../../TEMP/" +
-                                            self.file_names['Landfill data'])
+            if self.solar_cycle:
+                # If using the solar cycle landfill cost data
+                landfills_data = pd.read_csv(os.path.join(
+                    os.path.dirname(__file__),
+                    "SolarCycle", "wbj_solar_cycle_combined.csv"),
+                    index_col=0)
+                
+            else:
+                landfills_data = pd.read_csv("../../../TEMP/" +
+                                                self.file_names['Landfill data'])
                 
             if self.consumer_agent_resolution == ConsumerAgentResolution.PCA:
 
@@ -858,7 +875,7 @@ class ABM_CE_PV(Model):
                 distance_df = pd.DataFrame(columns=self.pca_data['PCA'],
                                         index=self.recycler_data['Recycler Name'])
                 distance_df2 = pd.DataFrame(columns=self.pca_data['PCA'],
-                                            index=landfills_data['Facility Name'])
+                                            index=landfills_data[self.landfill_data_params['landfill_name_column']])
 
                 # Calculate distances between each PCA and each recycler
                 for pca_index, pca_row in self.pca_data.iterrows():
@@ -885,7 +902,7 @@ class ABM_CE_PV(Model):
                                             landfills_lat, landfills_lon)
 
                         # Fill in the distance in the DataFrame
-                        distance_df2.at[landfills_row['Facility Name'],
+                        distance_df2.at[landfills_row[self.landfill_data_params['landfill_name_column']],
                                         pca_row['PCA']] = distance2
 
                 # Save the distances to a CSV file
@@ -894,10 +911,17 @@ class ABM_CE_PV(Model):
                     # save the distances to the RTN model folder
                     distance_df.to_csv(os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
                     distance_df2.to_csv(os.path.join(os.path.dirname(__file__), "RTN",
-                                                    self.file_names['PCA-landfill distances']))
+                                                    self.file_names['PCA-landfill distances']))                   
                 else:
                     distance_df.to_csv("../../../TEMP/pca_recycler_distances.csv")
-                    distance_df2.to_csv("../../../TEMP/" +
+                    if self.solar_cycle:
+                        # If using the solar cycle landfill cost data
+                        # save the landfill distances to the solar cycle folder
+                        distance_df2.to_csv(os.path.join(
+                        os.path.dirname(__file__), "SolarCycle",
+                        self.file_names['PCA-landfill distances']))
+                    else:
+                        distance_df2.to_csv("../../../TEMP/" +
                                         self.file_names['PCA-landfill distances'])
                 
             if self.consumer_agent_resolution == ConsumerAgentResolution.SITE:
@@ -917,14 +941,32 @@ class ABM_CE_PV(Model):
                     site_lats, site_lons, landfill_lats, landfill_lons)
                 
                 landfill_distance_df = pd.DataFrame(distance_matrix_landfill,
-                                                        index=landfills_data['Facility Name'],
+                                                        index=landfills_data[self.landfill_data_params['landfill_name_column']],
                                                         columns=self.uspvdb['case_id'])
                                                     
                 site_recycler_distance_df = pd.DataFrame(distance_matrix_recycler,
                                                         index=self.recycler_data['Recycler Name'],
                                                         columns=self.uspvdb['case_id'])
-                site_recycler_distance_df.to_csv("../../../TEMP/site_recycler_distances.csv")
-                landfill_distance_df.to_csv("../../../TEMP/site_landfill_distances.csv")
+                if self.rtn:
+                    # If using the RTN model results from Texas A&M University
+                    # save the distances to the RTN model folder
+                    site_recycler_distance_df.to_csv(os.path.join(
+                        os.path.dirname(__file__), "RTN",
+                        "site_recycler_distances.csv"))
+                    landfill_distance_df.to_csv(os.path.join(
+                        os.path.dirname(__file__), "RTN",
+                        "site_landfill_distances.csv"))
+                else:
+                    site_recycler_distance_df.to_csv("../../../TEMP/site_recycler_distances.csv")
+                    if self.solar_cycle:
+                        # If using the solar cycle landfill cost data
+                        # save the landfill distances to the solar cycle folder
+                        site_recycler_distance_df.to_csv("../../../TEMP/site_recycler_distances.csv")
+                        landfill_distance_df.to_csv(os.path.join(
+                            os.path.dirname(__file__), "SolarCycle",
+                            "site_landfill_distances.csv"))
+                    else:
+                        landfill_distance_df.to_csv("../../../TEMP/site_landfill_distances.csv")
 
                 hazardous_landfills_data = pd.read_csv("../../../TEMP/Landfills_data_SA.csv")
                 hazardous_landfill_lats = hazardous_landfills_data['Latitude'].to_numpy().astype(float)
@@ -971,8 +1013,14 @@ class ABM_CE_PV(Model):
 
                 self.recycler_distance_df = pd.read_csv(
                 '../../../TEMP/pca_recycler_distances.csv')
-                self.landfill_distance_df = pd.read_csv(
-                    '../../../TEMP/' + self.file_names['PCA-landfill distances'])
+                if self.solar_cycle:
+                    # If using the solar cycle landfill cost data
+                    self.landfill_distance_df = pd.read_csv(os.path.join(
+                        os.path.dirname(__file__), "SolarCycle",
+                        self.file_names['PCA-landfill distances']))
+                else:
+                    self.landfill_distance_df = pd.read_csv(
+                        '../../../TEMP/' + self.file_names['PCA-landfill distances'])
                 self.hazardous_landfill_distance_df = pd.read_csv(
             '../../../TEMP/' + self.file_names['Hazardous PCA-landfill distances'])
                 
@@ -980,13 +1028,28 @@ class ABM_CE_PV(Model):
 
                 self.recycler_distance_df = pd.read_csv(
                 '../../../TEMP/site_recycler_distances.csv')
-                self.landfill_distance_df = pd.read_csv(
-                    '../../../TEMP/site_landfill_distances.csv')
+                if self.solar_cycle:
+                    # If using the solar cycle landfill cost data
+                    self.landfill_distance_df = pd.read_csv(os.path.join(
+                        os.path.dirname(__file__), "SolarCycle",
+                        "site_landfill_distances.csv"))
+                else:
+                    self.landfill_distance_df = pd.read_csv(
+                        '../../../TEMP/site_landfill_distances.csv')
                 self.hazardous_landfill_distance_df = pd.read_csv(
             '../../../TEMP/hazardous_site_landfill_distances.csv')
+                
             self.recycling_costs_df = pd.DataFrame()
-            self.landfill_cost_df = pd.read_csv(
-            '../../../TEMP/' + self.file_names['Landfill data'])
+            
+            if self.solar_cycle:
+                # If using the solar cycle landfill cost data
+                self.landfill_cost_df = pd.read_csv(os.path.join(
+                    os.path.dirname(__file__),
+                    "SolarCycle", "wbj_solar_cycle_combined.csv"),
+                    index_col=0)
+            else:
+                self.landfill_cost_df = pd.read_csv(
+                '../../../TEMP/' + self.file_names['Landfill data'])
 
         self.pv_ice_yearly_waste = 0
 
