@@ -2017,8 +2017,8 @@ class ABM_CE_PV(Model):
         self.average_price_per_function_model()
         self.agents.do("step")
         self.clock = self.clock + 1
-        if self.clock == self.last_step:
-            self.datacollector.collect(self)
+        # if self.clock == self.last_step:
+        #     self.datacollector.collect(self)
 
         # Calculate yearly waste using pv_ice_waste_calculation method
         # pass pv_output

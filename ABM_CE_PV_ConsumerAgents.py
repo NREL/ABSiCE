@@ -15,7 +15,7 @@ from collections import OrderedDict
 from scipy.stats import truncnorm
 import operator
 from math import e
-from utils import transform_timeseries_timestep, GeneratorSize, ConsumerAgentResolution
+from utils import TIMESTEP, transform_timeseries_timestep, GeneratorSize, ConsumerAgentResolution
 import os
 
 
@@ -1066,6 +1066,9 @@ class Consumers(Agent):
         elif self.model.consumer_agent_resolution == ConsumerAgentResolution.SITE:
             self.pca = self.model.agent_site_map[self.unique_id][2]
             self.state = self.model.agent_site_map[self.unique_id][3]
+            # for site-level resolution, setting agents_per_pca to 1
+            # to avoid any further division when calculating waste volume
+            # per agent without making changes elsewhere in the code
             self.agents_per_pca = 1
         else:
             raise ValueError("Invalid consumer agent resolution.")
