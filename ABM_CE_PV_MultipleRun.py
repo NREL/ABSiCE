@@ -745,6 +745,6 @@ def get_number_of_steps(number_steps: int, timestep: TIMESTEP):
     else:
         raise ValueError("Unsupported timestep: {}".format(timestep))
 
-run_model(10, 10, timestep=TIMESTEP.QUARTERLY)
+run_model(10, 11, timestep=TIMESTEP.QUARTERLY)
 # run_batch(40, 31, list1=['a', 'b', 'c'],list2=['d', 'e', 'f'],
 #          list3=['x', 'y', 'z'])
