@@ -17,6 +17,15 @@ class GeneratorSize(Enum):
     SMALL = "small"
     LARGE = "large"
 
+class ConsumerAgentResolution(Enum):
+    """
+    Enum for consumer agent resolution types.
+    """
+    PCA = "pca"
+    SITE = "site"
+
+PCA_MISSING_VALUE = "Outside ReEDS Region (No Match)"
+
 def transform_timeseries_timestep(
     timeseries: pd.DataFrame, timestep: TIMESTEP, scale: bool = True
 ) -> pd.Series:
