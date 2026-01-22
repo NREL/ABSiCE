@@ -1264,8 +1264,14 @@ class ABM_CE_PV(Model):
         self.growth_threshold = growth_threshold
         # Initialize Regulator parameters
         unique_states = self.data.loc[:, 'State'].unique().tolist()
+        # DC is not included in the PV ICE data but is there in the USPVDB
+        # so we add it here
+        if self.consumer_agent_resolution == ConsumerAgentResolution.SITE:
+            site_states = self.uspvdb['p_state'].unique().tolist()
+            unique_states = set(unique_states).union(site_states)
+            unique_states = list(unique_states)
         self.num_regulators = len(unique_states)
-        self.regulator_state_map = self.create_regulator_state_map()
+        self.regulator_state_map = self.create_regulator_state_map(unique_states)
         # Create a map of agents to their unique IDs
         # This is used to access agents by their unique ID
         self.agent_map = {}
@@ -1420,7 +1426,8 @@ class ABM_CE_PV(Model):
                 "Waste Hoard (Kg)": lambda a: report_output_consumer(a, "hoard_kg"),
                 "Total Waste (W)": lambda a: report_output_consumer(a, "total_waste_W"),
                 "Total Waste (m2)": lambda a: report_output_consumer(a, "total_waste_m2"),
-                "Installed Capacity (W)": lambda a: report_output_consumer(a, "total_installed_capacity_W")
+                "Installed Capacity (W)": lambda a: report_output_consumer(a, "total_installed_capacity_W"),
+                "TCLP Test Result": lambda a: report_output_consumer(a, "tclp_test_result"),
             }
         }
 
@@ -1484,7 +1491,7 @@ class ABM_CE_PV(Model):
     
     def create_agent_site_map(self):
         """
-        Create a mapping of agent ids to their respective site names, PCA, and state.
+        Create a mapping of agent ids to their respective site names, PCA, state, and installation year.
         """
         case_ids = self.uspvdb['case_id'].unique()
         agents = {}
@@ -1497,16 +1504,17 @@ class ABM_CE_PV(Model):
                                            'p_state'].iloc[0]
             pca_value = self.uspvdb.loc[self.uspvdb['p_name'] == site_name,
                                         'PCA'].iloc[0]
-            agents[agent_id] = (case_id, site_name, pca_value, state_value)
+            p_year = self.uspvdb.loc[self.uspvdb['p_name'] == site_name,
+                                     'p_year'].iloc[0]
+            agents[agent_id] = (case_id, site_name, pca_value, state_value, p_year)
             agent_id += 1
 
         return agents
     
-    def create_regulator_state_map(self):
+    def create_regulator_state_map(self, unique_states:list[str]) -> dict[int, str]:
         """
         Create a mapping of regulator agent ids to their respective states.
         """
-        unique_states = self.data['State'].unique().tolist()
         regulator_state_map = {}
         agent_id = self.num_prod_n_recyc + self.num_consumers + \
             self.num_refurbishers
