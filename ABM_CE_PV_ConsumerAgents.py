@@ -129,6 +129,8 @@ class Consumers(Agent):
         self.hazardous = False  # Default value, will be set later
         self.utility_scale_pv_contribution_factor = 1.0
         self.capacity_contribution_factor = 1.0
+        self.installation_year = self.initialize_installation_year()
+        self.tclp_test_result = 0
 
         # reporting variables
         self.waste_kg_current_step = {}
@@ -205,10 +207,7 @@ class Consumers(Agent):
         self.refurbisher_id = model.num_consumers + model.num_prod_n_recyc + \
             random.randrange(model.num_refurbishers)
         # todo: see if this can be stored in the model.
-        for id, state in self.model.regulator_state_map.items():
-            if state == self.state:
-                self.regulator_id = id
-                break
+        self.initialize_regulator_id()
             
         # self.landfill_cost = random.choice(landfill_cost)
         # self.landfill_cost = np.random.triangular(
@@ -262,6 +261,37 @@ class Consumers(Agent):
         self.sold_waste = 0
         self.convenience = self.extended_tpb_convenience()
         self.knowledge = self.extended_tpb_knowledge()
+
+    def initialize_installation_year(self) -> None:
+        """
+        Initialize installation year based on the consumer_agent_resolution
+        """
+        if self.model.consumer_agent_resolution == ConsumerAgentResolution.PCA:
+            self.installation_year = self.model.current_date.year
+        elif self.model.consumer_agent_resolution == ConsumerAgentResolution.SITE:
+            self.installation_year = self.model.agent_site_map[self.unique_id][4]
+        else:
+            raise ValueError("Invalid consumer agent resolution.")
+        
+    def initialize_regulator_id(self) -> None:
+        """
+        Initialize regulator id based on the consumer_agent_resolution
+        """
+        self.regulator_id = None
+        for id, state in self.model.regulator_state_map.items():
+            if state == self.state:
+                self.regulator_id = id
+                break
+        if self.regulator_id is None:
+            # If we get here, no matching regulator was found
+            print(f"Warning: No regulator found for state '{self.state}' (agent {self.unique_id})")
+
+    def update_installation_year(self) -> None:
+       # When reaching installation end-of-life, agent install new PV panels
+       if self.installation_year is None:
+           self.initialize_installation_year()
+       if self.installation_year + self.model.product_lifetime == self.model.current_date.year:
+           self.installation_year = self.model.current_date.year
 
     def update_transport_costs(self):
         """
@@ -1193,6 +1223,8 @@ class Consumers(Agent):
         based on the thresholds set by the regulator.
         Update the storage limits based on the generator size.
         """
+        if self.regulator_id is None:
+            self.initialize_regulator_id()
         agent = self.model.agent_map[self.regulator_id]
         if agent.is_exclusion_applicable(self.recycling_facility_id):
             # If the product is exempt from regulations, it is not hazardous
@@ -1208,6 +1240,7 @@ class Consumers(Agent):
             # If the TCLP test is applicable, check if the waste is hazardous
             # based on the TCLP test results.
             self.hazardous = self.model.tclp_test()
+            self.tclp_test_result = int(self.hazardous)
             # If the waste is hazardous, update the generator size based on the thresholds
             self.update_generator_size(agent.thresholds)
             self.update_hazardous_storage_limits(agent.thresholds)
@@ -1364,6 +1397,7 @@ class Consumers(Agent):
         self.update_product_eol("new")
         self.product_storage_to_other_ref = self.product_storage_to_other
         # self.update_product_eol("used")
+        self.update_installation_year()
 
 
 def report_output_consumer(agent: Consumers, field: str) -> any:
@@ -1396,5 +1430,7 @@ def report_output_consumer(agent: Consumers, field: str) -> any:
         return agent.tot_prod_EoL_m2
     elif field == "total_installed_capacity_W":
         return agent.get_additional_capacity()
+    elif field == "tclp_test_result":
+        return agent.tclp_test_result
     else:
         raise ValueError(f"Field '{field}' not recognized for reporting.")
