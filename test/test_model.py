@@ -10,8 +10,8 @@ class TestABM_CE_PV(unittest.TestCase):
         hazardous_2000 = []
         hazardous_2010 = []
         for _ in range(1000):
-            hazardous_2000.append(self.model.tclp_test(start_year=2000))
-            hazardous_2010.append(self.model.tclp_test(start_year=2010))
+            hazardous_2000.append(self.model.tclp_test(start_year=2000, state='CA'))
+            hazardous_2010.append(self.model.tclp_test(start_year=2010, state='CA'))
         hazardous_2000_rate = sum(hazardous_2000) / len(hazardous_2000)
         hazardous_2010_rate = sum(hazardous_2010) / len(hazardous_2010)
 
