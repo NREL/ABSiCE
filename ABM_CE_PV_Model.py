@@ -274,7 +274,11 @@ class ABM_CE_PV(Model):
                             'Hazardous PCA-landfill distances':
                                 "pca_landfills_distances_SA.csv",
                             'Site-landfill distances':
-                                "site_landfills_distances.csv",}):
+                                "site_landfills_distances.csv",
+                            'Universal Waste Landfills data':
+                                "Universal_Waste_Landfills_data.csv",
+                            'Universal Waste Recyclers data':
+                                "Universal_Waste_Recyclers_data.csv",}):
 
         """Initiate model.
 
@@ -673,6 +677,10 @@ class ABM_CE_PV(Model):
             self.recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "TEMP", 
                                                     "recycler_data.csv"))
 
+        # Load Universal Waste Recyclers data
+        self.universal_waste_recyclers_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "TEMP", 
+                                                    self.file_names['Universal Waste Recyclers data']))
+
         if pca_scenario:
             i = 0
             r1 = PV_ICE.Simulation(name=SFscenarios[i], path=testfolder)
@@ -923,6 +931,48 @@ class ABM_CE_PV(Model):
                     else:
                         distance_df2.to_csv("../../../TEMP/" +
                                         self.file_names['PCA-landfill distances'])
+
+                # Calculate distances for Universal Waste Landfills (PCA resolution)
+                universal_waste_landfills_data = pd.read_csv("../../../TEMP/" + self.file_names['Universal Waste Landfills data'])
+                uw_landfill_distance_df = pd.DataFrame(columns=self.pca_data['PCA'],
+                                            index=universal_waste_landfills_data['Facility Name'])
+                
+                for pca_index, pca_row in self.pca_data.iterrows():
+                    pca_lat = pca_row['Lat']
+                    pca_lon = pca_row['Long']
+                    
+                    for uw_landfill_index, uw_landfill_row in universal_waste_landfills_data.iterrows():
+                        uw_landfill_lat = uw_landfill_row['Latitude']
+                        uw_landfill_lon = uw_landfill_row['Longitude']
+                        
+                        distance_uw_landfill = haversine(pca_lat, pca_lon,
+                                            uw_landfill_lat, uw_landfill_lon)
+                        
+                        uw_landfill_distance_df.at[uw_landfill_row['Facility Name'],
+                                        pca_row['PCA']] = distance_uw_landfill
+                
+                uw_landfill_distance_df.to_csv("../../../TEMP/universal_waste_pca_landfill_distances.csv")
+                
+                # Calculate distances for Universal Waste Recyclers (PCA resolution)
+                universal_waste_recyclers_data = pd.read_csv("../../../TEMP/" + self.file_names['Universal Waste Recyclers data'])
+                uw_recycler_distance_df = pd.DataFrame(columns=self.pca_data['PCA'],
+                                            index=universal_waste_recyclers_data['Recycler Name'])
+                
+                for pca_index, pca_row in self.pca_data.iterrows():
+                    pca_lat = pca_row['Lat']
+                    pca_lon = pca_row['Long']
+                    
+                    for uw_recycler_index, uw_recycler_row in universal_waste_recyclers_data.iterrows():
+                        uw_recycler_lat = uw_recycler_row['Latitude']
+                        uw_recycler_lon = uw_recycler_row['Longitude']
+                        
+                        distance_uw_recycler = haversine(pca_lat, pca_lon,
+                                            uw_recycler_lat, uw_recycler_lon)
+                        
+                        uw_recycler_distance_df.at[uw_recycler_row['Recycler Name'],
+                                        pca_row['PCA']] = distance_uw_recycler
+                
+                uw_recycler_distance_df.to_csv("../../../TEMP/universal_waste_pca_recycler_distances.csv")
                 
             if self.consumer_agent_resolution == ConsumerAgentResolution.SITE:
 
@@ -980,10 +1030,41 @@ class ABM_CE_PV(Model):
                     os.path.join(
                         os.path.dirname(__file__), "TEMP", 'hazardous_site_landfill_distances.csv'))
 
+                # Calculate distances for Universal Waste Landfills
+                universal_waste_landfills_data = pd.read_csv("../../../TEMP/" + self.file_names['Universal Waste Landfills data'])
+                uw_landfill_lats = universal_waste_landfills_data['Latitude'].to_numpy().astype(float)
+                uw_landfill_lons = universal_waste_landfills_data['Longitude'].to_numpy().astype(float)
+                uw_landfill_distance_matrix = haversine_vectorized(
+                    site_lats, site_lons, uw_landfill_lats, uw_landfill_lons)
+                uw_landfill_distance_df = pd.DataFrame(uw_landfill_distance_matrix,
+                                                        index=universal_waste_landfills_data['Facility Name'],
+                                                        columns=self.uspvdb['case_id'])
+                uw_landfill_distance_df.to_csv(
+                    os.path.join(
+                        os.path.dirname(__file__), "TEMP", 'universal_waste_site_landfill_distances.csv'))
+
+                # Calculate distances for Universal Waste Recyclers
+                universal_waste_recyclers_data = pd.read_csv("../../../TEMP/" + self.file_names['Universal Waste Recyclers data'])
+                uw_recycler_lats = universal_waste_recyclers_data['Latitude'].to_numpy().astype(float)
+                uw_recycler_lons = universal_waste_recyclers_data['Longitude'].to_numpy().astype(float)
+                uw_recycler_distance_matrix = haversine_vectorized(
+                    site_lats, site_lons, uw_recycler_lats, uw_recycler_lons)
+                uw_recycler_distance_df = pd.DataFrame(uw_recycler_distance_matrix,
+                                                        index=universal_waste_recyclers_data['Recycler Name'],
+                                                        columns=self.uspvdb['case_id'])
+                uw_recycler_distance_df.to_csv(
+                    os.path.join(
+                        os.path.dirname(__file__), "TEMP", 'universal_waste_site_recycler_distances.csv'))
+
         self.correct_mat_factor = pd.read_csv(
             '../../../TEMP/correct_mat_factor.csv')    
         self.hazardous_landfill_cost_df = pd.read_csv(
             '../../../TEMP/' + self.file_names['Hazardous landfill data'])
+        # Load Universal Waste Landfills data
+        self.universal_waste_landfills_data = pd.read_csv(
+            '../../../TEMP/' + self.file_names['Universal Waste Landfills data'])
+        # Use the same data for cost dataframe
+        self.universal_waste_landfill_cost_df = self.universal_waste_landfills_data.copy()
 
         self.correct_mat_factor = transform_timeseries_timestep(
             self.correct_mat_factor, self.timestep, scale=False)
@@ -1023,6 +1104,11 @@ class ABM_CE_PV(Model):
                         '../../../TEMP/' + self.file_names['PCA-landfill distances'])
                 self.hazardous_landfill_distance_df = pd.read_csv(
             '../../../TEMP/' + self.file_names['Hazardous PCA-landfill distances'])
+                # Load Universal Waste distance files
+                self.universal_waste_landfill_distance_df = pd.read_csv(
+            '../../../TEMP/universal_waste_pca_landfill_distances.csv')
+                self.universal_waste_recycler_distance_df = pd.read_csv(
+            '../../../TEMP/universal_waste_pca_recycler_distances.csv')
                 
             elif consumer_agent_resolution == ConsumerAgentResolution.SITE:
 
@@ -1038,6 +1124,11 @@ class ABM_CE_PV(Model):
                         '../../../TEMP/site_landfill_distances.csv')
                 self.hazardous_landfill_distance_df = pd.read_csv(
             '../../../TEMP/hazardous_site_landfill_distances.csv')
+                # Load Universal Waste distance files
+                self.universal_waste_landfill_distance_df = pd.read_csv(
+            '../../../TEMP/universal_waste_site_landfill_distances.csv')
+                self.universal_waste_recycler_distance_df = pd.read_csv(
+            '../../../TEMP/universal_waste_site_recycler_distances.csv')
                 
             self.recycling_costs_df = pd.DataFrame()
             
@@ -1060,10 +1151,18 @@ class ABM_CE_PV(Model):
             self.agent_pca_map = self.create_agent_pca_map(self.num_consumers)
         elif self.consumer_agent_resolution is ConsumerAgentResolution.SITE:
             self.agent_site_map = self.create_agent_site_map()
-        self.num_recyclers = len(self.recycler_distance_df[
+        # Count total recyclers (regular + universal waste)
+        num_regular_recyclers = len(self.recycler_distance_df[
             'Recycler Name'].unique())
-        self.recycler_names = self.recycler_distance_df[
+        num_universal_waste_recyclers = len(self.universal_waste_recycler_distance_df[
+            'Recycler Name'].unique())
+        self.num_recyclers = num_regular_recyclers + num_universal_waste_recyclers
+        # Combine recycler names from both sources
+        regular_recycler_names = self.recycler_distance_df[
             'Recycler Name'].to_list()
+        universal_waste_recycler_names = self.universal_waste_recycler_distance_df[
+            'Recycler Name'].to_list()
+        self.recycler_names = regular_recycler_names + universal_waste_recycler_names
         self.num_producers = num_producers
         self.num_prod_n_recyc = self.num_recyclers + num_producers
         self.prod_n_recyc_node_degree = prod_n_recyc_node_degree

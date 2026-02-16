@@ -132,3 +132,21 @@ def transform_pca_timeseries_timestep(
     df_expanded = df_expanded.drop(columns=['offset'])
 
     return df_expanded
+
+def get_number_of_days_in_timestep(timestep: TIMESTEP) -> int:
+    """
+    Get the number of days in the specified time step. It is an approximate value.
+
+    Args:
+        timestep (TIMESTEP): The time step.
+    Returns:
+        int: The number of days in the time step.
+    """
+    if timestep == TIMESTEP.ANNUAL:
+        return 365 # Not accounting for leap years
+    elif timestep == TIMESTEP.MONTHLY:
+        return 30  # Approximate average
+    elif timestep == TIMESTEP.QUARTERLY:
+        return 90  # Approximate average
+    else:
+        raise ValueError("Unsupported timestep. Use ANNUAL, MONTHLY, or QUARTERLY.")

@@ -69,10 +69,9 @@ class Recyclers(Agent):
         self.recycler_costs = 0
         self.recycler_name = self.model.recycler_names.pop()
         self.hazardous = False
+        self.universal_waste = False
         self.verified = False
-        # Check if the recycler is a hazardous waste recycler
-        if self.model.recycler_data[self.model.recycler_data['Recycler Name'] == self.recycler_name]['RCRA permit'].values[0]:
-            self.hazardous = True
+        self.set_recycler_type()
 
     # def update_transport_recycling_costs(self):
     #     """
@@ -85,6 +84,16 @@ class Recyclers(Agent):
     #          self.model.product_average_wght) * \
     #         self.model.transportation_cost / 1E3 * \
     #         self.model.mn_mx_av_distance_to_recycler[2]
+
+    def set_recycler_type(self):
+        # Check if the recycler is a hazardous waste recycler
+        hazardous_recycler_row = self.model.recycler_data[self.model.recycler_data['Recycler Name'] == self.recycler_name]
+        if not hazardous_recycler_row.empty and hazardous_recycler_row['RCRA permit'].values[0]:
+            self.hazardous = True
+        # Check if the recycler is a universal waste recycler
+        universal_waste_recycler_row = self.model.recycler_data[self.model.recycler_data['Recycler Name'] == self.recycler_name]
+        if not universal_waste_recycler_row.empty and universal_waste_recycler_row['Universal Waste Permit'].values[0]:
+            self.universal_waste = True
         
     def get_recycling_cost(self):
         """
