@@ -249,7 +249,7 @@ class ABM_CE_PV(Model):
                         "k": 0.30,            # rate of degradation
                         "a50": 15,  # midpoint age
                         "hazard_cutoff": {
-                            'AL': 5.0, 'AZ': 5.0, 'AR': 5.0, 'CA': 5.0, 'CO': 5.0, 'CT': 5.0,
+                            'federal': 5.0, 'AL': 5.0, 'AZ': 5.0, 'AR': 5.0, 'CA': 5.0, 'CO': 5.0, 'CT': 5.0,
                             'DE': 5.0, 'FL': 5.0, 'GA': 5.0, 'ID': 5.0, 'IL': 5.0, 'IN': 5.0, 'IA': 5.0,
                             'KS': 5.0, 'KY': 5.0, 'LA': 5.0, 'ME': 5.0, 'MD': 5.0, 'MA': 5.0, 'MI': 5.0,
                             'MN': 5.0, 'MS': 5.0, 'MO': 5.0, 'MT': 5.0, 'NE': 5.0, 'NV': 5.0, 'NH': 5.0,
@@ -1948,7 +1948,7 @@ class ABM_CE_PV(Model):
         valid_site_indices = random.sample(all_site_indices, int(len(all_site_indices) * self.landfill_solar_waste_acceptance_ratio))
         self.landfill_distance_df = self.landfill_distance_df.iloc[valid_site_indices].reset_index(drop=True)
 
-    def tclp_test(self, start_year: int = 2020, state: str = "default") -> bool:
+    def tclp_test(self, start_year: int = 2020, state: str = "federal") -> bool:
         """Age-varying (logistic) mean & std TCLP hazard classification.
 
         compute an age-dependent mean and standard deviation
