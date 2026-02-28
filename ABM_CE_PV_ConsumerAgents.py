@@ -1053,22 +1053,22 @@ class Consumers(Agent):
             # take the row with the latest date that is less than or equal to the current date
             latest_date = matching_row['date'].max()
             latest_rows = matching_row.loc[matching_row['date'] == latest_date]
-            return latest_rows
+            return latest_rows.iloc[0]  # return the first row if there are multiple with the same latest date
         else:
             earliest_rows = df.loc[
                 df['case_id'] == self.agent_identifier].sort_values(by='date')
             if earliest_rows.empty:
                 print(f"Warning: No RTN data available for {self.agent_identifier}.")
-                return pd.DataFrame({"case_id": [self.agent_identifier], "date": [self.model.current_date], "Cost": [pd.NA]})
+                return pd.DataFrame({"case_id": [self.agent_identifier], "date": [self.model.current_date], "Cost": [np.nan]}).iloc[0]
             print(
                 f"Warning: No RTN data available for {self.agent_identifier} on or before {self.model.current_date}. "
                 f"Using earliest available data from {earliest_rows['date'].iloc[0]}."
             )
-            return earliest_rows
+            return earliest_rows.iloc[0]
         
     def _get_rtn_landfill_cost(self, landfill_name: str) -> float:
         landfill_cost_rows = self._get_rtn_data(self.model.landfill_cost_df)
-        total_landfill_cost = landfill_cost_rows['Cost'].sum(min_count=1) # at least one non-NA value required to compute sum, otherwise return NA
+        total_landfill_cost = landfill_cost_rows['Cost']
         if pd.isna(total_landfill_cost):
             print(f"Warning: Landfill cost data for {self.agent_identifier} in {self.model.current_date.year} is NaN in RTN model. Using infinity as landfill cost.")
             return np.inf
@@ -1374,8 +1374,8 @@ class Consumers(Agent):
     def _get_rtn_recycling_cost(self) -> float:
         recycling_cost_row = self._get_rtn_data(self.model.recycling_costs_df)
         # sum all rows Cost values if multiple rows are returned for the same case_id and date
-        total_recycling_cost = recycling_cost_row['Cost'].sum(min_count=1) # at least one non-NA value required to compute sum, otherwise return NA
-        if np.isnan(total_recycling_cost):
+        total_recycling_cost = recycling_cost_row['Cost']
+        if pd.isna(total_recycling_cost):
             print(f"Warning: Recycling cost for {self.agent_identifier} in {self.model.current_date.year} is NaN. Using infinity as cost.")
             return np.inf
         else:
