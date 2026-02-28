@@ -102,7 +102,7 @@ from geopy.geocoders import Nominatim
 import time
 from math import radians, sin, cos, sqrt, atan2
 from pathlib import Path
-from utils import TIMESTEP, ConsumerAgentResolution, PCA_MISSING_VALUE, transform_timeseries_timestep, transform_pca_timeseries_timestep
+from utils import TIMESTEP, ConsumerAgentResolution, PCA_MISSING_VALUE, transform_timeseries_timestep, transform_pca_timeseries_timestep, add_date_from_temporal_columns
 from datetime import datetime
 
 
@@ -274,7 +274,8 @@ class ABM_CE_PV(Model):
                             'Hazardous PCA-landfill distances':
                                 "pca_landfills_distances_SA.csv",
                             'Site-landfill distances':
-                                "site_landfills_distances.csv",}):
+                                "site_landfills_distances.csv",
+                            'Recycler data': "Recyclers_data.csv",}):
 
         """Initiate model.
 
@@ -998,16 +999,25 @@ class ABM_CE_PV(Model):
         if self.rtn:
             # If using the RTN model results from Texas A&M University
             # load the recycling and landfill data from the RTN model
-            self.recycler_distance_df = pd.read_csv(
-                os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
+            # Recycler distance is not required since
+            # the site to recycler distances are already calculated
+            # in the RTN model and costs are calculated based on those distances
+            # But we still load it from the RTN directory to only initialize those recycler agents
+            # that are relevant for the RTN model and not the full list of recyclers.
+            self.recycler_distance_df = self.recycler_distance_df = pd.read_csv(
+                '../../../TEMP/site_recycler_distances.csv')
             self.recycling_costs_df = pd.read_csv(
-                os.path.join(os.path.dirname(__file__), "RTN", "RecyclingCostsbyYearPCA.csv"))
-            self.landfill_distance_df = pd.read_csv(
-                os.path.join(os.path.dirname(__file__), "RTN",
-                             self.file_names['PCA-landfill distances']))
+                os.path.join(os.path.dirname(__file__), "RTN", self.file_names['Recycling data']))
+            self.recycling_costs_df = add_date_from_temporal_columns(self.recycling_costs_df, self.timestep)
+            # Lanfill distances are also not required for the RTN model
+            self.landfill_distance_df = self.landfill_distance_df = pd.read_csv(
+                        '../../../TEMP/site_landfill_distances.csv')
             self.landfill_cost_df = pd.read_csv(
                 os.path.join(os.path.dirname(__file__), "RTN",
                              self.file_names['Landfill data']))
+            self.landfill_cost_df = add_date_from_temporal_columns(self.landfill_cost_df, self.timestep)
+            self.hazardous_landfill_distance_df = pd.read_csv(
+            '../../../TEMP/hazardous_site_landfill_distances.csv')
         else:
             if consumer_agent_resolution == ConsumerAgentResolution.PCA:
 
@@ -1060,10 +1070,9 @@ class ABM_CE_PV(Model):
             self.agent_pca_map = self.create_agent_pca_map(self.num_consumers)
         elif self.consumer_agent_resolution is ConsumerAgentResolution.SITE:
             self.agent_site_map = self.create_agent_site_map()
-        self.num_recyclers = len(self.recycler_distance_df[
-            'Recycler Name'].unique())
-        self.recycler_names = self.recycler_distance_df[
-            'Recycler Name'].to_list()
+        recycler_data_df = self.recycling_costs_df if self.rtn else self.recycler_distance_df
+        self.num_recyclers = len(recycler_data_df['Recycler Name'].unique())
+        self.recycler_names = recycler_data_df['Recycler Name'].unique().tolist()
         self.num_producers = num_producers
         self.num_prod_n_recyc = self.num_recyclers + num_producers
         self.prod_n_recyc_node_degree = prod_n_recyc_node_degree
