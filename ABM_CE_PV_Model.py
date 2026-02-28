@@ -248,7 +248,16 @@ class ABM_CE_PV(Model):
                         "aged_std": 1.33,     # observed std (mg/L Pb) for field aged modules
                         "k": 0.30,            # rate of degradation
                         "a50": 15,  # midpoint age
-                        "hazard_cutoff": 5.0, # mg/L Pb threshold for hazard classification as per EPA
+                        "hazard_cutoff": {
+                            'federal': 5.0, 'AL': 5.0, 'AZ': 5.0, 'AR': 5.0, 'CA': 5.0, 'CO': 5.0, 'CT': 5.0,
+                            'DE': 5.0, 'FL': 5.0, 'GA': 5.0, 'ID': 5.0, 'IL': 5.0, 'IN': 5.0, 'IA': 5.0,
+                            'KS': 5.0, 'KY': 5.0, 'LA': 5.0, 'ME': 5.0, 'MD': 5.0, 'MA': 5.0, 'MI': 5.0,
+                            'MN': 5.0, 'MS': 5.0, 'MO': 5.0, 'MT': 5.0, 'NE': 5.0, 'NV': 5.0, 'NH': 5.0,
+                            'NJ': 5.0, 'NM': 5.0, 'NY': 5.0, 'NC': 5.0, 'ND': 5.0, 'OH': 5.0, 'OK': 5.0,
+                            'OR': 5.0, 'PA': 5.0, 'RI': 5.0, 'SC': 5.0, 'SD': 5.0, 'TN': 5.0, 'TX': 5.0,
+                            'UT': 5.0, 'VT': 5.0, 'VA': 5.0, 'WA': 5.0, 'WV': 5.0, 'WI': 5.0, 'WY': 5.0},
+                            # mg/L Pb threshold for hazard classification as per EPA 
+                            # (CA STLC test has same threshold)
                         # Optional lower bound for std to avoid collapse
                         "min_std": 0.05,
                         "distribution": "weibull"  # distribution type: "normal" or "weibull"
@@ -1948,7 +1957,7 @@ class ABM_CE_PV(Model):
         valid_site_indices = random.sample(all_site_indices, int(len(all_site_indices) * self.landfill_solar_waste_acceptance_ratio))
         self.landfill_distance_df = self.landfill_distance_df.iloc[valid_site_indices].reset_index(drop=True)
 
-    def tclp_test(self, start_year: int = 2020) -> bool:
+    def tclp_test(self, start_year: int = 2020, state: str = "federal") -> bool:
         """Age-varying (logistic) mean & std TCLP hazard classification.
 
         compute an age-dependent mean and standard deviation
@@ -1966,6 +1975,8 @@ class ABM_CE_PV(Model):
         ----------
         start_year : int
             Year the module was installed.
+        state : str
+            State of the module, used to determine hazard cutoff.
 
         Returns
         -------
@@ -1981,7 +1992,7 @@ class ABM_CE_PV(Model):
         aged_sd  = self.tclp_params["aged_std"]
         k        = self.tclp_params["k"]
         a50      = self.tclp_params["a50"]
-        cutoff   = self.tclp_params["hazard_cutoff"]
+        cutoff   = self.tclp_params["hazard_cutoff"][state]
         min_std  = self.tclp_params.get("min_std", 0.0)
 
         # Logistic weight w(age) in [0,1]

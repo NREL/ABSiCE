@@ -1262,7 +1262,7 @@ class Consumers(Agent):
         else:
             # If the TCLP test is applicable, check if the waste is hazardous
             # based on the TCLP test results.
-            self.hazardous = self.model.tclp_test()
+            self.hazardous = self.model.tclp_test(state=self.state)
             self.tclp_test_result = int(self.hazardous)
             # If the waste is hazardous, update the generator size based on the thresholds
             self.update_generator_size(agent.thresholds)
