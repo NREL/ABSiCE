@@ -1066,7 +1066,7 @@ class Consumers(Agent):
             )
             return earliest_rows.iloc[0]
         
-    def _get_rtn_landfill_cost(self, landfill_name: str) -> float:
+    def _get_rtn_landfill_cost(self) -> float:
         landfill_cost_rows = self._get_rtn_data(self.model.landfill_cost_df)
         total_landfill_cost = landfill_cost_rows['Cost']
         if pd.isna(total_landfill_cost):
@@ -1083,7 +1083,7 @@ class Consumers(Agent):
         model, otherwise get the cost from the regular landfill file.
         """
         if self.model.rtn:
-            return self._get_rtn_landfill_cost(landfill_name)
+            return self._get_rtn_landfill_cost()
         else:
             landfill_name_column = self.model.landfill_data_params['landfill_name_column']
             landfill_volume_column = self.model.landfill_data_params['landfill_volume_column']
@@ -1104,7 +1104,7 @@ class Consumers(Agent):
                    self.model.hazardous_waste_management_cost['landfill'] / 1E3 * self.model.dynamic_product_average_wght
         else:
             if self.model.rtn:
-                return self._get_rtn_landfill_cost(self.landfill_name)
+                return self._get_rtn_landfill_cost()
             return self.landfill_cost
         
     def set_pca_state(self):
