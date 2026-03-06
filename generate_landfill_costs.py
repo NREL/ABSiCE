@@ -108,12 +108,12 @@ def generate_landfill_costs(
     # Validate no duplicates were created
     # validate_merge(merged_df, shipments_df)
     
-    print("Calculating costs ($/W)...")
-    # Calculate Cost: (TotalCost_$ / Shipped_kg) * 0.0077
+    print("Calculating costs ($/ton)...")
+    # Calculate Cost: (TotalCost_$ / Shipped_kg) * 1000
     # Handle division by zero
     merged_df['Cost'] = (
         merged_df['TotalCost_$'] / merged_df['Shipped_kg'].replace(0, float('nan'))
-    ) * 0.0077
+    ) * 1000
     
     # Select and reorder columns for output
     output_df = merged_df[[

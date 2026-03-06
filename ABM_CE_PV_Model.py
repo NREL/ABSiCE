@@ -1932,18 +1932,11 @@ class ABM_CE_PV(Model):
         """
         Returns the transportation cost based on the current date and
         the rtn flag.
-        If the RTN model costs are enabled, it checks if the current year
-        is within the range of the recycling costs DataFrame. If it is,
-        it returns 0, since the transportation costs are accounted for
-        in the recycling costs. Otherwise, it returns the transportation cost.
-        If the RTN model costs are not enabled, it returns the transportation cost.
+        If the RTN model costs are enabled, it returns 0, since the transportation costs are accounted for. 
+        Otherwise, it returns the transportation cost.
         """
         if self.rtn:
-            min_year = self.recycling_costs_df['Year'].min()
-            max_year = self.recycling_costs_df['Year'].max()
-            if self.current_date.year >= min_year and \
-                    self.current_date.year <= max_year:
-                return 0
+            return 0
         if hazardous:
             return self.hazardous_transportation_cost
         return self.transportation_cost
