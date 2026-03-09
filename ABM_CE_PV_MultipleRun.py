@@ -42,7 +42,8 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         t0 = time.time()
         if j < 10:
             model = ABM_CE_PV(
-                seed=(j), 
+                seed=(j),
+                att_distrib_param_eol=[0.375, 0.1], 
                 last_step=number_steps,
                 hazardous_waste_regulation_enabled=False,
                 landfill_solar_waste_acceptance_ratio=1.0,

@@ -15,7 +15,7 @@ from collections import OrderedDict
 from scipy.stats import truncnorm
 import operator
 from math import e
-from utils import TIMESTEP, transform_timeseries_timestep, GeneratorSize, ConsumerAgentResolution
+from utils import TIMESTEP, transform_timeseries_timestep, GeneratorSize, ConsumerAgentResolution, MISSING_VALUE_COST
 import os
 
 
@@ -1058,6 +1058,7 @@ class Consumers(Agent):
             earliest_rows = df.loc[
                 df['case_id'] == self.agent_identifier].sort_values(by='date')
             if earliest_rows.empty:
+                # ! If there are no rows for the case_id, return a row with NaN cost and print a warning message.
                 print(f"Warning: No RTN data available for {self.agent_identifier}.")
                 return pd.DataFrame({"case_id": [self.agent_identifier], "date": [self.model.current_date], "Cost": [np.nan]}).iloc[0]
             print(
@@ -1070,8 +1071,9 @@ class Consumers(Agent):
         landfill_cost_rows = self._get_rtn_data(self.model.landfill_cost_df)
         total_landfill_cost = landfill_cost_rows['Cost']
         if pd.isna(total_landfill_cost):
-            print(f"Warning: Landfill cost data for {self.agent_identifier} in {self.model.current_date.year} is NaN in RTN model. Using infinity as landfill cost.")
-            return np.inf
+            # ! If the landfill cost data for the agent in the current year is NaN, use the MISSING_VALUE_COST as a fallback and print a warning message.
+            print(f"Warning: Landfill cost data for {self.agent_identifier} in {self.model.current_date.year} is NaN in RTN model. Using {MISSING_VALUE_COST} as landfill cost.")
+            return MISSING_VALUE_COST
         else:
             return total_landfill_cost
         
@@ -1104,7 +1106,7 @@ class Consumers(Agent):
                    self.model.hazardous_waste_management_cost['landfill'] / 1E3 * self.model.dynamic_product_average_wght
         else:
             if self.model.rtn:
-                return self._get_rtn_landfill_cost()
+                return self._get_rtn_landfill_cost() / 1E3 * self.model.dynamic_product_average_wght
             return self.landfill_cost
         
     def set_pca_state(self):
@@ -1376,8 +1378,9 @@ class Consumers(Agent):
         # sum all rows Cost values if multiple rows are returned for the same case_id and date
         total_recycling_cost = recycling_cost_row['Cost']
         if pd.isna(total_recycling_cost):
-            print(f"Warning: Recycling cost for {self.agent_identifier} in {self.model.current_date.year} is NaN. Using infinity as cost.")
-            return np.inf
+            # If the recycling cost is NaN, print a warning and return a default value for the cost.
+            print(f"Warning: Recycling cost for {self.agent_identifier} in {self.model.current_date.year} is NaN. Using {MISSING_VALUE_COST} as cost.")
+            return MISSING_VALUE_COST
         else:
             return total_recycling_cost
         
