@@ -1437,6 +1437,8 @@ class Consumers(Agent):
         self.product_mass_output_metrics()
         self.product_storage_to_other = 0
         self.product_storage_to_other_ref = 0
+        # reset waste generated in the current step for each EoL pathway
+        self.waste_kg_current_step = {}
         self.update_transport_costs()
         # Update product growth from a list:
         if self.model.clock // self.model.timestep.value > self.model.growth_threshold:
