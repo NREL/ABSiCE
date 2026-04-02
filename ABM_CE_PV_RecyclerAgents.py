@@ -86,25 +86,29 @@ class Recyclers(Agent):
     #         self.model.transportation_cost / 1E3 * \
     #         self.model.mn_mx_av_distance_to_recycler[2]
         
-    def get_recycling_cost(self):
+    def get_recycling_cost(self, facility_id: int = None) -> float:
         """
         Get the recycling cost of the recycler.
         Either from the recycling costs dataframe or the original recycling cost.
+        If the model is using the RTN, the recycling costs are obtained from the recycling_costs_df
+        dataframe, which is updated with the recycling costs from the RTN model for each year, site and recycler.
         """
         if self.model.rtn:
             # Get the recycling cost from the dataframe for the current year and recycler name
             recycling_cost_row = self.recycling_costs_df[
-                (self.recycling_costs_df['Year'] == self.model.current_date.year) &
-                (self.recycling_costs_df['Recycler Name'] == self.recycler_name)
+                (self.recycling_costs_df['date'] <= self.model.current_date) &
+                (self.recycling_costs_df['Recycler Name'] == self.recycler_name) &
+                (self.recycling_costs_df['Site'] == facility_id)
             ]
             # If the row is not empty, return the recycling cost
             # Otherwise, return the original recycling cost
             if not recycling_cost_row.empty:
-                if np.isnan(recycling_cost_row['Cost'].values[0]):
+                recycling_cost_row = recycling_cost_row.sort_values(by='date', ascending=False).iloc[0]
+                if np.isnan(recycling_cost_row['Cost']):
                     print(f"Warning: Recycling cost for {self.recycler_name} in {self.model.current_date.year} is NaN. Using infinity as cost.")
                     recycling_cost = np.inf
                 else:
-                    recycling_cost = recycling_cost_row['Cost'].values[0]
+                    recycling_cost = recycling_cost_row['Cost']
                 return recycling_cost 
                   
         return self.original_recycling_cost

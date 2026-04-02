@@ -102,7 +102,7 @@ from geopy.geocoders import Nominatim
 import time
 from math import radians, sin, cos, sqrt, atan2
 from pathlib import Path
-from utils import TIMESTEP, ConsumerAgentResolution, PCA_MISSING_VALUE, transform_timeseries_timestep, transform_pca_timeseries_timestep
+from utils import TIMESTEP, ConsumerAgentResolution, PCA_MISSING_VALUE, transform_timeseries_timestep, transform_pca_timeseries_timestep, add_date_from_temporal_columns
 from datetime import datetime
 
 
@@ -130,8 +130,8 @@ class ABM_CE_PV(Model):
                  consumers_distribution={"residential": 1,
                                          "commercial": 0., "utility": 0.},
                  init_eol_rate={"repair": 0.005, "sell": 0.01,
-                                "recycle": 0.1, "landfill": 0.4425,
-                                "hoard": 0.4425},
+                                "recycle": 0.1, "landfill": 0.885,
+                                "hoard": 0},
                  init_purchase_choice={"new": 0.9995, "used": 0.0005,
                                        "certified": 0},
                  total_number_product=[38, 38, 38, 38, 38, 38, 38, 139, 251,
@@ -166,7 +166,7 @@ class ABM_CE_PV(Model):
                  product_lifetime=30,
                  all_EoL_pathways={"repair": True, "sell": True,
                                    "recycle": True, "landfill": True,
-                                   "hoard": True},
+                                   "hoard": False},
                  max_storage=[1, 8, 4],
                  att_distrib_param_eol= [0.595, 0.1], # [0.805, 0.09],
                  att_distrib_param_reuse=[0.01, 0.185], # [0.223, 0.262],
@@ -283,7 +283,8 @@ class ABM_CE_PV(Model):
                             'Hazardous PCA-landfill distances':
                                 "pca_landfills_distances_SA.csv",
                             'Site-landfill distances':
-                                "site_landfills_distances.csv",}):
+                                "site_landfills_distances.csv",
+                            'Recycler data': "Recyclers_data.csv",}):
 
         """Initiate model.
 
@@ -1007,16 +1008,25 @@ class ABM_CE_PV(Model):
         if self.rtn:
             # If using the RTN model results from Texas A&M University
             # load the recycling and landfill data from the RTN model
-            self.recycler_distance_df = pd.read_csv(
-                os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
+            # Recycler distance is not required since
+            # the site to recycler distances are already calculated
+            # in the RTN model and costs are calculated based on those distances
+            # But we still load it from the RTN directory to only initialize those recycler agents
+            # that are relevant for the RTN model and not the full list of recyclers.
+            self.recycler_distance_df = self.recycler_distance_df = pd.read_csv(
+                '../../../TEMP/site_recycler_distances.csv')
             self.recycling_costs_df = pd.read_csv(
-                os.path.join(os.path.dirname(__file__), "RTN", "RecyclingCostsbyYearPCA.csv"))
-            self.landfill_distance_df = pd.read_csv(
-                os.path.join(os.path.dirname(__file__), "RTN",
-                             self.file_names['PCA-landfill distances']))
+                os.path.join(os.path.dirname(__file__), "RTN", self.file_names['Recycling data']))
+            self.recycling_costs_df = add_date_from_temporal_columns(self.recycling_costs_df, self.timestep)
+            # Lanfill distances are also not required for the RTN model
+            self.landfill_distance_df = self.landfill_distance_df = pd.read_csv(
+                        '../../../TEMP/site_landfill_distances.csv')
             self.landfill_cost_df = pd.read_csv(
                 os.path.join(os.path.dirname(__file__), "RTN",
                              self.file_names['Landfill data']))
+            self.landfill_cost_df = add_date_from_temporal_columns(self.landfill_cost_df, self.timestep)
+            self.hazardous_landfill_distance_df = pd.read_csv(
+            '../../../TEMP/hazardous_site_landfill_distances.csv')
         else:
             if consumer_agent_resolution == ConsumerAgentResolution.PCA:
 
@@ -1069,10 +1079,9 @@ class ABM_CE_PV(Model):
             self.agent_pca_map = self.create_agent_pca_map(self.num_consumers)
         elif self.consumer_agent_resolution is ConsumerAgentResolution.SITE:
             self.agent_site_map = self.create_agent_site_map()
-        self.num_recyclers = len(self.recycler_distance_df[
-            'Recycler Name'].unique())
-        self.recycler_names = self.recycler_distance_df[
-            'Recycler Name'].to_list()
+        recycler_data_df = self.recycling_costs_df if self.rtn else self.recycler_distance_df
+        self.num_recyclers = len(recycler_data_df['Recycler Name'].unique())
+        self.recycler_names = recycler_data_df['Recycler Name'].unique().tolist()
         self.num_producers = num_producers
         self.num_prod_n_recyc = self.num_recyclers + num_producers
         self.prod_n_recyc_node_degree = prod_n_recyc_node_degree
@@ -1923,18 +1932,11 @@ class ABM_CE_PV(Model):
         """
         Returns the transportation cost based on the current date and
         the rtn flag.
-        If the RTN model costs are enabled, it checks if the current year
-        is within the range of the recycling costs DataFrame. If it is,
-        it returns 0, since the transportation costs are accounted for
-        in the recycling costs. Otherwise, it returns the transportation cost.
-        If the RTN model costs are not enabled, it returns the transportation cost.
+        If the RTN model costs are enabled, it returns 0, since the transportation costs are accounted for. 
+        Otherwise, it returns the transportation cost.
         """
         if self.rtn:
-            min_year = self.recycling_costs_df['Year'].min()
-            max_year = self.recycling_costs_df['Year'].max()
-            if self.current_date.year >= min_year and \
-                    self.current_date.year <= max_year:
-                return 0
+            return 0
         if hazardous:
             return self.hazardous_transportation_cost
         return self.transportation_cost
