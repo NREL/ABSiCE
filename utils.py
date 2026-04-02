@@ -1,5 +1,6 @@
 from enum import Enum
 import pandas as pd
+import numpy as np
 
 class TIMESTEP(Enum):
     """
@@ -173,3 +174,6 @@ def add_date_from_temporal_columns(df: pd.DataFrame, timestep: TIMESTEP) -> pd.D
     elif timestep == TIMESTEP.ANNUAL:
         df['date'] = pd.to_datetime(df[column_dict['year']].astype(str) + '-01-01')
     return df
+
+
+MISSING_VALUE_COST = np.inf
