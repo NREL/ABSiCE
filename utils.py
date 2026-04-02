@@ -1,5 +1,6 @@
 from enum import Enum
 import pandas as pd
+import numpy as np
 
 class TIMESTEP(Enum):
     """
@@ -150,3 +151,47 @@ def get_number_of_days_in_timestep(timestep: TIMESTEP) -> int:
         return 90  # Approximate average
     else:
         raise ValueError("Unsupported timestep. Use ANNUAL, MONTHLY, or QUARTERLY.")
+
+def add_date_from_temporal_columns(df: pd.DataFrame, timestep: TIMESTEP) -> pd.DataFrame:
+    """
+    Get a date from temporal columns in a DataFrame.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame.
+        timestep (TIMESTEP): The time step to use for creating the date.
+
+    Returns:
+        pd.Series: The resulting dates.
+
+    Example:
+        If columns are ['year', 'month'], the date will be created as the first day of the month for the given year and month.
+        If columns are ['year', 'quarter'], the date will be created as the first day of the month corresponding to the quarter for the given year and quarter.
+        If columns are ['year'], the date will be created as the first day of the year for the given year.
+
+        For example, years = [2020, 2021], quarters = [1, 2], the resulting dates will be ['2020-01-01', '2020-04-01', '2021-01-01', '2021-04-01'].
+    """
+    if timestep == TIMESTEP.MONTHLY:
+        required_columns = ['year', 'month']
+    elif timestep == TIMESTEP.QUARTERLY:
+        required_columns = ['year', 'quarter']
+    elif timestep == TIMESTEP.ANNUAL:
+        required_columns = ['year']
+    else:
+        raise ValueError("Unsupported timestep. Use ANNUAL, MONTHLY, or QUARTERLY.")
+    
+    column_dict = {col.lower(): col for col in df.columns}
+
+    missing_cols = set(required_columns) - set(column_dict.keys())
+    if missing_cols:
+        raise ValueError(f"Missing required columns for {timestep.name} timestep: {missing_cols}")
+
+    if timestep == TIMESTEP.MONTHLY:
+        df['date'] = pd.to_datetime(df[column_dict['year']].astype(str) + '-' + df[column_dict['month']].astype(str).str.zfill(2) + '-01')
+    elif timestep == TIMESTEP.QUARTERLY:
+        df['date'] = pd.to_datetime(df[column_dict['year']].astype(str) + '-' + ((df[column_dict['quarter']] - 1) * 3 + 1).astype(str).str.zfill(2) + '-01')
+    elif timestep == TIMESTEP.ANNUAL:
+        df['date'] = pd.to_datetime(df[column_dict['year']].astype(str) + '-01-01')
+    return df
+
+
+MISSING_VALUE_COST = np.inf

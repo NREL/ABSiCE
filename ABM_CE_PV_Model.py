@@ -102,7 +102,7 @@ from geopy.geocoders import Nominatim
 import time
 from math import radians, sin, cos, sqrt, atan2
 from pathlib import Path
-from utils import TIMESTEP, ConsumerAgentResolution, PCA_MISSING_VALUE, transform_timeseries_timestep, transform_pca_timeseries_timestep
+from utils import TIMESTEP, ConsumerAgentResolution, PCA_MISSING_VALUE, transform_timeseries_timestep, transform_pca_timeseries_timestep, add_date_from_temporal_columns
 from datetime import datetime
 
 
@@ -130,8 +130,8 @@ class ABM_CE_PV(Model):
                  consumers_distribution={"residential": 1,
                                          "commercial": 0., "utility": 0.},
                  init_eol_rate={"repair": 0.005, "sell": 0.01,
-                                "recycle": 0.1, "landfill": 0.4425,
-                                "hoard": 0.4425},
+                                "recycle": 0.1, "landfill": 0.885,
+                                "hoard": 0},
                  init_purchase_choice={"new": 0.9995, "used": 0.0005,
                                        "certified": 0},
                  total_number_product=[38, 38, 38, 38, 38, 38, 38, 139, 251,
@@ -166,7 +166,7 @@ class ABM_CE_PV(Model):
                  product_lifetime=30,
                  all_EoL_pathways={"repair": True, "sell": True,
                                    "recycle": True, "landfill": True,
-                                   "hoard": True},
+                                   "hoard": False},
                  max_storage=[1, 8, 4],
                  att_distrib_param_eol= [0.595, 0.1], # [0.805, 0.09],
                  att_distrib_param_reuse=[0.01, 0.185], # [0.223, 0.262],
@@ -248,7 +248,16 @@ class ABM_CE_PV(Model):
                         "aged_std": 1.33,     # observed std (mg/L Pb) for field aged modules
                         "k": 0.30,            # rate of degradation
                         "a50": 15,  # midpoint age
-                        "hazard_cutoff": 5.0, # mg/L Pb threshold for hazard classification as per EPA
+                        "hazard_cutoff": {
+                            'federal': 5.0, 'AL': 5.0, 'AZ': 5.0, 'AR': 5.0, 'CA': 5.0, 'CO': 5.0, 'CT': 5.0,
+                            'DE': 5.0, 'FL': 5.0, 'GA': 5.0, 'ID': 5.0, 'IL': 5.0, 'IN': 5.0, 'IA': 5.0,
+                            'KS': 5.0, 'KY': 5.0, 'LA': 5.0, 'ME': 5.0, 'MD': 5.0, 'MA': 5.0, 'MI': 5.0,
+                            'MN': 5.0, 'MS': 5.0, 'MO': 5.0, 'MT': 5.0, 'NE': 5.0, 'NV': 5.0, 'NH': 5.0,
+                            'NJ': 5.0, 'NM': 5.0, 'NY': 5.0, 'NC': 5.0, 'ND': 5.0, 'OH': 5.0, 'OK': 5.0,
+                            'OR': 5.0, 'PA': 5.0, 'RI': 5.0, 'SC': 5.0, 'SD': 5.0, 'TN': 5.0, 'TX': 5.0,
+                            'UT': 5.0, 'VT': 5.0, 'VA': 5.0, 'WA': 5.0, 'WV': 5.0, 'WI': 5.0, 'WY': 5.0},
+                            # mg/L Pb threshold for hazard classification as per EPA 
+                            # (CA STLC test has same threshold)
                         # Optional lower bound for std to avoid collapse
                         "min_std": 0.05,
                         "distribution": "weibull"  # distribution type: "normal" or "weibull"
@@ -275,6 +284,7 @@ class ABM_CE_PV(Model):
                                 "pca_landfills_distances_SA.csv",
                             'Site-landfill distances':
                                 "site_landfills_distances.csv",
+                            'Recycler data': "Recyclers_data.csv",
                             'Universal Waste Landfills data':
                                 "Universal_Waste_Landfills_data.csv",
                             'Universal Waste Recyclers data':
@@ -1079,16 +1089,25 @@ class ABM_CE_PV(Model):
         if self.rtn:
             # If using the RTN model results from Texas A&M University
             # load the recycling and landfill data from the RTN model
-            self.recycler_distance_df = pd.read_csv(
-                os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
+            # Recycler distance is not required since
+            # the site to recycler distances are already calculated
+            # in the RTN model and costs are calculated based on those distances
+            # But we still load it from the RTN directory to only initialize those recycler agents
+            # that are relevant for the RTN model and not the full list of recyclers.
+            self.recycler_distance_df = self.recycler_distance_df = pd.read_csv(
+                '../../../TEMP/site_recycler_distances.csv')
             self.recycling_costs_df = pd.read_csv(
-                os.path.join(os.path.dirname(__file__), "RTN", "RecyclingCostsbyYearPCA.csv"))
-            self.landfill_distance_df = pd.read_csv(
-                os.path.join(os.path.dirname(__file__), "RTN",
-                             self.file_names['PCA-landfill distances']))
+                os.path.join(os.path.dirname(__file__), "RTN", self.file_names['Recycling data']))
+            self.recycling_costs_df = add_date_from_temporal_columns(self.recycling_costs_df, self.timestep)
+            # Lanfill distances are also not required for the RTN model
+            self.landfill_distance_df = self.landfill_distance_df = pd.read_csv(
+                        '../../../TEMP/site_landfill_distances.csv')
             self.landfill_cost_df = pd.read_csv(
                 os.path.join(os.path.dirname(__file__), "RTN",
                              self.file_names['Landfill data']))
+            self.landfill_cost_df = add_date_from_temporal_columns(self.landfill_cost_df, self.timestep)
+            self.hazardous_landfill_distance_df = pd.read_csv(
+            '../../../TEMP/hazardous_site_landfill_distances.csv')
         else:
             if consumer_agent_resolution == ConsumerAgentResolution.PCA:
 
@@ -1151,15 +1170,14 @@ class ABM_CE_PV(Model):
             self.agent_pca_map = self.create_agent_pca_map(self.num_consumers)
         elif self.consumer_agent_resolution is ConsumerAgentResolution.SITE:
             self.agent_site_map = self.create_agent_site_map()
+        recycler_data_df = self.recycling_costs_df if self.rtn else self.recycler_distance_df
         # Count total recyclers (regular + universal waste)
-        num_regular_recyclers = len(self.recycler_distance_df[
-            'Recycler Name'].unique())
+        num_regular_recyclers = len(recycler_data_df['Recycler Name'].unique())
         num_universal_waste_recyclers = len(self.universal_waste_recycler_distance_df[
             'Recycler Name'].unique())
         self.num_recyclers = num_regular_recyclers + num_universal_waste_recyclers
         # Combine recycler names from both sources
-        regular_recycler_names = self.recycler_distance_df[
-            'Recycler Name'].to_list()
+        regular_recycler_names = recycler_data_df['Recycler Name'].unique().tolist()
         universal_waste_recycler_names = self.universal_waste_recycler_distance_df[
             'Recycler Name'].to_list()
         self.recycler_names = regular_recycler_names + universal_waste_recycler_names
@@ -2013,18 +2031,11 @@ class ABM_CE_PV(Model):
         """
         Returns the transportation cost based on the current date and
         the rtn flag.
-        If the RTN model costs are enabled, it checks if the current year
-        is within the range of the recycling costs DataFrame. If it is,
-        it returns 0, since the transportation costs are accounted for
-        in the recycling costs. Otherwise, it returns the transportation cost.
-        If the RTN model costs are not enabled, it returns the transportation cost.
+        If the RTN model costs are enabled, it returns 0, since the transportation costs are accounted for. 
+        Otherwise, it returns the transportation cost.
         """
         if self.rtn:
-            min_year = self.recycling_costs_df['Year'].min()
-            max_year = self.recycling_costs_df['Year'].max()
-            if self.current_date.year >= min_year and \
-                    self.current_date.year <= max_year:
-                return 0
+            return 0
         if hazardous:
             return self.hazardous_transportation_cost
         return self.transportation_cost
@@ -2038,7 +2049,7 @@ class ABM_CE_PV(Model):
         valid_site_indices = random.sample(all_site_indices, int(len(all_site_indices) * self.landfill_solar_waste_acceptance_ratio))
         self.landfill_distance_df = self.landfill_distance_df.iloc[valid_site_indices].reset_index(drop=True)
 
-    def tclp_test(self, start_year: int = 2020) -> bool:
+    def tclp_test(self, start_year: int = 2020, state: str = "federal") -> bool:
         """Age-varying (logistic) mean & std TCLP hazard classification.
 
         compute an age-dependent mean and standard deviation
@@ -2056,6 +2067,8 @@ class ABM_CE_PV(Model):
         ----------
         start_year : int
             Year the module was installed.
+        state : str
+            State of the module, used to determine hazard cutoff.
 
         Returns
         -------
@@ -2071,7 +2084,7 @@ class ABM_CE_PV(Model):
         aged_sd  = self.tclp_params["aged_std"]
         k        = self.tclp_params["k"]
         a50      = self.tclp_params["a50"]
-        cutoff   = self.tclp_params["hazard_cutoff"]
+        cutoff   = self.tclp_params["hazard_cutoff"][state]
         min_std  = self.tclp_params.get("min_std", 0.0)
 
         # Logistic weight w(age) in [0,1]

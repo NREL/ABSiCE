@@ -15,7 +15,7 @@ from collections import OrderedDict
 from scipy.stats import truncnorm
 import operator
 from math import e
-from utils import TIMESTEP, transform_timeseries_timestep, GeneratorSize, ConsumerAgentResolution, get_number_of_days_in_timestep
+from utils import TIMESTEP, transform_timeseries_timestep, GeneratorSize, ConsumerAgentResolution, get_number_of_days_in_timestep, MISSING_VALUE_COST
 import os
 from ABM_CE_PV_RecyclerAgents import Recyclers
 
@@ -1074,6 +1074,41 @@ class Consumers(Agent):
         else:
             return self.hoarding_cost
         
+    def _get_rtn_data(self, df: pd.DataFrame) -> float:
+
+        matching_row = df.loc[
+                (df['case_id'] == self.agent_identifier) &
+                (df['date'] <= self.model.current_date)
+            ]
+        
+        if not matching_row.empty:
+            # take the row with the latest date that is less than or equal to the current date
+            latest_date = matching_row['date'].max()
+            latest_rows = matching_row.loc[matching_row['date'] == latest_date]
+            return latest_rows.iloc[0]  # return the first row if there are multiple with the same latest date
+        else:
+            earliest_rows = df.loc[
+                df['case_id'] == self.agent_identifier].sort_values(by='date')
+            if earliest_rows.empty:
+                # ! If there are no rows for the case_id, return a row with NaN cost and print a warning message.
+                print(f"Warning: No RTN data available for {self.agent_identifier}.")
+                return pd.DataFrame({"case_id": [self.agent_identifier], "date": [self.model.current_date], "Cost": [np.nan]}).iloc[0]
+            print(
+                f"Warning: No RTN data available for {self.agent_identifier} on or before {self.model.current_date}. "
+                f"Using earliest available data from {earliest_rows['date'].iloc[0]}."
+            )
+            return earliest_rows.iloc[0]
+        
+    def _get_rtn_landfill_cost(self) -> float:
+        landfill_cost_rows = self._get_rtn_data(self.model.landfill_cost_df)
+        total_landfill_cost = landfill_cost_rows['Cost']
+        if pd.isna(total_landfill_cost):
+            # ! If the landfill cost data for the agent in the current year is NaN, use the MISSING_VALUE_COST as a fallback and print a warning message.
+            print(f"Warning: Landfill cost data for {self.agent_identifier} in {self.model.current_date.year} is NaN in RTN model. Using {MISSING_VALUE_COST} as landfill cost.")
+            return MISSING_VALUE_COST
+        else:
+            return total_landfill_cost
+        
     # make this method accessible from constructor
     def get_initial_landfill_cost(self, landfill_name: str):
         """
@@ -1082,19 +1117,7 @@ class Consumers(Agent):
         model, otherwise get the cost from the regular landfill file.
         """
         if self.model.rtn:
-            landfill_cost_row = self.model.landfill_cost_df['Year'] == \
-                self.model.current_date.year & \
-                self.model.landfill_cost_df['Facility Name'] == landfill_name
-            if not landfill_cost_row.empty:
-                if np.isnan(
-                        landfill_cost_row['Cost'].values[0]):
-                    print(f"Warning: Landfill cost for {landfill_name} in {self.model.current_date.year} is NaN. Using infinity as cost.")
-                    landfill_cost = np.inf
-                else:
-                    landfill_cost = landfill_cost_row['Cost'].values[0]
-                return landfill_cost
-            else:
-                raise ValueError(f"Landfill cost data for {landfill_name} in {self.model.current_date.year} not found in RTN model.")
+            return self._get_rtn_landfill_cost()
         else:
             landfill_name_column = self.model.landfill_data_params['landfill_name_column']
             landfill_volume_column = self.model.landfill_data_params['landfill_volume_column']
@@ -1114,6 +1137,8 @@ class Consumers(Agent):
         elif self.universal_waste:
             return self.universal_waste_landfill_cost
         else:
+            if self.model.rtn:
+                return self._get_rtn_landfill_cost() / 1E3 * self.model.dynamic_product_average_wght
             return self.landfill_cost
         
     def set_pca_state(self):
@@ -1166,9 +1191,9 @@ class Consumers(Agent):
             if agent.unique_id == self.recycling_facility_id:
                 # Use universal waste recycling costs if applicable
                 if self.universal_waste:
-                    recyc_cost = agent.recycling_cost + self.universal_waste_recyc_transp_cost * 0.0077
+                    recyc_cost = self.get_recycling_cost(agent.recycling_cost) + self.universal_waste_recyc_transp_cost * 0.0077
                 else:
-                    recyc_cost = agent.recycling_cost + self.recyc_transp_cost * 0.0077
+                    recyc_cost = self.get_recycling_cost(agent.recycling_cost) + self.recyc_transp_cost * 0.0077
                 self.perceived_behavioral_control[2] = recyc_cost  # ! Multiply
                 # ! by average mass per watt instead of dynamic
             elif agent.unique_id == self.refurbisher_id:
@@ -1485,10 +1510,38 @@ class Consumers(Agent):
         Get the name of the landfill based on the transportation distance from the landfill dataframe.
         :return: The name of the landfill.
         """
-        return self.model.landfill_distance_df.loc[
+
+        if self.model.rtn:
+            landfill_cost_row = self._get_rtn_data(self.model.landfill_cost_df)
+            landfill_name = landfill_cost_row['Landfill Name']
+            return landfill_name
+        else:
+            return self.model.landfill_distance_df.loc[
                 self.model.landfill_distance_df[str(self.agent_identifier)] ==
                 self.landfill_transp_dist, self.model.landfill_data_params['landfill_name_column']].iloc[0]
-
+        
+    def _get_rtn_recycling_cost(self) -> float:
+        recycling_cost_row = self._get_rtn_data(self.model.recycling_costs_df)
+        # sum all rows Cost values if multiple rows are returned for the same case_id and date
+        total_recycling_cost = recycling_cost_row['Cost']
+        if pd.isna(total_recycling_cost):
+            # If the recycling cost is NaN, print a warning and return a default value for the cost.
+            print(f"Warning: Recycling cost for {self.agent_identifier} in {self.model.current_date.year} is NaN. Using {MISSING_VALUE_COST} as cost.")
+            return MISSING_VALUE_COST
+        else:
+            return total_recycling_cost
+        
+    def get_recycling_cost(self, agent_recycling_cost: float) -> float:
+        """
+        Get the recycling cost based on the source of recycling cost data.
+        If the source is 'rtn', then get the cost from the rtn model, otherwise
+        get the cost from the associated recycling facility agent.
+        """
+        if self.model.rtn:
+            return self._get_rtn_recycling_cost()
+        else:
+            return agent_recycling_cost
+        
     @property
     def agent_identifier(self) -> str:
         """
@@ -1531,6 +1584,8 @@ class Consumers(Agent):
         self.product_mass_output_metrics()
         self.product_storage_to_other = 0
         self.product_storage_to_other_ref = 0
+        # reset waste generated in the current step for each EoL pathway
+        self.waste_kg_current_step = {}
         self.update_transport_costs()
         # Update product growth from a list:
         if self.model.clock // self.model.timestep.value > self.model.growth_threshold:

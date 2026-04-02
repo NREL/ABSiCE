@@ -42,16 +42,23 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         t0 = time.time()
         if j < 10:
             model = ABM_CE_PV(
-                seed=(j), 
+                seed=(j),
+                att_distrib_param_eol=[0.425, 0.1], 
                 last_step=number_steps,
                 hazardous_waste_regulation_enabled=False,
                 landfill_solar_waste_acceptance_ratio=1.0,
                 calculate_distances=False,
                 model_states=['TX', 'AZ', 'NV', 'NM'],
-                solar_cycle=True,
+                solar_cycle=False,
+                rtn=True,
                 landfill_data_params = {
                     "landfill_volume_column": "Waste Business Journal Costs ($/metric tons)",
                     "landfill_name_column": "Landfill Name"},
+                file_name={
+                    'Landfill data': "LandfillCostsbyYearAllLandfills.csv",
+                    'Recycling data': "RecyclingCostsbyYearAllLandfills.csv",
+                    'Hazardous landfill data': "Landfills_data_SA.csv"
+                    },
                 timestep=timestep,
                 )  # baseline
         elif j < 20:
