@@ -170,7 +170,7 @@ class ABM_CE_PV(Model):
                  max_storage=[1, 8, 4],
                  att_distrib_param_eol= [0.595, 0.1], # [0.805, 0.09],
                  att_distrib_param_reuse=[0.01, 0.185], # [0.223, 0.262],
-                 original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+                 original_recycling_cost=[0.0038-1E-6, 0.0038+1E-6, 0.0038],
                  recycling_learning_shape_factor=-0.01, # -0.3,
                  repairability=0.55,
                  original_repairing_cost=[0.1, 0.45, 0.23],
