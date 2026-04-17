@@ -337,7 +337,7 @@ class Consumers(Agent):
         population.
         """
         distribution = truncnorm(a, b, loc, scale)
-        attitude_level = float(distribution.rvs(1))
+        attitude_level = float(distribution.rvs(1)[0])
         return attitude_level
 
     def extended_tpb_convenience(self):
@@ -368,7 +368,7 @@ class Consumers(Agent):
         scale = self.model.extended_tpb["knowledge_distrib"][1]
         distribution = truncnorm((0 - loc) / scale, (1 - loc) / scale,
                                  loc, scale)
-        knowledge_level = float(distribution.rvs(1))
+        knowledge_level = float(distribution.rvs(1)[0])
         knowledge_eol = [knowledge_level, knowledge_level, knowledge_level,
                          0, 0]
         knowledge_eol = [self.model.extended_tpb["w_knowledge"] * x for x in
@@ -1322,7 +1322,9 @@ class Consumers(Agent):
         else:
             # If the TCLP test is applicable, check if the waste is hazardous
             # based on the TCLP test results.
-            is_tclp_positive = self.model.tclp_test()
+            is_tclp_positive = self.model.tclp_test(
+                self.model.tclp_market_share_df,
+                self.model.current_date.year)
             self.tclp_test_result = int(is_tclp_positive)
             if is_tclp_positive:
                 if agent.is_universal_waste_regulation_applicable():

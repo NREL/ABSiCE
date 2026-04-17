@@ -241,13 +241,14 @@ class ABM_CE_PV(Model):
                 # Li, F., Tatapudi, S. R., Shaw, S. L., Libby, C., Bicer, B., & TamizhMani, G. (2025). 
                 # Photovoltaic module leach testing: Database development and statistical analysis. 
                 # Journal of Environmental Management, 377, 124666.
+                # BSF market-share inputs were estimated using Gemini combining multiple sources including:
+                # https://www.ise.fraunhofer.de/en/publications/studies/photovoltaics-report.html
+                # https://www.anernstore.com/blogs/diy-solar-guides/cell-type-market-shares-efficiency
                  tclp_params = {
-                        "fresh_mean": 2.18,   # observed mean (mg/L Pb) for fresh modules
-                        "fresh_std": 0.86,    # observed std (mg/L Pb) for fresh modules
-                        "aged_mean": 3.20,    # observed mean (mg/L Pb) for field aged modules
-                        "aged_std": 1.33,     # observed std (mg/L Pb) for field aged modules
-                        "k": 0.30,            # rate of degradation
-                        "a50": 15,  # midpoint age
+                    "bsf_mean": 3.35,
+                    "bsf_std": 1.17,
+                    "non_bsf_mean": 1.85,
+                    "non_bsf_std": 0.97,
                         "hazard_cutoff": {
                             'federal': 5.0, 'AL': 5.0, 'AZ': 5.0, 'AR': 5.0, 'CA': 5.0, 'CO': 5.0, 'CT': 5.0,
                             'DE': 5.0, 'FL': 5.0, 'GA': 5.0, 'ID': 5.0, 'IL': 5.0, 'IN': 5.0, 'IA': 5.0,
@@ -260,7 +261,6 @@ class ABM_CE_PV(Model):
                             # (CA STLC test has same threshold)
                         # Optional lower bound for std to avoid collapse
                         "min_std": 0.05,
-                        "distribution": "weibull"  # distribution type: "normal" or "weibull"
                  },
                  pv_ice=False,
                  pca=False,
@@ -1361,6 +1361,9 @@ class ABM_CE_PV(Model):
         self.seeding = seeding
         self.seeding_recyc = seeding_recyc
         self.tclp_params = tclp_params
+        self.tclp_market_share_df = pd.read_csv(
+            os.path.join(os.path.dirname(__file__), "policy_regulation",
+                         "tclp_market_share_interpolated.csv"))
 
         self.all_gba = pd.read_excel(reedsFile)  #importing all grid balancing areas in an excel file
 
@@ -2049,24 +2052,22 @@ class ABM_CE_PV(Model):
         valid_site_indices = random.sample(all_site_indices, int(len(all_site_indices) * self.landfill_solar_waste_acceptance_ratio))
         self.landfill_distance_df = self.landfill_distance_df.iloc[valid_site_indices].reset_index(drop=True)
 
-    def tclp_test(self, start_year: int = 2020, state: str = "federal") -> bool:
-        """Age-varying (logistic) mean & std TCLP hazard classification.
+    def tclp_test(self, tclp_market_share_df: pd.DataFrame,
+                  current_year: int, state: str = "federal") -> bool:
+        """Market-share-weighted Weibull TCLP hazard classification.
 
-        compute an age-dependent mean and standard deviation
-        by smoothly interpolating between "fresh" and "aged"
-        parameters using a logistic weight w(age). Then,
-        sample a latent variable from a Weibull distribution
-        parameterized to match the interpolated mean and std.
-        Return True if the sampled latent value exceeds
-        the hazard cutoff.
-
-        This preserves gradual broadening of variance with age while avoiding
-        discrete mixture sampling.
+        Uses annual BSF and Non-BSF market shares to compute weighted
+        combined mean and standard deviation, then samples a latent TCLP
+        value from a Weibull distribution parameterized from that combined
+        mean/std. Returns True if the sampled latent value exceeds the
+        hazard cutoff.
 
         Parameters
         ----------
-        start_year : int
-            Year the module was installed.
+        tclp_market_share_df : pd.DataFrame
+            DataFrame containing annual BSF and Non-BSF market shares.
+        current_year : int
+            Current simulation year used to select market shares.
         state : str
             State of the module, used to determine hazard cutoff.
 
@@ -2074,36 +2075,41 @@ class ABM_CE_PV(Model):
         -------
         bool
             True if sampled latent value > hazard_cutoff.
+
+        Notes
+        -----
+        Initial TCLP market share values are based on U.S. panel sales
+        observed during 2005-2010. Assuming an average panel lifetime of
+        30 years, these sales shares are shifted forward by 30 years to
+        represent end-of-life market shares. Linear interpolation is then
+        applied to estimate intermediate yearly values between anchor years.
         """
 
-        module_age_years = self.current_date.year - start_year
+        min_year = int(tclp_market_share_df["Year"].min())
+        max_year = int(tclp_market_share_df["Year"].max())
+        lookup_year = max(min_year, min(current_year, max_year))
 
-        fresh_mu = self.tclp_params["fresh_mean"]
-        fresh_sd = self.tclp_params["fresh_std"]
-        aged_mu  = self.tclp_params["aged_mean"]
-        aged_sd  = self.tclp_params["aged_std"]
-        k        = self.tclp_params["k"]
-        a50      = self.tclp_params["a50"]
-        cutoff   = self.tclp_params["hazard_cutoff"][state]
-        min_std  = self.tclp_params.get("min_std", 0.0)
+        market_share_row = tclp_market_share_df.loc[
+            tclp_market_share_df["Year"] == lookup_year].iloc[0]
+        bsf_share = float(market_share_row["BSF"])
+        non_bsf_share = float(market_share_row["Non-BSF"])
 
-        # Logistic weight w(age) in [0,1]
-        w = 1.0 / (1.0 + e ** (-k * (module_age_years - a50)))
+        bsf_mean = self.tclp_params["bsf_mean"]
+        bsf_std = self.tclp_params["bsf_std"]
+        non_bsf_mean = self.tclp_params["non_bsf_mean"]
+        non_bsf_std = self.tclp_params["non_bsf_std"]
+        min_std = self.tclp_params.get("min_std", 0.0)
 
-        # Interpolated mean & std
-        mu_age = (1 - w) * fresh_mu + w * aged_mu
-        sd_age = (1 - w) * fresh_sd + w * aged_sd
-        sd_age = max(sd_age, min_std)
+        combined_mean = bsf_share * bsf_mean + non_bsf_share * non_bsf_mean
+        combined_std = bsf_share * bsf_std + non_bsf_share * non_bsf_std
+        combined_std = max(combined_std, min_std)
 
-        if self.tclp_params["distribution"] == "normal":
-            # Normal distribution sampling
-            latent = np.random.normal(mu_age, sd_age)
-            
-        elif self.tclp_params["distribution"] == "weibull":
-            # Weibull shape parameters estimated from mean & std
-            weibull_shape = (sd_age / mu_age) ** -1.086
-            weibull_scale = mu_age / gamma(1 + 1 / weibull_shape)
-            latent = np.random.weibull(weibull_shape) * weibull_scale
+        cutoff = self.tclp_params["hazard_cutoff"].get(
+            state, self.tclp_params["hazard_cutoff"]["federal"])
+
+        weibull_shape = (combined_std / combined_mean) ** -1.086
+        weibull_scale = combined_mean / gamma(1 + 1 / weibull_shape)
+        latent = np.random.weibull(weibull_shape) * weibull_scale
         return latent > cutoff
 
     def get_num_consumers(self, target_num_consumers: int) -> int:
