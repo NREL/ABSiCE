@@ -3,21 +3,28 @@
 transform_pvice_waste_by_pca.py
 
 Reads PVICE PCA-level waste output and reshapes it into a long-format CSV
-with columns: Year, PCA, Total_Waste_EOL_Ton.
+with columns: year, pca, Total_Waste_EOL_Ton.
 
 Only the pXX_Module columns are used; all other material columns are ignored.
 """
 
 import re
 import pandas as pd
+import os
 
-INPUT_FILE: str = (
-    "/Users/pghosh/SOLAR/"
-    "PVICE_PCA_Si_WasteEOL_Method2_Hybrid_ALLDEGBINS_ByPCAMaterial.csv"
+INPUT_FILE: str = os.path.join(
+    os.path.dirname(__file__),
+    "PV_ICE",
+    "TEMP",
+    "PCA",
+    "PVICE_PCA_WasteEOL_by_Year_and_PCA_wide.csv",
 )
-OUTPUT_FILE: str = (
-    "/Users/pghosh/SOLAR/ABSiCE/"
-    "PVICE_PCA_WasteEOL_by_Year_and_PCA.csv"
+OUTPUT_FILE: str = os.path.join(
+    os.path.dirname(__file__),
+    "PV_ICE",
+    "TEMP",
+    "PCA",
+    "PVICE_PCA_WasteEOL_by_Year_and_PCA_long.csv",
 )
 
 _MODULE_COL_PATTERN: re.Pattern = re.compile(r"^(p\d+)_Module$")
@@ -66,7 +73,7 @@ def transform_waste_csv(input_path: str, output_path: str) -> pd.DataFrame:
     )
 
     df_long["PCA"] = df_long["pca_column"].apply(extract_pca_id)
-    df_long = df_long.rename(columns={"year": "Year"})
+    df_long = df_long.rename(columns={"Year": "year", "PCA": "pca"})
     df_long = df_long[["year", "pca", "Yearly_Waste_EOL_Ton"]]
     df_long = df_long.sort_values(by=["year", "pca"]).reset_index(drop=True)
 

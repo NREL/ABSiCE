@@ -143,10 +143,9 @@ class Consumers(Agent):
         self.landfill_name = self.get_landfill_name()
         self.landfill_cost = self.get_initial_landfill_cost(self.landfill_name)
         if self.model.sa_landfill_costs[0]:
-            self.landfill_cost = self.model.sa_landfill_costs[1]
+            self.landfill_cost = self.model.sa_landfill_costs[1]  # $/ton
         else:
-            self.landfill_cost = self.landfill_cost / 1E3 * \
-                self.model.dynamic_product_average_wght  # $/W
+            self.landfill_cost = self.landfill_cost  # already $/ton from get_initial_landfill_cost
         # self.init_landfill_cost = self.landfill_cost
         self.set_contribution_factors()
 
@@ -324,16 +323,15 @@ class Consumers(Agent):
             #print(self.unique_id, self.pca_recyc_transp_dist, 
             #      self.model.transportation_cost, 
             #      self.model.dynamic_product_average_wght)
+        # $/ton: dist [km] * transportation_cost [$/ton/km]
         self.recyc_transp_cost = self.recyc_transp_dist * \
-            self.model.get_transportation_cost(self.hazardous) / 1E3
-            # ! remove weight * \ self.model.dynamic_product_average_wght
+            self.model.get_transportation_cost(self.hazardous)
         self.landfill_transp_cost = self.landfill_transp_dist * \
-            self.model.get_transportation_cost() / 1E3
+            self.model.get_transportation_cost()
 
         self.hazardous_landfill_transp_cost = \
             self.hazardous_landfill_transp_dist * \
-            self.model.get_transportation_cost(True) / 1E3
-            # ! remove weight * \ self.model.dynamic_product_average_wght
+            self.model.get_transportation_cost(True)
         # self.landfill_cost = \
         #    self.init_landfill_cost + \
         #    (self.model.dynamic_product_average_wght -
@@ -550,18 +548,31 @@ class Consumers(Agent):
                 self.pv_ice_waste_df['date'] == self.model.current_date][
                 'Yearly_Waste_EOL_Ton'].iloc[0]
 
-        self.number_product_EoL = yearly_waste_ton * (1 - self.used_new_ratio)
-        self.number_used_product_EoL = yearly_waste_ton * self.used_new_ratio
+        # Scale by contribution factors so every downstream consumer of
+        # number_product_EoL (update_eol_volumes, consumer_costs, kg reporters,
+        # product_storage_to_other accumulation) correctly reflects this agent's
+        # capacity-weighted share of the PCA waste.
+        # For PCA resolution both factors are 1 — no behavioural change.
+        self.number_product_EoL = (
+            yearly_waste_ton * (1 - self.used_new_ratio)
+            * self.capacity_contribution_factor
+            * self.utility_scale_pv_contribution_factor)
+        self.number_used_product_EoL = (
+            yearly_waste_ton * self.used_new_ratio
+            * self.capacity_contribution_factor
+            * self.utility_scale_pv_contribution_factor)
 
         # deprecated: m2-based waste tracking replaced by metric-ton tracking
         self.number_product_EoL_m2 = 0
         self.number_used_product_EoL_m2 = 0
 
+        # pca_tot_waste_ton accumulates the unscaled PCA-level waste so the
+        # per-PCA reporter reflects total throughput, not per-agent shares.
         self.model.pca_tot_waste_ton[self.pca] += yearly_waste_ton
         # pca_tot_waste_m2 deprecated, stays 0
 
-        self.tot_prod_EoL = (self.number_product_EoL + self.number_used_product_EoL) * \
-            self.capacity_contribution_factor * self.utility_scale_pv_contribution_factor
+        # tot_prod_EoL is now simply the sum of the already-scaled fields.
+        self.tot_prod_EoL = self.number_product_EoL + self.number_used_product_EoL
         self.tot_prod_EoL_m2 = 0  # deprecated: waste now tracked in metric tons
 
         # Update product stock lists from synthetic Effective_Capacity_[W].
@@ -751,10 +762,10 @@ class Consumers(Agent):
                             second_hand_p = agent.scd_hand_price
                             repair_c = agent.repairing_cost
                     self.purchase_choice = "used"
+                    # $/ton: dist [km] * transportation_cost [$/ton/km]
                     self.model.cost_seeding += second_hand_p + repair_c + \
                         self.random_interstate_distance * \
-                        self.model.transportation_cost / 1E3 * \
-                        self.model.dynamic_product_average_wght
+                        self.model.transportation_cost
         if self.purchase_choice == "new":
             self.number_product_new += self.number_product[-1]
         elif self.EoL_pathway == "used":
@@ -1041,8 +1052,9 @@ class Consumers(Agent):
         or not. If the waste is hazardous, the cost is higher.
         """
         if self.hazardous:
+            # Both terms are $/ton; hazardous_waste_management_cost already in $/ton
             return self.hoarding_cost + \
-                   self.model.hazardous_waste_management_cost['hoard'] / 1E3 * self.model.dynamic_product_average_wght
+                   self.model.hazardous_waste_management_cost['hoard']
         else:
             return self.hoarding_cost
 
@@ -1116,21 +1128,20 @@ class Consumers(Agent):
             _work[['Yearly_Waste_EOL_Ton', '_install_W']].fillna(0.0))
 
         # m²/W from old Solar Futures dataOut (panel geometry proxy)
-        _m2_per_w: pd.Series = np.where(
+        _m2_per_w: np.ndarray = np.where(
             _work['Yearly_Sum_Power_atEOL'] > 0,
             _work['Yearly_Sum_Area_atEOL'] / _work['Yearly_Sum_Power_atEOL'],
             0.0)
         # kg/W = (m²/W) × (kg/m²)
         _kg_per_w: pd.Series = _work['total_massperm2'] * _m2_per_w
         # waste metric tons → W: tons × 1000 kg/ton ÷ (kg/W)
-        _waste_w: pd.Series = np.where(
+        _waste_w: np.ndarray = np.where(
             _kg_per_w > 0,
             _work['Yearly_Waste_EOL_Ton'] * 1000.0 / _kg_per_w,
             0.0)
         # Effective_Capacity_[W] = ∑ installs − ∑ waste, clipped to ≥ 0
         _effective_capacity_w: pd.Series = (
-            pd.Series(_work['_install_W'].values).cumsum()
-            - pd.Series(_waste_w).cumsum()
+            _work['_install_W'].cumsum() - pd.Series(_waste_w, index=_work.index).cumsum()
         ).clip(lower=0.0)
 
         # Merge the annual stock value back onto all sub-annual rows so every
@@ -1204,12 +1215,15 @@ class Consumers(Agent):
         from the regular landfill site.
         """
         if self.hazardous:
+            # Both terms are $/ton; hazardous_waste_management_cost already in $/ton
+            # hazardous_landfill_cost loaded as $/ton from set_hazardous_landfill_transport_distance_and_costs
             return self.hazardous_landfill_cost + \
-                   self.model.hazardous_waste_management_cost['landfill'] / 1E3 * self.model.dynamic_product_average_wght
+                   self.model.hazardous_waste_management_cost['landfill']
         else:
             if self.model.rtn:
-                return self._get_rtn_landfill_cost() / 1E3 * self.model.dynamic_product_average_wght
-            return self.landfill_cost
+                # RTN landfill CSV is in $/ton (generate_landfill_costs.py * 1000)
+                return self._get_rtn_landfill_cost()
+            return self.landfill_cost  # $/ton
         
     def set_pca_state(self):
         """
@@ -1261,8 +1275,7 @@ class Consumers(Agent):
             if agent.unique_id == self.recycling_facility_id:
                 self.perceived_behavioral_control[2] = (
                     self.get_recycling_cost(agent.recycling_cost) +
-                    self.recyc_transp_cost * 0.0077)  # ! Multiply
-                # ! by average mass per watt instead of dynamic
+                    self.recyc_transp_cost)  # $/ton: cost [$/ton] + transport [$/ton]
             elif agent.unique_id == self.refurbisher_id:
                 self.perceived_behavioral_control[0] = \
                     agent.repairing_cost
@@ -1272,8 +1285,7 @@ class Consumers(Agent):
         self.pbc_reuse[0] = self.model.fsthand_mkt_pric
         self.perceived_behavioral_control[3] = (
             self.get_landfill_cost() +
-            self.get_pca_landfill_transp_cost() * 0.0077) # ! Multiply
-                # ! by average mass per watt instead of dynamic
+            self.get_pca_landfill_transp_cost())  # $/ton: cost [$/ton] + transport [$/ton]
         self.perceived_behavioral_control[4] = self.get_hoarding_cost()
 
     def product_mass_output_metrics(self):
@@ -1398,9 +1410,9 @@ class Consumers(Agent):
         recyc_transp_dist = recyc_transp_dist[str(self.agent_identifier)]
         recyc_transp_dist = recyc_transp_dist.to_list()
         self.recyc_transp_dist = min(recyc_transp_dist)
+        # $/ton: dist [km] * transportation_cost [$/ton/km]
         self.recyc_transp_cost = self.recyc_transp_dist * \
-            self.model.get_transportation_cost(self.hazardous) / 1E3
-            # ! remove weight * \ self.model.dynamic_product_average_wght
+            self.model.get_transportation_cost(self.hazardous)
 
     def set_landfill_transport_distance_and_costs(self):
         """
@@ -1412,9 +1424,9 @@ class Consumers(Agent):
         landfill_transp_dist = landfill_transp_dist[str(self.agent_identifier)]
         landfill_transp_dist = landfill_transp_dist.to_list()
         self.landfill_transp_dist = min(landfill_transp_dist)
+        # $/ton: dist [km] * transportation_cost [$/ton/km]
         self.landfill_transp_cost = self.landfill_transp_dist * \
-            self.model.get_transportation_cost() / 1E3 
-            # ! remove weight * \ self.model.dynamic_product_average_wght
+            self.model.get_transportation_cost()
 
     def set_hazardous_landfill_transport_distance_and_costs(self):
         """
@@ -1426,9 +1438,10 @@ class Consumers(Agent):
             hazardous_landfill_transp_dist[str(self.agent_identifier)].to_list()
         self.hazardous_landfill_transp_dist = \
             min(hazardous_landfill_transp_dist)
+        # $/ton: dist [km] * transportation_cost [$/ton/km]
         self.hazardous_landfill_transp_cost = \
             self.hazardous_landfill_transp_dist * \
-            self.model.get_transportation_cost(True) / 1E3
+            self.model.get_transportation_cost(True)
         self.hazardous_landfill_name = \
             self.model.hazardous_landfill_distance_df.loc[
                 self.model.hazardous_landfill_distance_df[str(self.agent_identifier)] ==
@@ -1585,7 +1598,7 @@ def report_output_consumer(agent: Consumers, field: str) -> any:
         return agent.waste_kg_current_step.get("landfill", 0)
     elif field == "hoard_kg":
         return agent.waste_kg_current_step.get("hoard", 0)
-    elif field == "total_waste_W":
+    elif field == "total_waste_ton":
         return agent.tot_prod_EoL
     elif field == "total_waste_m2":
         return agent.tot_prod_EoL_m2

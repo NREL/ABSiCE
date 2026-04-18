@@ -142,16 +142,16 @@ class ABM_CE_PV(Model):
                  product_growth=[0.166, 0.045],
                  growth_threshold=10,
                  failure_rate_alpha=[2.4928, 5.3759, 3.93495],
-                 hoarding_cost=[0, 0.001, 0.0005],
-                 landfill_cost=[
-                     0.0089, 0.0074, 0.0071, 0.0069, 0.0056, 0.0043,
-                     0.0067, 0.0110, 0.0085, 0.0082, 0.0079, 0.0074, 0.0069,
-                     0.0068, 0.0068, 0.0052, 0.0052, 0.0051, 0.0074, 0.0062,
-                     0.0049, 0.0049, 0.0047, 0.0032, 0.0049, 0.0065, 0.0064,
-                     0.0062, 0.0052, 0.0048, 0.0048, 0.0044, 0.0042, 0.0039,
-                     0.0039, 0.0045, 0.0055, 0.0050, 0.0049, 0.0044, 0.0044,
-                     0.0039, 0.0033, 0.0030, 0.0041, 0.0050, 0.0040, 0.0040,
-                     0.0038, 0.0033],
+                 hoarding_cost=[0, 130, 65],  # [0, 0.001, 0.0005] $/W → $/ton
+                 landfill_cost=[  # $/ton (converted from $/W × 129,870)
+                     1156, 961, 922, 896, 727, 558,
+                     870, 1429, 1104, 1065, 1026, 961, 896,
+                     883, 883, 675, 675, 662, 961, 805,
+                     636, 636, 610, 416, 636, 844, 831,
+                     805, 675, 623, 623, 571, 545, 506,
+                     506, 584, 714, 649, 636, 571, 571,
+                     506, 429, 390, 533, 649, 520, 520,
+                     494, 429],
                  hazardous_waste_management_cost={"repair": 0.0, "sell": 0.0,
                                                     "recycle": 0.0, "landfill": 0.0,
                                                     "hoard": 0.0}, # $/ton
@@ -168,15 +168,15 @@ class ABM_CE_PV(Model):
                                    "recycle": True, "landfill": True,
                                    "hoard": False},
                  max_storage=[1, 8, 4],
-                 att_distrib_param_eol= [0.595, 0.1], # [0.805, 0.09],
+                 att_distrib_param_eol= [0.515, 0.1], # [0.805, 0.09],
                  att_distrib_param_reuse=[0.01, 0.185], # [0.223, 0.262],
-                 original_recycling_cost=[0.0038-1E-6, 0.0038+1E-6, 0.0038],
+                 original_recycling_cost=[400-1E-6, 400+1E-6, 400],  # 0.4 $/Kg → $/ton
                  recycling_learning_shape_factor=-0.01, # -0.3,
                  repairability=0.55,
-                 original_repairing_cost=[0.1, 0.45, 0.23],
+                 original_repairing_cost=[12987, 58442, 29870],  # [0.1, 0.45, 0.23] $/W → $/ton
                  repairing_learning_shape_factor=-0.31,
                  scndhand_mkt_pric_rate=[0.4, 0.2],
-                 fsthand_mkt_pric=0.45,
+                 fsthand_mkt_pric=58442,  # 0.45 $/W → $/ton
                  fsthand_mkt_pric_reg_param=[1, 0.04],
                  refurbisher_margin=[0.4, 0.6, 0.5],
                  purchase_choices={"new": True, "used": True,
@@ -275,7 +275,7 @@ class ABM_CE_PV(Model):
                  hazardous_waste_regulation_enabled=False,
                  landfill_solar_waste_acceptance_ratio=0.4,
                  last_step=31,
-                 sa_landfill_costs=(False, 0.0037),
+                 sa_landfill_costs=(False, 481),  # 0.0037 $/W → $/ton
                  file_name={'Landfill data': "Landfills_data_2023.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv",
@@ -348,8 +348,8 @@ class ABM_CE_PV(Model):
             failure_rate_alpha (list, optional): alpha parameter of the Weibull
                 function that models waste generation. Defaults to [2.4928,
                 5.3759, 3.93495].
-            hoarding_cost (list, optional): storage costs. Defaults to
-                [0, 0.001, 0.0005].
+            hoarding_cost (list, optional): storage costs in $/ton. Defaults to
+                [0, 130, 65].
             landfill_cost (list, optional): landfill costs. Defaults to
                 [ 0.0089, 0.0074, 0.0071, 0.0069, 0.0056, 0.0043, 0.0067,
                 0.0110, 0.0085, 0.0082, 0.0079, 0.0074, 0.0069, 0.0068, 0.0068,
@@ -1366,13 +1366,12 @@ class ABM_CE_PV(Model):
             sum(distances_to_recyclers) / len(distances_to_recyclers)]
         # Compute transportation costs
         self.transportation_cost_rcl = [
-            x * self.transportation_cost / 1E3 *
-            self.dynamic_product_average_wght for x in
-            self.mn_mx_av_distance_to_recycler]
+            x * self.transportation_cost for x in
+            self.mn_mx_av_distance_to_recycler]  # $/ton: dist [km] * cost [$/ton/km]
 
         # ! TODO: change landfill transportation costs
         self.transportation_cost_rpr_ldf = self.mean_distance_within_state * \
-            self.transportation_cost / 1E3 * self.dynamic_product_average_wght
+            self.transportation_cost  # $/ton: dist [km] * cost [$/ton/km]
 
         # ! We remove the use of the recycling distances calculated with the
         # ! shortest path algorithm to use the pca-recycler distances instead
@@ -1459,7 +1458,7 @@ class ABM_CE_PV(Model):
                 "Waste Recycle (Kg)": lambda a: report_output_consumer(a, "recycle_kg"),
                 "Waste Landfill (Kg)": lambda a: report_output_consumer(a, "landfill_kg"),
                 "Waste Hoard (Kg)": lambda a: report_output_consumer(a, "hoard_kg"),
-                "Total Waste (W)": lambda a: report_output_consumer(a, "total_waste_W"),
+                "Total Waste (ton)": lambda a: report_output_consumer(a, "total_waste_ton"),
                 "Total Waste (m2)": lambda a: report_output_consumer(a, "total_waste_m2"),
                 "Installed Capacity (W)": lambda a: report_output_consumer(a, "total_installed_capacity_W"),
                 "TCLP Test Result": lambda a: report_output_consumer(a, "tclp_test_result"),
