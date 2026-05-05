@@ -143,27 +143,48 @@ class Consumers(Agent):
         self.landfill_name = self.get_landfill_name()
         self.landfill_cost = self.get_initial_landfill_cost(self.landfill_name)
         if self.model.sa_landfill_costs[0]:
-            self.landfill_cost = self.model.sa_landfill_costs[1]
+            self.landfill_cost = self.model.sa_landfill_costs[1]  # $/ton
         else:
-            self.landfill_cost = self.landfill_cost / 1E3 * \
-                self.model.dynamic_product_average_wght  # $/W
+            self.landfill_cost = self.landfill_cost  # already $/ton from get_initial_landfill_cost
         # self.init_landfill_cost = self.landfill_cost
         self.set_contribution_factors()
 
-        # ! prepare pvice waste outputs
+        _pca_merged_dir = os.path.join(
+            os.path.dirname(__file__), "PV_ICE", "TEMP", "PCA_merged")
+        # NOTE: old PV ICE results — kept for W→m² ratio
+        # (Yearly_Sum_Area_atEOL / Yearly_Sum_Power_atEOL) used in
+        # mass_per_function_model and as the conversion basis for the synthetic
+        # Effective_Capacity_[W] computed below; waste EOL values come from
+        # self.pv_ice_waste_df (consolidated metric-ton file) instead.
         self.data_out_pca = pd.read_csv(
             "dataOut_95-by-35.Adv_" + self.pca + "_.csv")
         self.data_out_pca['Yearly_Sum_Power_atEOL'] /= self.agents_per_pca
         self.data_out_pca['Yearly_Sum_Area_atEOL'] /= self.agents_per_pca
+
+        # Merged datain file: Solar Futures (2010–2025) + ReEDS StdScen24 (2026+);
+        # loaded before the timestep transform so _compute_synthetic_effective_capacity
+        # can reuse self.data_in_pca without re-reading from disk.
+        self.data_in_pca = pd.read_csv(
+            os.path.join(_pca_merged_dir, "datain_95-by-35.Adv_" + self.pca + "_.csv"))
+        self.data_in_pca['new_Installed_Capacity_[MW]'] /= self.agents_per_pca
+        self.data_in_pca['new_Installed_Capacity_[MW]'] *= 1E6
+
+        # Waste EOL data (metric tons) from consolidated file, sliced by PCA.
+        self.pv_ice_waste_df = self.model.pvice_waste_eol_df[
+            self.model.pvice_waste_eol_df['pca'] == self.pca].copy()
+        self.pv_ice_waste_df = self.pv_ice_waste_df.reset_index(drop=True)
+        self.pv_ice_waste_df['Yearly_Waste_EOL_Ton'] /= self.agents_per_pca
+
         # ! modified the initial number of products & prepare pvice outputs
         self.data_out_pca = transform_timeseries_timestep(
             self.data_out_pca, self.model.timestep)
-        self.data_in_pca = pd.read_csv(
-            "datain_95-by-35.Adv_" + self.pca + "_.csv")
-        self.data_in_pca['new_Installed_Capacity_[MW]'] /= self.agents_per_pca
-        self.data_in_pca['new_Installed_Capacity_[MW]'] *= 1E6
         self.data_in_pca = transform_timeseries_timestep(
             self.data_in_pca, self.model.timestep)
+
+        # Compute synthetic Effective_Capacity_[W] after the timestep transform
+        self.data_out_pca = self._compute_synthetic_effective_capacity(
+            self.data_out_pca)
+
         subset_df_cap = self.data_in_pca.copy()
         subset_df_cap = subset_df_cap[
             subset_df_cap['year'] < (self.model.current_date.year)]
@@ -302,16 +323,15 @@ class Consumers(Agent):
             #print(self.unique_id, self.pca_recyc_transp_dist, 
             #      self.model.transportation_cost, 
             #      self.model.dynamic_product_average_wght)
+        # $/ton: dist [km] * transportation_cost [$/ton/km]
         self.recyc_transp_cost = self.recyc_transp_dist * \
-            self.model.get_transportation_cost(self.hazardous) / 1E3
-            # ! remove weight * \ self.model.dynamic_product_average_wght
+            self.model.get_transportation_cost(self.hazardous)
         self.landfill_transp_cost = self.landfill_transp_dist * \
-            self.model.get_transportation_cost() / 1E3
+            self.model.get_transportation_cost()
 
         self.hazardous_landfill_transp_cost = \
             self.hazardous_landfill_transp_dist * \
-            self.model.get_transportation_cost(True) / 1E3
-            # ! remove weight * \ self.model.dynamic_product_average_wght
+            self.model.get_transportation_cost(True)
         # self.landfill_cost = \
         #    self.init_landfill_cost + \
         #    (self.model.dynamic_product_average_wght -
@@ -400,6 +420,8 @@ class Consumers(Agent):
         step.
         :return: Additional capacity installed (in W).
         """
+        # Installed capacity history from merged datain file (Solar Futures 2010–2025
+        # + ReEDS StdScen24 2026+).
         subset_df_cap = self.data_in_pca.copy()
         subset_df_cap = subset_df_cap[
             subset_df_cap['date'] == self.model.current_date]
@@ -513,48 +535,49 @@ class Consumers(Agent):
             self.used_new_ratio = self.used_products[-1] / (
                 self.new_products[-1] + self.used_products[-1])
 
-        yearly_waste_file = self.data_out_pca.copy()
+        # Read yearly waste from consolidated metric-ton file (self.pv_ice_waste_df).
+        # Units: Yearly_Waste_EOL_Ton is in metric tons (per agent, already divided
+        # by agents_per_pca in __init__).
         if self.model.clock == 0:
-            yearly_waste = yearly_waste_file[
-                yearly_waste_file['year'] <= (2020 + self.model.clock)]
-            yearly_waste = sum(
-                yearly_waste['Yearly_Sum_Power_atEOL'].tolist())
-            self.number_product_EoL = yearly_waste * (
-                1 - self.used_new_ratio)
-            self.number_used_product_EoL = yearly_waste * self.used_new_ratio
-            yearly_waste_m2 = yearly_waste_file[
-                yearly_waste_file['date'] <= self.model.current_date]
-            yearly_waste_m2 = sum(
-                yearly_waste_m2['Yearly_Sum_Area_atEOL'].tolist())
-            self.number_product_EoL_m2 = yearly_waste_m2 * (
-                1 - self.used_new_ratio)
-            self.number_used_product_EoL_m2 = yearly_waste_m2 * \
-                self.used_new_ratio
-            self.model.pca_tot_waste_w[self.pca] += yearly_waste
-            self.model.pca_tot_waste_m2[self.pca] += yearly_waste_m2
+            yearly_waste_ton = sum(
+                self.pv_ice_waste_df[
+                    self.pv_ice_waste_df['year'] <= (2020 + self.model.clock)
+                ]['Yearly_Waste_EOL_Ton'].tolist())
         else:
-            yearly_waste = yearly_waste_file[
-                yearly_waste_file['date'] == self.model.current_date]
-            self.number_product_EoL = yearly_waste[
-                'Yearly_Sum_Power_atEOL'].iloc[0] * (1 - self.used_new_ratio)
-            self.number_used_product_EoL = yearly_waste[
-                'Yearly_Sum_Power_atEOL'].iloc[0] * self.used_new_ratio
-            yearly_waste_m2 = yearly_waste_file[
-                yearly_waste_file['date'] == self.model.current_date]
-            self.number_product_EoL_m2 = yearly_waste_m2[
-                'Yearly_Sum_Area_atEOL'].iloc[0] * (1 - self.used_new_ratio)
-            self.number_used_product_EoL_m2 = yearly_waste[
-                'Yearly_Sum_Area_atEOL'].iloc[0] * self.used_new_ratio
-            self.model.pca_tot_waste_w[self.pca] += yearly_waste[
-                'Yearly_Sum_Power_atEOL'].iloc[0]
-            self.model.pca_tot_waste_m2[self.pca] += yearly_waste_m2[
-                'Yearly_Sum_Area_atEOL'].iloc[0]
+            yearly_waste_ton = self.pv_ice_waste_df[
+                self.pv_ice_waste_df['date'] == self.model.current_date][
+                'Yearly_Waste_EOL_Ton'].iloc[0]
 
-        self.tot_prod_EoL = (self.number_product_EoL + self.number_used_product_EoL) * \
-            self.capacity_contribution_factor * self.utility_scale_pv_contribution_factor
-        self.tot_prod_EoL_m2 = (self.number_product_EoL_m2 + self.number_used_product_EoL_m2) * \
-            self.capacity_contribution_factor * self.utility_scale_pv_contribution_factor
+        # Scale by contribution factors so every downstream consumer of
+        # number_product_EoL (update_eol_volumes, consumer_costs, kg reporters,
+        # product_storage_to_other accumulation) correctly reflects this agent's
+        # capacity-weighted share of the PCA waste.
+        # For PCA resolution both factors are 1 — no behavioural change.
+        self.number_product_EoL = (
+            yearly_waste_ton * (1 - self.used_new_ratio)
+            * self.capacity_contribution_factor
+            * self.utility_scale_pv_contribution_factor)
+        self.number_used_product_EoL = (
+            yearly_waste_ton * self.used_new_ratio
+            * self.capacity_contribution_factor
+            * self.utility_scale_pv_contribution_factor)
 
+        # deprecated: m2-based waste tracking replaced by metric-ton tracking
+        self.number_product_EoL_m2 = 0
+        self.number_used_product_EoL_m2 = 0
+
+        # pca_tot_waste_ton accumulates the unscaled PCA-level waste so the
+        # per-PCA reporter reflects total throughput, not per-agent shares.
+        self.model.pca_tot_waste_ton[self.pca] += yearly_waste_ton
+        # pca_tot_waste_m2 deprecated, stays 0
+
+        # tot_prod_EoL is now simply the sum of the already-scaled fields.
+        self.tot_prod_EoL = self.number_product_EoL + self.number_used_product_EoL
+        self.tot_prod_EoL_m2 = 0  # deprecated: waste now tracked in metric tons
+
+        # Update product stock lists from synthetic Effective_Capacity_[W].
+        # NOTE: see __init__ for accuracy caveat — W→m² conversion uses
+        # old Solar Futures dataOut ratios and may introduce some error.
         subset_df_remaining_cap = self.data_out_pca.copy()
         subset_df_remaining_cap = subset_df_remaining_cap[
             subset_df_remaining_cap['date'] <= self.model.current_date]
@@ -710,7 +733,9 @@ class Consumers(Agent):
                     used_volume_purchased = self.model.consumer_used_product \
                         / self.model.num_consumers * new_installed_capacity
                 if avl_paths.get(key) and key == "sell" and \
-                        self.sold_waste < used_volume_purchased:
+                        self.sold_waste * 1000 < used_volume_purchased * self.model.product_average_wght:
+                    # sold_waste is in metric tons → convert to kg (*1000).
+                    # used_volume_purchased is in W → convert to kg (* product_average_wght kg/W).
                     return key
                 else:
                     removed_choice = key
@@ -737,10 +762,10 @@ class Consumers(Agent):
                             second_hand_p = agent.scd_hand_price
                             repair_c = agent.repairing_cost
                     self.purchase_choice = "used"
+                    # $/ton: dist [km] * transportation_cost [$/ton/km]
                     self.model.cost_seeding += second_hand_p + repair_c + \
                         self.random_interstate_distance * \
-                        self.model.transportation_cost / 1E3 * \
-                        self.model.dynamic_product_average_wght
+                        self.model.transportation_cost
         if self.purchase_choice == "new":
             self.number_product_new += self.number_product[-1]
         elif self.EoL_pathway == "used":
@@ -817,27 +842,12 @@ class Consumers(Agent):
         # self.number_new_prod_repaired = sum([x * y for x in
         # yearly_converting_factor_list and y in self.waste]) +
         # average_converting_factor * storage
-        past_storage = max(0, (self.model.current_date.year - self.max_storage))
-        pv_ice_mat_subset_stored_years = self.model.pvice_mat_factor[
-            (self.model.pvice_mat_factor['year'] >= past_storage) &
-            (self.model.pvice_mat_factor['date'] <= self.model.current_date)]
-        avg_weight_factor_stored_pv = pv_ice_mat_subset_stored_years[
-            'total_massperm2'].mean()
-
-        original_df = self.data_out_pca.copy()
-        original_df = original_df[
-            (original_df['year'] >= past_storage) &
-            (original_df['date'] <= self.model.current_date)]
-        waste_in_w = original_df['Yearly_Sum_Power_atEOL'].mean()
-        waste_in_m2 = original_df['Yearly_Sum_Area_atEOL'].mean()
-        waste_w_to_m2_factor = waste_in_m2 / waste_in_w
-        # if self.unique_id == 0:
-        #    print(waste_w_to_m2_factor)
-
-        new_eol_vol = self.number_product_EoL_m2 * self.model.weight_factor \
-            + avg_weight_factor_stored_pv * storage * waste_w_to_m2_factor
-        used_eol_vol = self.number_used_product_EoL_m2 * \
-            self.model.weight_factor
+        # Waste is now tracked in metric tons (Yearly_Waste_EOL_Ton).
+        # Convert to kg by multiplying by 1000.
+        # storage is in metric tons (accumulated number_product_hoarded),
+        # also converted to kg.
+        new_eol_vol = self.number_product_EoL * 1000 + storage * 1000
+        used_eol_vol = self.number_used_product_EoL * 1000
 
         if eol_pathway == "repair":
             self.number_product_repaired += managed_waste
@@ -896,7 +906,7 @@ class Consumers(Agent):
                 self.perceived_behavioral_control[4]
             if product_type == "new":
                 self.number_new_prod_hoarded += \
-                    self.number_product_EoL_m2 * self.model.weight_factor
+                    self.number_product_EoL * 1000  # tons → kg
             else:
                 self.number_used_prod_hoarded += used_eol_vol
             self.model.pca_outputs[self.pca][eol_pathway] += (new_eol_vol +
@@ -929,6 +939,8 @@ class Consumers(Agent):
         pv_ice_mat_subset_stored_years = self.model.pvice_mat_factor[
             (self.model.pvice_mat_factor['year'] >= past_storage) &
             (self.model.pvice_mat_factor['date'] <= self.model.current_date)]
+        # NOTE: old PV ICE results — W→m² ratio from per-PCA dataOut file;
+        # used here only to convert installed capacity (W) to mass (kg).
         original_df = self.data_out_pca.copy()
         original_df = original_df[
             (original_df['year'] >= past_storage) &
@@ -946,6 +958,7 @@ class Consumers(Agent):
         conversion_factors = \
             pvice_mat_factor_copy['total_massperm2'].to_list()
         conversion_factors = conversion_factors[-len_product_as_function:]
+        # NOTE: old PV ICE results — W→m² ratio used for capacity mass conversion
         data_out_pca_copy = self.data_out_pca[
             self.data_out_pca['date'] <= self.model.current_date]
         waste_in_w_list = \
@@ -1021,11 +1034,13 @@ class Consumers(Agent):
             elif self.max_storage_hazardous_kg is not None:
                 # Check if the total mass of stored products per month exceeds
                 # the maximum storage capacity in kg.
-                total_mass_stored = [0] * len(self.product_years_storage_hazardous)
-                total_mass_stored[-1] = self.number_product_hoarded_hazardous
-                total_mass_stored = self.mass_per_function_model(total_mass_stored)
-                
-                total_mass_stored_month = total_mass_stored / self.number_of_months if self.number_of_months > 0 else total_mass_stored
+                # number_product_hoarded_hazardous is in metric tons; convert to kg.
+                total_mass_stored_kg = self.number_product_hoarded_hazardous * 1000
+                total_mass_stored_month = (
+                    total_mass_stored_kg / self.number_of_months
+                    if self.number_of_months > 0
+                    else total_mass_stored_kg
+                )
                 if total_mass_stored_month > self.max_storage_hazardous_kg:
                     return True
         return False
@@ -1037,11 +1052,109 @@ class Consumers(Agent):
         or not. If the waste is hazardous, the cost is higher.
         """
         if self.hazardous:
+            # Both terms are $/ton; hazardous_waste_management_cost already in $/ton
             return self.hoarding_cost + \
-                   self.model.hazardous_waste_management_cost['hoard'] / 1E3 * self.model.dynamic_product_average_wght
+                   self.model.hazardous_waste_management_cost['hoard']
         else:
             return self.hoarding_cost
-        
+
+    def _compute_synthetic_effective_capacity(
+            self,
+            data_out_pca_raw: pd.DataFrame) -> pd.DataFrame:
+        """
+        Compute a synthetic Effective_Capacity_[W] column for the per-PCA
+        dataOut DataFrame and return the DataFrame with the column attached.
+
+        The column is derived as cumulative merged-datain installs [W] minus
+        cumulative EOL waste converted from metric tons to W. The conversion
+        uses the W→m² ratio from the old Solar Futures dataOut files and the
+        kg/m² material density factors from the PV ICE baselines:
+
+            m²/W(t)    = Yearly_Sum_Area_atEOL(t) / Yearly_Sum_Power_atEOL(t)
+            kg/W(t)    = total_massperm2(t) [kg/m²]  ×  m²/W(t)
+            waste_W(t) = waste_ton(t) × 1000 [kg/ton]  ÷  kg/W(t)
+            Effective_Capacity_[W](t) = cumsum(installs_W) − cumsum(waste_W)
+
+        NOTE: The m²/W ratios reflect the old Solar Futures scenario's panel
+        geometry/efficiency and may introduce some error in the resulting
+        effective-capacity values depending on the year. Replace with actual
+        Effective_Capacity_[W] from a new PV ICE run with the merged datain
+        files when available.
+
+        Parameters:
+        data_out_pca_raw (pd.DataFrame): Per-PCA dataOut DataFrame with
+            Yearly_Sum_Power_atEOL and Yearly_Sum_Area_atEOL already divided
+            by agents_per_pca. May have sub-annual rows (e.g. monthly) after
+            transform_timeseries_timestep has been applied.
+
+        Returns:
+        pd.DataFrame: data_out_pca_raw with Effective_Capacity_[W] added
+            (or replaced if the column already exists). All sub-annual rows
+            for a given year receive the same stock value.
+        """
+        # Annual installs per agent [W] — sum sub-annual rows to recover annual
+        # totals (after transform each monthly row holds annual/periods).
+        _install_annual: pd.DataFrame = (
+            self.data_in_pca[['year', 'new_Installed_Capacity_[MW]']]
+            .groupby('year', as_index=False)['new_Installed_Capacity_[MW]'].sum()
+            .rename(columns={'new_Installed_Capacity_[MW]': '_install_W'})
+        )
+
+        # Annual waste EOL per agent — sum sub-annual rows to recover annual
+        # totals (after transform each sub-annual row holds annual/periods).
+        _waste_annual: pd.DataFrame = (
+            self.pv_ice_waste_df[['year', 'Yearly_Waste_EOL_Ton']]
+            .groupby('year', as_index=False)['Yearly_Waste_EOL_Ton'].sum()
+        )
+
+        # Annual material density kg/m² (mean across any sub-annual rows)
+        _mat_annual: pd.DataFrame = (
+            self.model.pvice_mat_factor[['year', 'total_massperm2']]
+            .groupby('year', as_index=False)['total_massperm2'].mean()
+        )
+
+        # Aggregate data_out_pca to one row per year. Power and Area are
+        # flow variables (÷ periods after transform), so summing restores
+        # the annual total. The m²/W ratio is preserved by the sum since
+        # both numerator and denominator are scaled by the same factor.
+        _work: pd.DataFrame = (
+            data_out_pca_raw[['year', 'Yearly_Sum_Power_atEOL', 'Yearly_Sum_Area_atEOL']]
+            .groupby('year', as_index=False).sum()
+        )
+        _work = _work.merge(_mat_annual, on='year', how='left')
+        _work = _work.merge(_waste_annual, on='year', how='left')
+        _work = _work.merge(_install_annual, on='year', how='left')
+        _work[['Yearly_Waste_EOL_Ton', '_install_W']] = (
+            _work[['Yearly_Waste_EOL_Ton', '_install_W']].fillna(0.0))
+
+        # m²/W from old Solar Futures dataOut (panel geometry proxy)
+        _m2_per_w: np.ndarray = np.where(
+            _work['Yearly_Sum_Power_atEOL'] > 0,
+            _work['Yearly_Sum_Area_atEOL'] / _work['Yearly_Sum_Power_atEOL'],
+            0.0)
+        # kg/W = (m²/W) × (kg/m²)
+        _kg_per_w: pd.Series = _work['total_massperm2'] * _m2_per_w
+        # waste metric tons → W: tons × 1000 kg/ton ÷ (kg/W)
+        _waste_w: np.ndarray = np.where(
+            _kg_per_w > 0,
+            _work['Yearly_Waste_EOL_Ton'] * 1000.0 / _kg_per_w,
+            0.0)
+        # Effective_Capacity_[W] = ∑ installs − ∑ waste, clipped to ≥ 0
+        _effective_capacity_w: pd.Series = (
+            _work['_install_W'].cumsum() - pd.Series(_waste_w, index=_work.index).cumsum()
+        ).clip(lower=0.0)
+
+        # Merge the annual stock value back onto all sub-annual rows so every
+        # row for a given year carries the same Effective_Capacity_[W].
+        _result: pd.DataFrame = data_out_pca_raw.copy()
+        if 'Effective_Capacity_[W]' in _result.columns:
+            _result = _result.drop(columns=['Effective_Capacity_[W]'])
+        _result = _result.merge(
+            pd.DataFrame({'year': _work['year'].values,
+                          'Effective_Capacity_[W]': _effective_capacity_w.values}),
+            on='year', how='left')
+        return _result
+
     def _get_rtn_data(self, df: pd.DataFrame) -> float:
 
         matching_row = df.loc[
@@ -1102,12 +1215,15 @@ class Consumers(Agent):
         from the regular landfill site.
         """
         if self.hazardous:
+            # Both terms are $/ton; hazardous_waste_management_cost already in $/ton
+            # hazardous_landfill_cost loaded as $/ton from set_hazardous_landfill_transport_distance_and_costs
             return self.hazardous_landfill_cost + \
-                   self.model.hazardous_waste_management_cost['landfill'] / 1E3 * self.model.dynamic_product_average_wght
+                   self.model.hazardous_waste_management_cost['landfill']
         else:
             if self.model.rtn:
-                return self._get_rtn_landfill_cost() / 1E3 * self.model.dynamic_product_average_wght
-            return self.landfill_cost
+                # RTN landfill CSV is in $/ton (generate_landfill_costs.py * 1000)
+                return self._get_rtn_landfill_cost()
+            return self.landfill_cost  # $/ton
         
     def set_pca_state(self):
         """
@@ -1159,8 +1275,7 @@ class Consumers(Agent):
             if agent.unique_id == self.recycling_facility_id:
                 self.perceived_behavioral_control[2] = (
                     self.get_recycling_cost(agent.recycling_cost) +
-                    self.recyc_transp_cost * 0.0077)  # ! Multiply
-                # ! by average mass per watt instead of dynamic
+                    self.recyc_transp_cost)  # $/ton: cost [$/ton] + transport [$/ton]
             elif agent.unique_id == self.refurbisher_id:
                 self.perceived_behavioral_control[0] = \
                     agent.repairing_cost
@@ -1170,8 +1285,7 @@ class Consumers(Agent):
         self.pbc_reuse[0] = self.model.fsthand_mkt_pric
         self.perceived_behavioral_control[3] = (
             self.get_landfill_cost() +
-            self.get_pca_landfill_transp_cost() * 0.0077) # ! Multiply
-                # ! by average mass per watt instead of dynamic
+            self.get_pca_landfill_transp_cost())  # $/ton: cost [$/ton] + transport [$/ton]
         self.perceived_behavioral_control[4] = self.get_hoarding_cost()
 
     def product_mass_output_metrics(self):
@@ -1234,9 +1348,13 @@ class Consumers(Agent):
         :param regulator_thresholds: A dictionary mapping generator sizes to their thresholds.
         """
         if self.hazardous:
-            hazardous_waste_mass = [0] * len(self.new_products_hard_copy)
-            hazardous_waste_mass[-1] = self.tot_prod_EoL
-            hazardous_waste_mass_month = self.mass_per_function_model(hazardous_waste_mass) / self.number_of_months if self.number_of_months > 0 else self.mass_per_function_model(hazardous_waste_mass)
+            # tot_prod_EoL is in metric tons; convert to kg for threshold comparison.
+            hazardous_waste_mass_kg = self.tot_prod_EoL * 1000
+            hazardous_waste_mass_month = (
+                hazardous_waste_mass_kg / self.number_of_months
+                if self.number_of_months > 0
+                else hazardous_waste_mass_kg
+            )
             self.generator_size = self.get_generator_size_from_waste(
             hazardous_waste_mass_month, regulator_thresholds)
             
@@ -1292,9 +1410,9 @@ class Consumers(Agent):
         recyc_transp_dist = recyc_transp_dist[str(self.agent_identifier)]
         recyc_transp_dist = recyc_transp_dist.to_list()
         self.recyc_transp_dist = min(recyc_transp_dist)
+        # $/ton: dist [km] * transportation_cost [$/ton/km]
         self.recyc_transp_cost = self.recyc_transp_dist * \
-            self.model.get_transportation_cost(self.hazardous) / 1E3
-            # ! remove weight * \ self.model.dynamic_product_average_wght
+            self.model.get_transportation_cost(self.hazardous)
 
     def set_landfill_transport_distance_and_costs(self):
         """
@@ -1306,9 +1424,9 @@ class Consumers(Agent):
         landfill_transp_dist = landfill_transp_dist[str(self.agent_identifier)]
         landfill_transp_dist = landfill_transp_dist.to_list()
         self.landfill_transp_dist = min(landfill_transp_dist)
+        # $/ton: dist [km] * transportation_cost [$/ton/km]
         self.landfill_transp_cost = self.landfill_transp_dist * \
-            self.model.get_transportation_cost() / 1E3 
-            # ! remove weight * \ self.model.dynamic_product_average_wght
+            self.model.get_transportation_cost()
 
     def set_hazardous_landfill_transport_distance_and_costs(self):
         """
@@ -1320,9 +1438,10 @@ class Consumers(Agent):
             hazardous_landfill_transp_dist[str(self.agent_identifier)].to_list()
         self.hazardous_landfill_transp_dist = \
             min(hazardous_landfill_transp_dist)
+        # $/ton: dist [km] * transportation_cost [$/ton/km]
         self.hazardous_landfill_transp_cost = \
             self.hazardous_landfill_transp_dist * \
-            self.model.get_transportation_cost(True) / 1E3
+            self.model.get_transportation_cost(True)
         self.hazardous_landfill_name = \
             self.model.hazardous_landfill_distance_df.loc[
                 self.model.hazardous_landfill_distance_df[str(self.agent_identifier)] ==
@@ -1479,7 +1598,7 @@ def report_output_consumer(agent: Consumers, field: str) -> any:
         return agent.waste_kg_current_step.get("landfill", 0)
     elif field == "hoard_kg":
         return agent.waste_kg_current_step.get("hoard", 0)
-    elif field == "total_waste_W":
+    elif field == "total_waste_ton":
         return agent.tot_prod_EoL
     elif field == "total_waste_m2":
         return agent.tot_prod_EoL_m2
