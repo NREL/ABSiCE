@@ -70,9 +70,10 @@ class Recyclers(Agent):
         self.recycler_name = self.model.recycler_names.pop()
         self.hazardous = False
         self.verified = False
-        # Check if the recycler is a hazardous waste recycler
-        if self.model.recycler_data[self.model.recycler_data['Recycler Name'] == self.recycler_name]['RCRA permit'].values[0]:
-            self.hazardous = True
+        # Check if the recycler is a hazardous waste recycler and if the hazardous waste regulation is enabled in the model
+        if self.model.hazardous_waste_regulation_enabled:
+            if self.model.recycler_data[self.model.recycler_data['Recycler Name'] == self.recycler_name]['RCRA permit'].values[0]:
+                self.hazardous = True
 
     # def update_transport_recycling_costs(self):
     #     """
