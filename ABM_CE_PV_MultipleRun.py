@@ -43,22 +43,22 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         if j < 10:
             model = ABM_CE_PV(
                 seed=(j),
-                att_distrib_param_eol=[0.425, 0.1], 
+                # att_distrib_param_eol=[0.425, 0.1], 
                 last_step=number_steps,
                 hazardous_waste_regulation_enabled=False,
                 landfill_solar_waste_acceptance_ratio=1.0,
                 calculate_distances=False,
                 model_states=['TX', 'AZ', 'NV', 'NM'],
-                solar_cycle=False,
-                rtn=True,
+                solar_cycle=True,
+                rtn=False,
                 landfill_data_params = {
                     "landfill_volume_column": "Waste Business Journal Costs ($/metric tons)",
                     "landfill_name_column": "Landfill Name"},
-                file_name={
-                    'Landfill data': "LandfillCostsbyYearAllLandfills.csv",
-                    'Recycling data': "RecyclingCostsbyYearAllLandfills.csv",
-                    'Hazardous landfill data': "Landfills_data_SA.csv"
-                    },
+                # file_name={
+                #     'Landfill data': "LandfillCostsbyYearAllLandfills.csv",
+                #     'Recycling data': "RecyclingCostsbyYearAllLandfills.csv",
+                #     'Hazardous landfill data': "Landfills_data_SA.csv"
+                #     },
                 timestep=timestep,
                 )  # baseline
         elif j < 20:
@@ -80,7 +80,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                                 "recycle": 1E-6, "landfill": 1,
                                 "hoard": 1E-6},
                 recycling_learning_shape_factor=-0.0,
-                original_recycling_cost=[0.0077-1E-6, 0.0077+1E-6, 0.0077],
+                original_recycling_cost=[1000-1E-6, 1000+1E-6, 1000],  # 0.0077 $/W → $/ton
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
                 # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
                 # original_recycling_cost=[1E-12, 3E-12, 2E-12],
@@ -92,7 +92,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         elif j < 5:
             model = ABM_CE_PV(
                 seed=(j - 4), last_step=number_steps,
-                sa_landfill_costs=(True, 0.0077),
+                sa_landfill_costs=(True, 1000),  # 0.0077 $/W → $/ton
                 file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances_SA.csv"},
@@ -100,7 +100,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                                 "recycle": 1E-6, "landfill": 1,
                                 "hoard": 1E-6},
                 recycling_learning_shape_factor=-0.0,
-                original_recycling_cost=[0.0077-1E-6, 0.0077+1E-6, 0.0077],
+                original_recycling_cost=[1000-1E-6, 1000+1E-6, 1000],  # 0.0077 $/W → $/ton
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
                 # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
                 # original_recycling_cost=[1E-12, 3E-12, 2E-12],
@@ -112,7 +112,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         elif j < 6:
             model = ABM_CE_PV(
                 seed=(j - 5), last_step=number_steps,
-                sa_landfill_costs=(True, 0.0134),
+                sa_landfill_costs=(True, 1740),  # 0.0134 $/W → $/ton
                 file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances_SA.csv"},
@@ -120,7 +120,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                                 "recycle": 1E-6, "landfill": 1,
                                 "hoard": 1E-6},
                 recycling_learning_shape_factor=-0.0,
-                original_recycling_cost=[0.0077-1E-6, 0.0077+1E-6, 0.0077],
+                original_recycling_cost=[1000-1E-6, 1000+1E-6, 1000],  # 0.0077 $/W → $/ton
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
                 # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
                 # original_recycling_cost=[1E-12, 3E-12, 2E-12],
@@ -132,7 +132,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         elif j < 7:
             model = ABM_CE_PV(
                 seed=(j - 6), last_step=number_steps,
-                sa_landfill_costs=(True, 0.0000),
+                sa_landfill_costs=(True, 0.0000),  # 0.0 $/W (no change)
                 file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances_SA.csv"},
@@ -142,7 +142,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                 recycling_learning_shape_factor=-0.0,
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
                 # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
-                original_recycling_cost=[1E-12, 3E-12, 2E-12],
+                original_recycling_cost=[1E-12, 3E-12, 2E-12],  # near-zero, no conversion needed
                 # transportation_cost=1.25,
                 w_sn_eol=0,
                 w_pbc_eol=1,
@@ -151,7 +151,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         elif j < 8:
             model = ABM_CE_PV(
                 seed=(j - 7), last_step=number_steps,
-                sa_landfill_costs=(True, 0.0077),
+                sa_landfill_costs=(True, 1000),  # 0.0077 $/W → $/ton
                 file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances_SA.csv"},
@@ -170,7 +170,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         elif j < 9:
             model = ABM_CE_PV(
                 seed=(j - 8), last_step=number_steps,
-                sa_landfill_costs=(True, 0.0134),
+                sa_landfill_costs=(True, 1740),  # 0.0134 $/W -> $/ton,
                 file_name={'Landfill data': "Landfills_data_SA.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances_SA.csv"},
@@ -197,7 +197,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                                 "recycle": 1E-6, "landfill": 1,
                                 "hoard": 1E-6},
                 recycling_learning_shape_factor=-0.0,
-                original_recycling_cost=[0.0134-1E-6, 0.0134+1E-6, 0.0134],
+                original_recycling_cost=[1740-1E-6, 1740+1E-6, 1740],  # 0.0134 $/W -> $/ton,
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
                 # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
                 # original_recycling_cost=[1E-12, 3E-12, 2E-12],
@@ -210,7 +210,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         elif j < 11:
             model = ABM_CE_PV(
                 seed=(j - 10), last_step=number_steps,
-                sa_landfill_costs=(True, 0.0077),
+                sa_landfill_costs=(True, 1000),  # 0.0077 $/W -> $/ton,
                 # sa_landfill_costs=(True, 0.0038),
                 file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
@@ -219,7 +219,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                                 "recycle": 1E-6, "landfill": 1,
                                 "hoard": 1E-6},
                 recycling_learning_shape_factor=-0.0,
-                original_recycling_cost=[0.0134-1E-6, 0.0134+1E-6, 0.0134],
+                original_recycling_cost=[1740-1E-6, 1740+1E-6, 1740],  # 0.0134 $/W -> $/ton,
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
                 # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
                 # original_recycling_cost=[1E-12, 3E-12, 2E-12],
@@ -232,7 +232,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         elif j < 12:
             model = ABM_CE_PV(
                 seed=(j - 11), last_step=number_steps,
-                sa_landfill_costs=(True, 0.0134),
+                sa_landfill_costs=(True, 1740),  # 0.0134 $/W -> $/ton,
                 # sa_landfill_costs=(True, 0.0077),
                 file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
@@ -241,7 +241,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                                 "recycle": 1E-6, "landfill": 1,
                                 "hoard": 1E-6},
                 recycling_learning_shape_factor=-0.0,
-                original_recycling_cost=[0.0134-1E-6, 0.0134+1E-6, 0.0134],
+                original_recycling_cost=[1740-1E-6, 1740+1E-6, 1740],  # 0.0134 $/W -> $/ton,
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
                 # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
                 # original_recycling_cost=[1E-12, 3E-12, 2E-12],
@@ -262,7 +262,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                                 "recycle": 1E-6, "landfill": 1,
                                 "hoard": 1E-6},
                 recycling_learning_shape_factor=-0.0,
-                original_recycling_cost=[0.0077-1E-6, 0.0077+1E-6, 0.0077],
+                original_recycling_cost=[1000-1E-6, 1000+1E-6, 1000],  # 0.0077 $/W -> $/ton,
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
                 # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
                 # original_recycling_cost=[1E-12, 3E-12, 2E-12],
@@ -274,7 +274,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         elif j < 14:
             model = ABM_CE_PV(
                 seed=(j - 13), last_step=number_steps,
-                sa_landfill_costs=(True, 0.0077),
+                sa_landfill_costs=(True, 1000),  # 0.0077 $/W -> $/ton,
                 file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
@@ -282,7 +282,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                                 "recycle": 1E-6, "landfill": 1,
                                 "hoard": 1E-6},
                 recycling_learning_shape_factor=-0.0,
-                original_recycling_cost=[0.0077-1E-6, 0.0077+1E-6, 0.0077],
+                original_recycling_cost=[1000-1E-6, 1000+1E-6, 1000],  # 0.0077 $/W -> $/ton,
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
                 # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
                 # original_recycling_cost=[1E-12, 3E-12, 2E-12],
@@ -294,7 +294,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         elif j < 15:
             model = ABM_CE_PV(
                 seed=(j - 14), last_step=number_steps,
-                sa_landfill_costs=(True, 0.0134),
+                sa_landfill_costs=(True, 1740),  # 0.0134 $/W -> $/ton,
                 file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
@@ -302,7 +302,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                                 "recycle": 1E-6, "landfill": 1,
                                 "hoard": 1E-6},
                 recycling_learning_shape_factor=-0.0,
-                original_recycling_cost=[0.0077-1E-6, 0.0077+1E-6, 0.0077],
+                original_recycling_cost=[1000-1E-6, 1000+1E-6, 1000],  # 0.0077 $/W -> $/ton,
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
                 # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
                 # original_recycling_cost=[1E-12, 3E-12, 2E-12],
@@ -333,7 +333,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         elif j < 17:
             model = ABM_CE_PV(
                 seed=(j - 16), last_step=number_steps,
-                sa_landfill_costs=(True, 0.0077),
+                sa_landfill_costs=(True, 1000),  # 0.0077 $/W -> $/ton,
                 file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
@@ -352,7 +352,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         elif j < 18:
             model = ABM_CE_PV(
                 seed=(j - 17), last_step=number_steps,
-                sa_landfill_costs=(True, 0.0134),
+                sa_landfill_costs=(True, 1740),  # 0.0134 $/W -> $/ton,
                 file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
@@ -448,7 +448,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                                 "pca_landfills_distances.csv"},
                 recycling_learning_shape_factor=-0.0,
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
-                original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+                original_recycling_cost=[8312-1E-6, 8312+1E-6, 8312],  # 0.064 $/W -> $/ton,
                 # original_recycling_cost=[1E-12, 3E-12, 2E-12],
                 transportation_cost=1.5,
                 w_sn_eol=0,
@@ -463,7 +463,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                                 "pca_landfills_distances.csv"},
                 recycling_learning_shape_factor=-0.0,
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
-                original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+                original_recycling_cost=[8312-1E-6, 8312+1E-6, 8312],  # 0.064 $/W -> $/ton,
                 # original_recycling_cost=[1E-12, 3E-12, 2E-12],
                 transportation_cost=1E-12,
                 w_sn_eol=0,
@@ -478,7 +478,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                                 "pca_landfills_distances.csv"},
                 recycling_learning_shape_factor=-0.0,
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
-                original_recycling_cost=[0.085-1E-6, 0.085+1E-6, 0.085],
+                original_recycling_cost=[11039-1E-6, 11039+1E-6, 11039],  # 0.085 $/W -> $/ton,
                 # original_recycling_cost=[1E-12, 3E-12, 2E-12],
                 transportation_cost=1.5,
                 w_sn_eol=0.27,
@@ -493,7 +493,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                                 "pca_landfills_distances.csv"},
                 recycling_learning_shape_factor=-0.0,
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
-                original_recycling_cost=[0.085-1E-6, 0.085+1E-6, 0.085],
+                original_recycling_cost=[11039-1E-6, 11039+1E-6, 11039],  # 0.085 $/W -> $/ton,
                 # original_recycling_cost=[1E-12, 3E-12, 2E-12],
                 transportation_cost=1E-12,
                 w_sn_eol=0.27,
@@ -503,11 +503,11 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         elif j < 140:
             model = ABM_CE_PV(
                 seed=(j - 120), last_step=number_steps,
-                sa_landfill_costs=(True, 0.0115),
+                sa_landfill_costs=(True, 1494),  # 0.0115 $/W -> $/ton,
                 file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
-                original_recycling_cost=[0.085-1E-6, 0.085+1E-6, 0.085],
+                original_recycling_cost=[11039-1E-6, 11039+1E-6, 11039],  # 0.085 $/W -> $/ton,
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
                 # original_recycling_cost=[1E-12, 3E-12, 2E-12],
                 # transportation_cost=1.5,
@@ -518,11 +518,11 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         elif j < 160:
             model = ABM_CE_PV(
                 seed=(j - 140), last_step=number_steps,
-                sa_landfill_costs=(True, 0.0134),
+                sa_landfill_costs=(True, 1740),  # 0.0134 $/W -> $/ton,
                 file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
-                original_recycling_cost=[0.085-1E-6, 0.085+1E-6, 0.085],
+                original_recycling_cost=[11039-1E-6, 11039+1E-6, 11039],  # 0.085 $/W -> $/ton,
                 # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
                 # original_recycling_cost=[1E-12, 3E-12, 2E-12],
                 # transportation_cost=1.5,
