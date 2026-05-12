@@ -87,13 +87,14 @@ class Recyclers(Agent):
 
     def set_recycler_type(self):
         # Check if the recycler is a hazardous waste recycler
-        hazardous_recycler_row = self.model.recycler_data[self.model.recycler_data['Recycler Name'] == self.recycler_name]
-        if not hazardous_recycler_row.empty and hazardous_recycler_row['RCRA permit'].values[0]:
-            self.hazardous = True
-        # Check if the recycler is a universal waste recycler
-        universal_waste_recycler_row = self.model.recycler_data[self.model.recycler_data['Recycler Name'] == self.recycler_name]
-        if not universal_waste_recycler_row.empty and universal_waste_recycler_row['Universal Waste Permit'].values[0]:
-            self.universal_waste = True
+        if self.model.hazardous_waste_regulation_enabled:
+            hazardous_recycler_row = self.model.recycler_data[self.model.recycler_data['Recycler Name'] == self.recycler_name]
+            if not hazardous_recycler_row.empty and hazardous_recycler_row['RCRA permit'].values[0]:
+                self.hazardous = True
+            # Check if the recycler is a universal waste recycler
+            universal_waste_recycler_row = self.model.recycler_data[self.model.recycler_data['Recycler Name'] == self.recycler_name]
+            if not universal_waste_recycler_row.empty and universal_waste_recycler_row['Universal Waste Permit'].values[0]:
+                self.universal_waste = True
         
     def get_recycling_cost(self, facility_id: int = None) -> float:
         """

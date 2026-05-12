@@ -224,8 +224,7 @@ class Refurbishers(Agent):
         tpb_scores[1] = -1 * self.scd_hand_price + \
             self.repairing_cost + \
             agent.random_interstate_distance * \
-            self.model.get_transportation_cost() / 1E3 * \
-            self.model.dynamic_product_average_wght
+            self.model.get_transportation_cost()  # $/ton: dist [km] * cost [$/ton/km]
         pathways_and_BI = {
             list(self.model.all_EoL_pathways.keys())[i]:
                 tpb_scores[i] for i in range(
@@ -337,8 +336,7 @@ class Refurbishers(Agent):
         """
         self.sold_waste_recycler = self.model.yearly_repaired_waste / \
             self.model.num_consumers
-        mass_volume_recycler = self.sold_waste_recycler * \
-            self.model.dynamic_product_average_wght
+        mass_volume_recycler = self.sold_waste_recycler * 1000  # tons → kg
         for agent in self.model.agents:
             if agent.unique_id < self.model.num_consumers:
                 if agent.refurbisher_id == self.unique_id:
@@ -477,8 +475,7 @@ class Refurbishers(Agent):
                 revenue = \
                     -1 * self.scd_hand_price + self.repairing_cost + \
                     agent.random_interstate_distance * \
-                    self.model.get_transportation_cost() / 1E3 * \
-                    self.model.dynamic_product_average_wght
+                    self.model.get_transportation_cost()  # $/ton: dist [km] * cost [$/ton/km]
                 cost_recycling = agent.copy_perceived_behavioral_control[2]
                 cost_landfilling = \
                     agent.copy_perceived_behavioral_control[3]
