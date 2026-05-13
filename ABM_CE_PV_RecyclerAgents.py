@@ -96,6 +96,7 @@ class Recyclers(Agent):
                 self.model.universal_waste_recyclers_data['Recycler Name'] == self.recycler_name]
             if not universal_waste_recycler_row.empty and universal_waste_recycler_row['Universal Waste Permit'].values[0]:
                 self.universal_waste = True
+                self.hazardous = False  # If the recycler is a universal waste recycler, it cannot be a hazardous waste recycler
         
     def get_recycling_cost(self, facility_id: int = None) -> float:
         """

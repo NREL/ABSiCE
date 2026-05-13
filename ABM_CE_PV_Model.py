@@ -153,7 +153,7 @@ class ABM_CE_PV(Model):
                      506, 429, 390, 533, 649, 520, 520,
                      494, 429],
                  hazardous_waste_management_cost={"repair": 0.0, "sell": 0.0,
-                                                    "recycle": 0.0, "landfill": 0.0,
+                                                    "recycle": 0.0, "landfill": 300.0,
                                                     "hoard": 0.0}, # $/ton
                  theory_of_planned_behavior={
                      "residential": True, "commercial": True, "utility": True},
@@ -218,7 +218,7 @@ class ABM_CE_PV(Model):
                      'Wisconsin', 'Ohio', 'Kentucky', 'South Carolina'],
                  # transportation_cost=0.0314,
                  transportation_cost=0.095,
-                 hazardous_transportation_cost=0.395, # $/ton-km
+                 hazardous_transportation_cost=0.095, # $/ton-km
                  used_product_substitution_rate=[0.6, 1, 0.8],
                  imperfect_substitution=0,
                  epr_business_model=False,
