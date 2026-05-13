@@ -145,6 +145,33 @@ class Regulators(Agent):
             return True
         return False  # No universal waste regulations apply by default
 
+    def is_epr_applicable(self) -> bool:
+        """
+        Check if Extended Producer Responsibility (EPR) regulation is active
+        for this state. When True, the landfill pathway is disabled for all
+        PV owners in the state.
+        Returns:
+        bool: True if EPR is currently active for this state.
+        """
+        if (not self.current_regulatory_policy.empty
+                and self.current_regulatory_policy["epr"].values[0] == True):
+            return True
+        return False
+
+    def is_recycling_bonds_applicable(self) -> bool:
+        """
+        Check if recycling bonds are active for this state. When True, all
+        recycling costs (base cost, transportation, and waste management
+        premiums) are covered by the bonds and are effectively zero for
+        PV owners in the state.
+        Returns:
+        bool: True if recycling bonds are currently active for this state.
+        """
+        if (not self.current_regulatory_policy.empty
+                and self.current_regulatory_policy["recycling_bonds"].values[0] == True):
+            return True
+        return False
+
     def check_and_update_regulations(self) -> None:
         """
         Check and update regulatory policy values for this state based on the

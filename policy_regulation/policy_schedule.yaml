@@ -43,4 +43,7 @@
 #     - states: [ID, UT, AZ]
 #       end_year: 2035
 
-policies: {}
+policies:
+  epr:
+    - states: [WA]
+      start_year: 2030
