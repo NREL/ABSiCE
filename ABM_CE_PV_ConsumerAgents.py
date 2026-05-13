@@ -228,8 +228,6 @@ class Consumers(Agent):
             model.color_map.append('blue')
         else:
             model.color_map.append('green')
-        self.recycling_facility_id = model.num_consumers + random.randrange(
-            model.num_recyclers)
         self.refurbisher_id = model.num_consumers + model.num_prod_n_recyc + \
             random.randrange(model.num_refurbishers)
         # todo: see if this can be stored in the model.
@@ -332,6 +330,7 @@ class Consumers(Agent):
         if self.universal_waste:
             self.recyc_transp_cost = self.universal_waste_recyc_transp_dist * \
                 self.model.get_transportation_cost()
+            self.universal_waste_recyc_transp_cost = self.recyc_transp_cost
             self.landfill_transp_cost = self.universal_waste_landfill_transp_dist * \
                 self.model.get_transportation_cost()
         else:
@@ -1019,13 +1018,31 @@ class Consumers(Agent):
 
     def update_product_storage_hazardous(self): 
         """
-        Update the storage of hazardous products based on the purchase choice.
+        Update the storage of hazardous products based on the EOL choice.
         """
         if self.hazardous or self.universal_waste:
             self.product_years_storage_hazardous.append(self.EoL_pathway)
         else:
             self.product_years_storage_hazardous.append("na")
     
+    def _is_time_based_storage_limit_exceeded(self, max_storage_days: float) -> bool:
+        """
+        Check whether consecutive hoarding timesteps in product_years_storage_hazardous
+        exceed the allowed storage period derived from max_storage_days.
+        Parameters:
+        max_storage_days (float): Maximum allowed storage duration in days.
+        Returns:
+        bool: True if the time-based storage limit is exceeded, False otherwise.
+        """
+        count: int = 0
+        max_storage_period: float = max_storage_days / get_number_of_days_in_timestep(self.model.timestep)
+        for eol in self.product_years_storage_hazardous:
+            if eol == "hoard":
+                count += 1
+            elif count <= max_storage_period:
+                count = 0
+        return count > max_storage_period
+
     def is_hazardous_waste_storage_limit_exceeded(self):
         """
         Check if the storage limit for hazardous waste is exceeded based on
@@ -1034,24 +1051,16 @@ class Consumers(Agent):
         returns True if the limit is exceeded, False otherwise.
         """
         if self.hazardous:
-            count = 0
-            max_storage_period = self.max_storage_hazardous_days / get_number_of_days_in_timestep(self.model.timestep)
-            for eol in self.product_years_storage_hazardous:
-                if eol == "hoard":
-                    count += 1
-                elif count <= max_storage_period:
-                    count = 0
-            if count > max_storage_period:
+            if self._is_time_based_storage_limit_exceeded(self.max_storage_hazardous_days):
                 return True
-            elif self.max_storage_hazardous_kg is not None:
-                # Check if the total mass of stored products per month exceeds
-                # the maximum storage capacity in kg.
-                # number_product_hoarded_hazardous is in metric tons; convert to kg.
-                total_mass_stored_kg = self.number_product_hoarded_hazardous * 1000
-                total_mass_stored_month = (
+            if self.max_storage_hazardous_kg is not None:
+                # number_product_hoarded_hazardous is cumulative; convert tons → kg.
+                total_mass_stored_kg: float = self.number_product_hoarded_hazardous * 1000
+                # avg kg/month over simulation so far; compare against monthly limit.
+                total_mass_stored_month: float = (
                     total_mass_stored_kg / self.number_of_months
                     if self.number_of_months > 0
-                    else total_mass_stored_kg
+                    else total_mass_stored_kg  # step 0: no months elapsed yet, treat full stored mass as one month's worth
                 )
                 if total_mass_stored_month > self.max_storage_hazardous_kg:
                     return True
@@ -1065,29 +1074,62 @@ class Consumers(Agent):
         returns True if the limit is exceeded, False otherwise.
         """
         if self.universal_waste:
-            count = 0
-            max_storage_period = self.max_storage_universal_waste_days / get_number_of_days_in_timestep(self.model.timestep)
-            for eol in self.product_years_storage_hazardous:
-                if eol == "hoard":
-                    count += 1
-                elif count <= max_storage_period:
-                    count = 0
-            if count > max_storage_period:
-                return True
+            return self._is_time_based_storage_limit_exceeded(self.max_storage_universal_waste_days)
         return False
             
 
-    def get_hoarding_cost(self):
+    def _get_management_cost_premium(self, pathway: str) -> float:
+        """
+        Return the hazardous waste management cost premium ($/ton) for the
+        given EoL pathway, scaled by waste classification:
+          - hazardous: full premium
+          - universal waste: half premium (lighter regulatory burden)
+          - otherwise: 0
+        Parameters:
+        pathway (str): EoL pathway key in hazardous_waste_management_cost
+            (one of 'repair', 'sell', 'recycle', 'landfill', 'hoard').
+        Returns:
+        float: Premium in $/ton to add to the base pathway cost.
+        """
+        if self.hazardous:
+            return self.model.hazardous_waste_management_cost[pathway]
+        elif self.universal_waste:
+            return self.model.hazardous_waste_management_cost[pathway] / 2
+        return 0.0
+
+    def get_hoarding_cost(self) -> float:
         """
         Get the cost of hoarding based on if the waste is hazardous
         or not. If the waste is hazardous, the cost is higher.
         """
-        if self.hazardous:
-            # Both terms are $/ton; hazardous_waste_management_cost already in $/ton
-            return self.hoarding_cost + \
-                   self.model.hazardous_waste_management_cost['hoard']
-        else:
-            return self.hoarding_cost
+        # Both terms are $/ton; premium is 0 for non-regulated waste.
+        return self.hoarding_cost + self._get_management_cost_premium('hoard')
+
+    def get_repair_cost(self, repairing_cost: float) -> float:
+        """
+        Get the total cost of repair including any hazardous waste management
+        premium.
+        Parameters:
+        repairing_cost (float): Base repair cost from the refurbisher agent ($/ton).
+        Returns:
+        float: Total repair cost in $/ton.
+        """
+        return repairing_cost + self._get_management_cost_premium('repair')
+
+    def get_sell_cost(self, scd_hand_price: float, refurbisher_margin: float) -> float:
+        """
+        Get the net cost of selling (negative = revenue) including any hazardous
+        waste management premium. The premium reduces the net revenue a consumer
+        receives, reflecting additional compliance costs for regulated waste.
+        Parameters:
+        scd_hand_price (float): Second-hand price from the refurbisher agent ($/ton).
+        refurbisher_margin (float): Refurbisher margin ratio (dimensionless).
+        Returns:
+        float: Net sell cost in $/ton (negative = net revenue to the consumer).
+        """
+        # Base revenue (negative cost) minus premium that offsets it.
+        return (-1 * scd_hand_price * (1 - refurbisher_margin)
+                + self._get_management_cost_premium('sell'))
 
     def _compute_synthetic_effective_capacity(
             self,
@@ -1244,12 +1286,12 @@ class Consumers(Agent):
         or universal waste. Priority: hazardous > universal_waste > regular.
         """
         if self.hazardous:
-            # Both terms are $/ton; hazardous_waste_management_cost already in $/ton
             # hazardous_landfill_cost loaded as $/ton from set_hazardous_landfill_transport_distance_and_costs
             return self.hazardous_landfill_cost + \
-                   self.model.hazardous_waste_management_cost['landfill']
+                   self._get_management_cost_premium('landfill')
         elif self.universal_waste:
-            return self.universal_waste_landfill_cost
+            return self.universal_waste_landfill_cost + \
+                   self._get_management_cost_premium('landfill')
         else:
             if self.model.rtn:
                 # RTN landfill CSV is in $/ton (generate_landfill_costs.py * 1000)
@@ -1275,7 +1317,7 @@ class Consumers(Agent):
         else:
             raise ValueError("Invalid consumer agent resolution.")
         
-    def get_pca_landfill_transp_cost(self):
+    def get_landfill_transp_cost(self):
         """
         Get the transportation cost for landfill based on if the waste is
         hazardous or universal waste. Priority: hazardous > universal_waste > regular.
@@ -1303,23 +1345,21 @@ class Consumers(Agent):
         or own initiated costs.
         """
         for agent in self.model.agents:
-            if agent.unique_id == self.recycling_facility_id:
-                # Use universal waste recycling costs if applicable
-                if self.universal_waste:
-                    recyc_cost = self.get_recycling_cost(agent.recycling_cost) + self.universal_waste_recyc_transp_cost * 0.0077
-                else:
-                    recyc_cost = self.get_recycling_cost(agent.recycling_cost) + self.recyc_transp_cost
-                self.perceived_behavioral_control[2] = recyc_cost  # $/ton: cost [$/ton] + transport [$/ton]
+            if agent.unique_id == self.get_active_recycling_facility_id():
+                # Use universal waste recycling transport costs if applicable
+                recyc_transp: float = (self.universal_waste_recyc_transp_cost
+                                       if self.universal_waste else self.recyc_transp_cost)
+                # $/ton: base cost [$/ton] + transport [$/ton] + management premium [$/ton]
+                self.perceived_behavioral_control[2] = self.get_recycling_cost(agent.recycling_cost) + recyc_transp
             elif agent.unique_id == self.refurbisher_id:
-                self.perceived_behavioral_control[0] = \
-                    agent.repairing_cost
-                self.perceived_behavioral_control[1] = -1 * \
-                    agent.scd_hand_price * (1 - agent.refurbisher_margin)
+                self.perceived_behavioral_control[0] = self.get_repair_cost(agent.repairing_cost)
+                self.perceived_behavioral_control[1] = self.get_sell_cost(
+                    agent.scd_hand_price, agent.refurbisher_margin)
                 self.pbc_reuse[1] = agent.scd_hand_price
         self.pbc_reuse[0] = self.model.fsthand_mkt_pric
         self.perceived_behavioral_control[3] = (
             self.get_landfill_cost() +
-            self.get_pca_landfill_transp_cost())  # $/ton: cost [$/ton] + transport [$/ton]
+            self.get_landfill_transp_cost())  # $/ton: cost [$/ton] + transport [$/ton]
         self.perceived_behavioral_control[4] = self.get_hoarding_cost()
 
     def product_mass_output_metrics(self):
@@ -1373,7 +1413,18 @@ class Consumers(Agent):
         
         return new_generator_size
             
-        
+    def _compute_waste_per_month_kg(self) -> float:
+        """
+        Compute the waste generated per month in the current timestep in kg.
+        Parameters:
+        None
+        Returns:
+        float: Waste generated per month in kg.
+        """
+        # tot_prod_EoL is per-timestep metric tons (reset each step); convert to kg/month.
+        months_per_timestep: float = 12 / self.model.timestep.value
+        return self.tot_prod_EoL * 1000 / months_per_timestep
+
     def update_generator_size(self, regulator_thresholds: dict):
         """
         Update the generator size based on the total waste generated
@@ -1382,33 +1433,24 @@ class Consumers(Agent):
         :param regulator_thresholds: A dictionary mapping generator sizes to their thresholds.
         """
         if self.hazardous:
-            # tot_prod_EoL is in metric tons; convert to kg for threshold comparison.
-            hazardous_waste_mass_kg = self.tot_prod_EoL * 1000
-            hazardous_waste_mass_month = (
-                hazardous_waste_mass_kg / self.number_of_months
-                if self.number_of_months > 0
-                else hazardous_waste_mass_kg
-            )
+            # tot_prod_EoL is per-timestep; convert to kg/month for threshold comparison.
+            hazardous_waste_mass_per_month_kg: float = self._compute_waste_per_month_kg()
             self.generator_size = self.get_generator_size_from_waste(
-            hazardous_waste_mass_month, regulator_thresholds)
+                hazardous_waste_mass_per_month_kg, regulator_thresholds)
 
     def update_universal_waste_generator_size(self, universal_waste_thresholds: dict):
         """
         Update the generator size based on the total waste generated
         in the current period and the threshold limits set by the regulator
         for universal waste.
-        It uses the total waste generated in the past year to determine the generator size.
+        It uses the total waste generated per month in the current timestep to determine the generator size.
         :param universal_waste_thresholds: A dictionary mapping generator sizes to their thresholds.
         """
         if self.universal_waste:
-            # if not universal_waste_thresholds:
-            #     # If no thresholds are provided, default to SMALL generator size
-            #     self.generator_size = GeneratorSize.SMALL
-            past_year_index = len(self.new_products_hard_copy) - self.model.timestep.value
-            universal_waste_mass_past_year = self.new_products_hard_copy[past_year_index:]
-            universal_waste_mass = self.mass_per_function_model(universal_waste_mass_past_year).sum()
+            # tot_prod_EoL is per-timestep; convert to kg/month for threshold comparison.
+            universal_waste_mass_per_month_kg: float = self._compute_waste_per_month_kg()
             self.generator_size = self.get_generator_size_from_waste(
-                universal_waste_mass, universal_waste_thresholds)
+                universal_waste_mass_per_month_kg, universal_waste_thresholds)
 
     def update_universal_waste_limits(self, universal_waste_thresholds: dict):
         """
@@ -1431,7 +1473,7 @@ class Consumers(Agent):
         if self.regulator_id is None:
             self.initialize_regulator_id()
         agent = self.model.agent_map[self.regulator_id]
-        if agent.is_exclusion_applicable(self.recycling_facility_id):
+        if agent.is_exclusion_applicable(self.hazardous_recycler_facility_id):
             # If the product is exempt from regulations, it is not hazardous
             # It is treated the same as non-hazardous waste
             self.hazardous = False
@@ -1454,8 +1496,6 @@ class Consumers(Agent):
                         agent.universal_waste_thresholds)
                     self.update_universal_waste_limits(
                         agent.universal_waste_thresholds)
-                    # Set the recycling facility to the closest universal waste recycler
-                    self.recycling_facility_id = self.get_closest_recycler_id()
                 else:
                     # If the product is hazardous, set the hazardous flag to True
                     self.hazardous = True
@@ -1477,79 +1517,59 @@ class Consumers(Agent):
             if regulator_thresholds[self.generator_size].max_storage_kg is not None:
                 self.max_storage_hazardous_kg = regulator_thresholds[self.generator_size].max_storage_kg
 
-    def _find_closest_recycler_name(self, distance_df):
+    def _assign_closest_recycler(self, distance_df: pd.DataFrame) -> int:
         """
-        Helper function to find the name of the closest recycler.
-        
-        Args:
-            distance_df: DataFrame containing recycler distances
-            
+        Return the node ID of the closest recycler in distance_df.
+        Parameters:
+        distance_df (pd.DataFrame): Distance DataFrame with a 'Recycler Name'
+            column and consumer identifier columns.
         Returns:
-            Name of the closest recycler
+        int: Node ID of the closest recycler.
         """
-        recyc_distances = distance_df[str(self.agent_identifier)]
-        closest_recycler_idx = recyc_distances.idxmin()
-        closest_recycler_name = distance_df.loc[closest_recycler_idx, 'Recycler Name']
-        return closest_recycler_name
-
-    def get_closest_recycler_id(self):
-        """
-        Find the recycling facility with the shortest distance
-        Returns the agent ID of the closest recycler.
-        """
-        if self.universal_waste:
-            # Use universal waste recyclers
-            closest_recycler_name = self._find_closest_recycler_name(
-                self.model.universal_waste_recycler_distance_df.copy())
-        else:
-            # Use regular recyclers
-            closest_recycler_name = self._find_closest_recycler_name(
-                self.model.recycler_distance_df.copy())
-        
-        # Use Mesa AgentSet to select the recycler agent with matching name
-        recycler_agents = self.model.agents.select(
-            filter_func= lambda agent: isinstance(agent, Recyclers) and agent.recycler_name == closest_recycler_name
-        )
-        
-        if len(recycler_agents) > 0:
-            return recycler_agents[0].unique_id
-        else:
-            raise ValueError(f"No recycler agent found with name: {closest_recycler_name}")
+        dist_col: pd.Series = distance_df[str(self.agent_identifier)]
+        closest_name: str = distance_df.loc[dist_col.idxmin(), "Recycler Name"]
+        return self.model.recycler_name_to_id[closest_name]
 
     def set_recycling_transport_distance_and_costs(self):
         """
         Initialize recycling transportation costs and distances.
         """
-
-        recyc_transp_dist = self.model.recycler_distance_df.copy()
-        recyc_transp_dist = recyc_transp_dist[str(self.agent_identifier)]
-        recyc_transp_dist = recyc_transp_dist.to_list()
-        self.recyc_transp_dist = min(recyc_transp_dist)
+        dist_col: pd.Series = self.model.recycler_distance_df[
+            str(self.agent_identifier)]
+        self.recyc_transp_dist = dist_col.min()
         # $/ton: dist [km] * transportation_cost [$/ton/km]
         self.recyc_transp_cost = self.recyc_transp_dist * \
             self.model.get_transportation_cost(self.hazardous)
+        self.recycling_facility_id = self._assign_closest_recycler(
+            self.model.recycler_distance_df)
+        self.hazardous_recycler_facility_id = self.recycling_facility_id
 
     def set_universal_waste_recycling_transport_distance_and_costs(self):
         """
         Initialize universal waste recycling transportation costs and distances.
         """
-        universal_waste_recyc_transp_dist = self.model.universal_waste_recycler_distance_df.copy()
-        universal_waste_recyc_transp_dist = universal_waste_recyc_transp_dist[str(self.agent_identifier)]
-        universal_waste_recyc_transp_dist = universal_waste_recyc_transp_dist.to_list()
-        self.universal_waste_recyc_transp_dist = min(universal_waste_recyc_transp_dist)
+        uw_dist_col: pd.Series = self.model.universal_waste_recycler_distance_df[
+            str(self.agent_identifier)]
+        self.universal_waste_recyc_transp_dist = uw_dist_col.min()
         self.universal_waste_recyc_transp_cost = self.universal_waste_recyc_transp_dist * \
             self.model.get_transportation_cost()
+        self.universal_waste_recycler_facility_id = self._assign_closest_recycler(
+            self.model.universal_waste_recycler_distance_df)
 
-    def set_universal_waste_recycling_transport_distance_and_costs(self):
+    def get_active_recycling_facility_id(self) -> int:
         """
-        Initialize universal waste recycling transportation costs and distances.
+        Get the recycling facility ID for the current waste classification.
+        Returns universal_waste_recycler_facility_id if the waste is universal
+        waste, hazardous_recycler_facility_id if the waste is hazardous, or
+        recycling_facility_id otherwise.
+        Returns:
+        int: Node ID of the active recycling facility.
         """
-        universal_waste_recyc_transp_dist = self.model.universal_waste_recycler_distance_df.copy()
-        universal_waste_recyc_transp_dist = universal_waste_recyc_transp_dist[str(self.agent_identifier)]
-        universal_waste_recyc_transp_dist = universal_waste_recyc_transp_dist.to_list()
-        self.universal_waste_recyc_transp_dist = min(universal_waste_recyc_transp_dist)
-        self.universal_waste_recyc_transp_cost = self.universal_waste_recyc_transp_dist * \
-            self.model.get_transportation_cost() / 1E3
+        if self.universal_waste:
+            return self.universal_waste_recycler_facility_id
+        if self.hazardous:
+            return self.hazardous_recycler_facility_id
+        return self.recycling_facility_id
 
     def set_landfill_transport_distance_and_costs(self):
         """
@@ -1600,7 +1620,7 @@ class Consumers(Agent):
             min(universal_waste_landfill_transp_dist)
         self.universal_waste_landfill_transp_cost = \
             self.universal_waste_landfill_transp_dist * \
-            self.model.get_transportation_cost() / 1E3
+            self.model.get_transportation_cost()
         self.universal_waste_landfill_name = \
             self.model.universal_waste_landfill_distance_df.loc[
                 self.model.universal_waste_landfill_distance_df[str(self.agent_identifier)] ==
@@ -1664,14 +1684,17 @@ class Consumers(Agent):
         
     def get_recycling_cost(self, agent_recycling_cost: float) -> float:
         """
-        Get the recycling cost based on the source of recycling cost data.
+        Get the recycling cost based on the source of recycling cost data,
+        including any hazardous waste management premium.
         If the source is 'rtn', then get the cost from the rtn model, otherwise
         get the cost from the associated recycling facility agent.
+        Parameters:
+        agent_recycling_cost (float): Base recycling cost from the recycler agent ($/ton).
+        Returns:
+        float: Total recycling cost in $/ton including any management premium.
         """
-        if self.model.rtn:
-            return self._get_rtn_recycling_cost()
-        else:
-            return agent_recycling_cost
+        base_cost: float = self._get_rtn_recycling_cost() if self.model.rtn else agent_recycling_cost
+        return base_cost + self._get_management_cost_premium('recycle')
         
     @property
     def agent_identifier(self) -> str:

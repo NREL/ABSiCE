@@ -155,7 +155,7 @@ class Recyclers(Agent):
         if tot_waste_sold < used_vol_purchased:
             for agent in self.model.agents:
                 if agent.unique_id < self.model.num_consumers and \
-                        agent.recycling_facility_id == self.unique_id:
+                        agent.get_active_recycling_facility_id() == self.unique_id:
                     self.recycler_total_volume += agent.yearly_recycled_waste
                     if self.model.yearly_repaired_waste < \
                             self.model.repairability * self.model.total_waste:
@@ -170,7 +170,7 @@ class Recyclers(Agent):
         else:
             for agent in self.model.agents:
                 if agent.unique_id < self.model.num_consumers and \
-                        agent.recycling_facility_id == self.unique_id:
+                        agent.get_active_recycling_facility_id() == self.unique_id:
                     self.recycler_total_volume += agent.yearly_recycled_waste
                     self.recycling_volume = self.recycler_total_volume
                     self.repairable_volume = 0

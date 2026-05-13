@@ -285,6 +285,9 @@ class ABM_CE_PV(Model):
                             'Site-landfill distances':
                                 "site_landfills_distances.csv",
                             'Recycler data': "Recyclers_data.csv",
+                            # California DTSC universal waste data sources:
+                            #   Landfills: https://dtsc.ca.gov/photovoltaic-modules-pv-modules-universal-waste-management-regulations_uw-handlers/
+                            #   Recyclers:  https://dtsc.ca.gov/list-of-universal-waste-recyclers-that-treat-pv-modules/
                             'Universal Waste Landfills data':
                                 "Universal_Waste_Landfills_data.csv",
                             'Universal Waste Recyclers data':
@@ -1181,6 +1184,14 @@ class ABM_CE_PV(Model):
         universal_waste_recycler_names = self.universal_waste_recycler_distance_df[
             'Recycler Name'].to_list()
         self.recycler_names = regular_recycler_names + universal_waste_recycler_names
+        # Map each recycler name to its agent node ID. Recyclers.__init__ calls
+        # self.model.recycler_names.pop(), so the first recycler node
+        # (num_consumers + 0) gets the LAST name in recycler_names. Reversing
+        # the list before enumeration produces the correct mapping.
+        self.recycler_name_to_id: dict[str, int] = {
+            name: self.num_consumers + i
+            for i, name in enumerate(reversed(self.recycler_names))
+        }
         self.num_producers = num_producers
         self.num_prod_n_recyc = self.num_recyclers + num_producers
         self.prod_n_recyc_node_degree = prod_n_recyc_node_degree
