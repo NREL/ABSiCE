@@ -1,0 +1,46 @@
+# Policy Activation Schedule
+#
+# This file configures when specific regulatory policies are activated or
+# deactivated per state during the simulation period.
+#
+# Available policy columns (must match column names in policy_by_state.csv):
+#   - transfer_based_exclusion
+#   - verified_recycler_exclusion
+#   - chemical_product_exclusion
+#   - universal_waste_regulation
+#
+# For each policy, provide a list of entries where each entry specifies:
+#   states      (list, required): State abbreviations to apply the schedule to
+#                                 (e.g., [CA, TX, NY]).
+#   start_year  (int, optional) : Year the policy is activated (set to True).
+#   end_year    (int, optional) : Year the policy is deactivated (set to False).
+#
+# Scheduling behaviour:
+#   start_year only  →  Policy is False before start_year (regardless of the
+#                       initial value in policy_by_state.csv) and True from
+#                       start_year to the end of the simulation.
+#   end_year only    →  Policy follows the initial value in policy_by_state.csv
+#                       until end_year, then becomes False for the remainder of
+#                       the simulation.
+#   both             →  Policy is True during [start_year, end_year), and False
+#                       outside that window.
+#   neither          →  Policy is read directly from policy_by_state.csv with
+#                       no dynamic changes (no entry needed in this file).
+#
+# Constraint: Only one start_year and one end_year per policy per state are
+# supported. It is not possible to re-activate a policy after it has been
+# deactivated within a single simulation run.
+#
+# Example:
+# policies:
+#   universal_waste_regulation:
+#     - states: [CA, HI]
+#       start_year: 2025
+#       end_year: 2040
+#     - states: [TX, FL]
+#       start_year: 2030
+#   transfer_based_exclusion:
+#     - states: [ID, UT, AZ]
+#       end_year: 2035
+
+policies: {}
