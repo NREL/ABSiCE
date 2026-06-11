@@ -75,7 +75,7 @@ behaviors driven by social influence, peer pressure, policy, infrastructure avai
 
 - **ABM_CE_PV_RefurbisherAgents.py**
 
-## Installation/Setup
+## Installation
 
 1. **Install Conda** (if you have it, skip to Step 2) 
     - Option A: Anaconda (large, includes many packages)
