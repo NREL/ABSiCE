@@ -15,7 +15,7 @@ from collections import OrderedDict
 from scipy.stats import truncnorm
 import operator
 from math import e
-from utils import TIMESTEP, transform_timeseries_timestep, GeneratorSize, ConsumerAgentResolution, MISSING_VALUE_COST
+from utils import TIMESTEP, transform_timeseries_timestep, GeneratorSize, ConsumerAgentResolution, MISSING_VALUE_COST, UNKNOWN_LANDFILL
 import os
 
 
@@ -1485,8 +1485,9 @@ class Consumers(Agent):
 
         if self.model.rtn:
             landfill_cost_row = self._get_rtn_data(self.model.landfill_cost_df)
-            landfill_name = landfill_cost_row['Landfill Name']
-            return landfill_name
+            if pd.isna(landfill_cost_row['Cost']):
+                print(f"Warning: Landfill cost data for {self.agent_identifier} in {self.model.current_date.year} is NaN in RTN model. Unable to determine landfill name.")
+                return UNKNOWN_LANDFILL
         else:
             return self.model.landfill_distance_df.loc[
                 self.model.landfill_distance_df[str(self.agent_identifier)] ==

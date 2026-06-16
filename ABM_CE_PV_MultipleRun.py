@@ -49,16 +49,16 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                 landfill_solar_waste_acceptance_ratio=1.0,
                 calculate_distances=False,
                 model_states=['TX', 'AZ', 'NV', 'NM'],
-                solar_cycle=True,
-                rtn=False,
-                landfill_data_params = {
-                    "landfill_volume_column": "Waste Business Journal Costs ($/metric tons)",
-                    "landfill_name_column": "Landfill Name"},
-                # file_name={
-                #     'Landfill data': "LandfillCostsbyYearAllLandfills.csv",
-                #     'Recycling data': "RecyclingCostsbyYearAllLandfills.csv",
-                #     'Hazardous landfill data': "Landfills_data_SA.csv"
-                #     },
+                solar_cycle=False,
+                rtn=True,
+                # landfill_data_params = {
+                #     "landfill_volume_column": "Waste Business Journal Costs ($/metric tons)",
+                #     "landfill_name_column": "Landfill Name"},
+                file_name={
+                    'Landfill data': "LandfillCostsbyYearAllLandfills_3.csv",
+                    'Recycling data': "RecyclingCostsbyYearAllLandfills_3.csv",
+                    'Hazardous landfill data': "Landfills_data_SA.csv"
+                    },
                 timestep=timestep,
                 )  # baseline
         elif j < 20:
@@ -589,12 +589,12 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
         t1 = time.time()
         print(t1 - t0)
         os.chdir('../../../')
-        if not os.path.exists("results"):
-            os.makedirs("results")
+        if not os.path.exists("results/RTN_Iteration_3/RTN_run_all_landfills"):
+            os.makedirs("results/RTN_Iteration_3/RTN_run_all_landfills")
         results_model.to_csv(os.path.join(
-            "results", "Results_model_run_%s.csv" % j))
+            "results", "RTN_Iteration_3", "RTN_run_all_landfills", "Results_model_run_%s.csv" % j))
         results_agents_consumers.to_csv(os.path.join(
-            "results", "Results_agents_consumers_run_%s.csv" % j), index=False)
+            "results", "RTN_Iteration_3", "RTN_run_all_landfills", "Results_agents_consumers_run_%s.csv" % j), index=False)
         # results_agents.to_csv("results\\Results_agents_run_%s.csv" % j)
 
 

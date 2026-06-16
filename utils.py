@@ -177,3 +177,4 @@ def add_date_from_temporal_columns(df: pd.DataFrame, timestep: TIMESTEP) -> pd.D
 
 
 MISSING_VALUE_COST = np.inf
+UNKNOWN_LANDFILL = "Unknown Landfill"
