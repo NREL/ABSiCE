@@ -1,5 +1,6 @@
-﻿Recycler Name,State,City,Latitude,Longitude
-SolarCycle,Texas,Odessa,31.845682,-102.367645
-"We Recycle Solar, Inc.",Arizona,Phoenix,33.4484367,-112.074141
-Okon Recycling,Texas,Dallas,32.779167,-96.808891
-FabTech Solar Solutions,Arizona,Gilbert,33.352763,-111.789037
+﻿Recycler Name,State,City,Latitude,Longitude,RCRA permit
+SolarCycle,Texas,Odessa,31.845682,-102.367645,FALSE
+"We Recycle Solar, Inc.",Arizona,Phoenix,33.4484367,-112.074141,FALSE
+Okon Recycling,Texas,Dallas,32.779167,-96.808891,FALSE
+FabTech Solar Solutions,Arizona,Gilbert,33.352763,-111.789037,FALSE
+ComstockMetals,Nevada,"Silver Springs",39.382751,-119.258232,FALSE
