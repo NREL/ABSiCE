@@ -92,12 +92,14 @@ from mesa.datacollection import DataCollector
 import networkx as nx
 import numpy as np
 from math import e, gamma
+from math import e, gamma
 import pandas as pd
 import random
 import PV_ICE
 import os
 import csv
 import pandas as pd
+import yaml
 from geopy.geocoders import Nominatim
 import time
 from math import radians, sin, cos, sqrt, atan2
@@ -1420,6 +1422,8 @@ class ABM_CE_PV(Model):
             unique_states = list(unique_states)
         self.num_regulators = len(unique_states)
         self.regulator_state_map = self.create_regulator_state_map(unique_states)
+        # Load the policy schedule YAML once and distribute per-state entries to agents
+        self.policy_schedule_by_state = self._load_policy_schedule_by_state()
         # Create a map of agents to their unique IDs
         # This is used to access agents by their unique ID
         self.agent_map = {}
@@ -1531,7 +1535,9 @@ class ABM_CE_PV(Model):
                 self.grid.place_agent(d, node)
                 self.agent_map[node] = d
             else:
-                e = Regulators(node, self)
+                e = Regulators(node, self,
+                               self.policy_schedule_by_state.get(
+                                   self.regulator_state_map[node], {}))
                 self.grid.place_agent(e, node)
                 self.agent_map[node] = e
         # Draw initial graph
@@ -1669,6 +1675,34 @@ class ABM_CE_PV(Model):
             regulator_state_map[agent_id] = state
             agent_id += 1
         return regulator_state_map
+
+    def _load_policy_schedule_by_state(self) -> dict[str, dict]:
+        """
+        Load policy_schedule.yaml once and return a mapping of state abbreviation
+        to that state's policy schedule dict (keyed by policy column name).
+        Parameters:
+        None
+        Returns:
+        dict[str, dict]: Mapping of state abbreviation to its schedule, e.g.
+            {'CA': {'universal_waste_regulation': {'start_year': 2025}}, ...}
+        """
+        path: str = os.path.join(
+            os.path.dirname(__file__), "policy_regulation", "policy_schedule.yaml")
+        if not os.path.exists(path):
+            return {}
+        with open(path, 'r') as f:
+            config: dict = yaml.safe_load(f) or {}
+        raw_policies: dict = config.get('policies') or {}
+        schedule_by_state: dict[str, dict] = {}
+        for policy_name, entries in raw_policies.items():
+            if not entries:
+                continue
+            for entry in entries:
+                states: list[str] = entry.get('states', [])
+                entry_schedule: dict = {k: v for k, v in entry.items() if k != 'states'}
+                for state in states:
+                    schedule_by_state.setdefault(state, {})[policy_name] = entry_schedule
+        return schedule_by_state
 
     def shortest_paths(self, target_states, distances_to_target):
         """

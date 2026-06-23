@@ -789,6 +789,10 @@ class Consumers(Agent):
         and attributed to the chosen EoL pathway
         """
         limited_paths = self.model.all_EoL_pathways.copy()
+        # Disable landfill for consumers in states with active EPR regulation
+        if (self.regulator_id is not None
+                and self.model.agent_map[self.regulator_id].is_epr_applicable()):
+            limited_paths["landfill"] = False
         if self.model.seeding_recyc["Seeding"] and self.model.clock // self.model.timestep.value >= \
                 self.model.seeding_recyc["Year"]:
             for consumer in range(self.model.seeding_recyc["number_seed"]):
@@ -1351,6 +1355,11 @@ class Consumers(Agent):
                                        if self.universal_waste else self.recyc_transp_cost)
                 # $/ton: base cost [$/ton] + transport [$/ton] + management premium [$/ton]
                 self.perceived_behavioral_control[2] = self.get_recycling_cost(agent.recycling_cost) + recyc_transp
+                # If recycling bonds are active, all recycling costs (base, transport,
+                # and waste management premiums) are covered — zero out entirely.
+                if (self.regulator_id is not None
+                        and self.model.agent_map[self.regulator_id].is_recycling_bonds_applicable()):
+                    self.perceived_behavioral_control[2] = 0.0
             elif agent.unique_id == self.refurbisher_id:
                 self.perceived_behavioral_control[0] = self.get_repair_cost(agent.repairing_cost)
                 self.perceived_behavioral_control[1] = self.get_sell_cost(
