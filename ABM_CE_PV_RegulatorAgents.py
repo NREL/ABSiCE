@@ -21,12 +21,12 @@ class GeneratorSizeThreshold:
     A class to represent the thresholds for different generator sizes.
     Attributes:
         max_storage_kg: The maximum storage mass allowed for the generator size.
-        max_storage_years: The maximum storage limit allowed for the generator size.
+        max_storage_days: The maximum storage limit allowed for the generator size.
         waste_generation_limit_kg: The maximum waste generation limit for the generator size.
     """
     
     max_storage_kg: Optional[int]
-    max_storage_years: Optional[int]
+    max_storage_days: Optional[int]
     waste_generation_limit_kg: Optional[int]  
 
     @classmethod
@@ -35,11 +35,11 @@ class GeneratorSizeThreshold:
         Create a GeneratorSizeThreshold instance from a dictionary.
         """
         max_storage_kg = thresholds_dict.get("max_storage_kg")
-        max_storage_years = thresholds_dict.get("max_storage_years")
+        max_storage_days = thresholds_dict.get("max_storage_days")
         waste_generation_limit_kg = thresholds_dict.get("waste_generation_limit_kg")
         return cls(
             max_storage_kg=max_storage_kg if pd.notna(max_storage_kg) else None,
-            max_storage_years=max_storage_years if pd.notna(max_storage_years) else None,
+            max_storage_days=max_storage_days if pd.notna(max_storage_days) else None,
             waste_generation_limit_kg=waste_generation_limit_kg if pd.notna(waste_generation_limit_kg) else None
 
         )
@@ -54,6 +54,7 @@ class Regulators(Agent):
         model: Model - The model this agent belongs to.
         policy_duration: list[dict] - A list of policy durations in years applicable to the agent.
         For example, [{"policy_name": "policy1", "duration": 12}, {"policy_name": "policy2", "duration": 24}]
+        thresholds: dict - A dictionary mapping generator sizes to their thresholds (for hazardous waste).
     """
 
     def __init__(self, 
@@ -80,6 +81,12 @@ class Regulators(Agent):
         # Map generator sizes to their thresholds from the DataFrame
         for size, thresh_dict in thresholds.items():
             self.thresholds[GeneratorSize(size)] = GeneratorSizeThreshold.from_dict(thresh_dict)
+        # Initialize universal waste thresholds
+        universal_waste_threshold_df = pd.read_csv(os.path.join(os.path.dirname(__file__), "policy_regulation", "universal_waste_generator_threshold.csv"))
+        universal_waste_thresholds = universal_waste_threshold_df[universal_waste_threshold_df['state'] == threshold_state].set_index('generator_size').to_dict(orient='index')
+        self.universal_waste_thresholds = {}
+        for size, thresh_dict in universal_waste_thresholds.items():
+            self.universal_waste_thresholds[GeneratorSize(size)] = GeneratorSizeThreshold.from_dict(thresh_dict)
 
     def _is_transfer_based_exclusion(self, recycler_id: int):
         """

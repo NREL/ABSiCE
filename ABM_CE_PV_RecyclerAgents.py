@@ -69,11 +69,9 @@ class Recyclers(Agent):
         self.recycler_costs = 0
         self.recycler_name = self.model.recycler_names.pop()
         self.hazardous = False
+        self.universal_waste = False
         self.verified = False
-        # Check if the recycler is a hazardous waste recycler and if the hazardous waste regulation is enabled in the model
-        if self.model.hazardous_waste_regulation_enabled:
-            if self.model.recycler_data[self.model.recycler_data['Recycler Name'] == self.recycler_name]['RCRA permit'].values[0]:
-                self.hazardous = True
+        self.set_recycler_type()
 
     # def update_transport_recycling_costs(self):
     #     """
@@ -86,6 +84,19 @@ class Recyclers(Agent):
     #          self.model.product_average_wght) * \
     #         self.model.transportation_cost / 1E3 * \
     #         self.model.mn_mx_av_distance_to_recycler[2]
+
+    def set_recycler_type(self):
+        # Check if the recycler is a hazardous waste recycler
+        if self.model.hazardous_waste_regulation_enabled:
+            hazardous_recycler_row = self.model.recycler_data[self.model.recycler_data['Recycler Name'] == self.recycler_name]
+            if not hazardous_recycler_row.empty and hazardous_recycler_row['RCRA permit'].values[0]:
+                self.hazardous = True
+            # Check if the recycler is a universal waste recycler
+            universal_waste_recycler_row = self.model.universal_waste_recyclers_data[
+                self.model.universal_waste_recyclers_data['Recycler Name'] == self.recycler_name]
+            if not universal_waste_recycler_row.empty and universal_waste_recycler_row['Universal Waste Permit'].values[0]:
+                self.universal_waste = True
+                self.hazardous = False  # If the recycler is a universal waste recycler, it cannot be a hazardous waste recycler
         
     def get_recycling_cost(self, facility_id: int = None) -> float:
         """
@@ -146,7 +157,7 @@ class Recyclers(Agent):
         if tot_waste_sold < used_vol_purchased:
             for agent in self.model.agents:
                 if agent.unique_id < self.model.num_consumers and \
-                        agent.recycling_facility_id == self.unique_id:
+                        agent.get_active_recycling_facility_id() == self.unique_id:
                     self.recycler_total_volume += agent.yearly_recycled_waste
                     if self.model.yearly_repaired_waste < \
                             self.model.repairability * self.model.total_waste:
@@ -161,7 +172,7 @@ class Recyclers(Agent):
         else:
             for agent in self.model.agents:
                 if agent.unique_id < self.model.num_consumers and \
-                        agent.recycling_facility_id == self.unique_id:
+                        agent.get_active_recycling_facility_id() == self.unique_id:
                     self.recycler_total_volume += agent.yearly_recycled_waste
                     self.recycling_volume = self.recycler_total_volume
                     self.repairable_volume = 0

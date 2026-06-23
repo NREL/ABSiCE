@@ -45,15 +45,15 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                 seed=(j),
                 # att_distrib_param_eol=[0.425, 0.1], 
                 last_step=number_steps,
-                hazardous_waste_regulation_enabled=False,
+                hazardous_waste_regulation_enabled=True,
                 landfill_solar_waste_acceptance_ratio=1.0,
                 calculate_distances=False,
-                model_states=['TX', 'AZ', 'NV', 'NM'],
-                solar_cycle=True,
+                # model_states= ['TX', 'AZ', 'NV', 'NM'],
+                solar_cycle=False,
                 rtn=False,
-                landfill_data_params = {
-                    "landfill_volume_column": "Waste Business Journal Costs ($/metric tons)",
-                    "landfill_name_column": "Landfill Name"},
+                # landfill_data_params = {
+                #     "landfill_volume_column": "Waste Business Journal Costs ($/metric tons)",
+                #     "landfill_name_column": "Landfill Name"},
                 # file_name={
                 #     'Landfill data': "LandfillCostsbyYearAllLandfills.csv",
                 #     'Recycling data': "RecyclingCostsbyYearAllLandfills.csv",
