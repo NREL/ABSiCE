@@ -177,9 +177,9 @@ class Producers(Agent):
 
         recl_vol = \
             self.model.product_mass_fractions[self.material_produced] \
-            * tot_recycling_volume / num_neighbors_producer * \
-            self.model.dynamic_product_average_wght \
-            * self.model.recovery_fractions[self.material_produced]
+            * tot_recycling_volume * 1000 / num_neighbors_producer * \
+            self.model.recovery_fractions[self.material_produced]
+            # tons → kg
 
         # ! TODO: replace code below with PV_ICE material waste value - STOP
 
@@ -203,12 +203,15 @@ class Producers(Agent):
                 self.yearly_recycled_material_volume * (
                         self.recycled_mat_price - self.virgin_mat_prices)
         if not self.model.epr_business_model:
-            self.transport_cost_industrial_waste = \
-                self.yearly_industrial_waste_generated * \
-                ((self.model.yearly_product_wght *
-                  self.model.get_transportation_cost() / 1E3 *
-                  self.model.mean_distance_within_state) +
-                 self.model.average_landfill_cost)
+            # industrial_waste_generated is in W; convert to metric tons inline
+            # yearly_product_wght [kg/W] * 1W / 1000 [kg/ton] = ton/W
+            industrial_waste_ton = (
+                self.yearly_industrial_waste_generated *
+                self.model.yearly_product_wght / 1000)  # W * kg/W / 1000 = ton
+            self.transport_cost_industrial_waste = industrial_waste_ton * (
+                self.model.get_transportation_cost() *
+                self.model.mean_distance_within_state +
+                self.model.average_landfill_cost)  # ton * ($/ton/km * km + $/ton) = $
         elif self.material_produced == "Product":
             self.transport_cost_industrial_waste = 0
             for key, value in self.industrial_waste_ratio.items():

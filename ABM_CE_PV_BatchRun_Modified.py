@@ -49,16 +49,16 @@ if __name__ == '__main__':
         "product_growth": [0.166, 0.045],
         "growth_threshold": 10,
         "failure_rate_alpha": [2.4928, 5.3759, 3.93495],
-        "hoarding_cost": [0, 0.001, 0.0005],
-        "landfill_cost": [
-                     0.0089, 0.0074, 0.0071, 0.0069, 0.0056, 0.0043,
-                     0.0067, 0.0110, 0.0085, 0.0082, 0.0079, 0.0074, 0.0069,
-                     0.0068, 0.0068, 0.0052, 0.0052, 0.0051, 0.0074, 0.0062,
-                     0.0049, 0.0049, 0.0047, 0.0032, 0.0049, 0.0065, 0.0064,
-                     0.0062, 0.0052, 0.0048, 0.0048, 0.0044, 0.0042, 0.0039,
-                     0.0039, 0.0045, 0.0055, 0.0050, 0.0049, 0.0044, 0.0044,
-                     0.0039, 0.0033, 0.0030, 0.0041, 0.0050, 0.0040, 0.0040,
-                     0.0038, 0.0033],
+        "hoarding_cost": [0, 130, 65],  # [0, 0.001, 0.0005] $/W -> $/ton
+        "landfill_cost": [  # $/ton (converted from $/W × 129,870)
+                     1156, 961, 922, 896, 727, 558,
+                     870, 1429, 1104, 1065, 1026, 961, 896,
+                     883, 883, 675, 675, 662, 961, 805,
+                     636, 636, 610, 416, 636, 844, 831,
+                     805, 675, 623, 623, 571, 545, 506,
+                     506, 584, 714, 649, 636, 571, 571,
+                     506, 429, 390, 533, 649, 520, 520,
+                     494, 429],
         "theory_of_planned_behavior": {"residential": True, "commercial": True,
                                        "utility": True},
         "w_sn_eol": 0.27,
@@ -73,13 +73,13 @@ if __name__ == '__main__':
         "max_storage": [1, 8, 4],
         "att_distrib_param_eol": [0.544, 0.1],
         "att_distrib_param_reuse": [0.223, 0.262],
-        "original_recycling_cost": [0.106, 0.128, 0.117],
+        "original_recycling_cost": [13636, 16623, 15195],  # [0.106, 0.128, 0.117] $/W -> $/ton
         "recycling_learning_shape_factor": -0.39,
         "repairability": 0.55,
-        "original_repairing_cost": [0.1, 0.45, 0.23],
+        "original_repairing_cost": [12987, 58442, 29870],  # [0.1, 0.45, 0.23] $/W -> $/ton
         "repairing_learning_shape_factor": -0.31,
         "scndhand_mkt_pric_rate": [0.4, 0.2],
-        "fsthand_mkt_pric": 0.45,
+        "fsthand_mkt_pric": 58442,  # 0.45 $/W -> $/ton
         "fsthand_mkt_pric_reg_param": [1, 0.04],
         "refurbisher_margin": [0.4, 0.6, 0.5],
         "purchase_choices": {"new": True, "used": True, "certified": False},

@@ -6,17 +6,19 @@ class TestABM_CE_PV(unittest.TestCase):
         self.model = ABM_CE_PV()
 
     def test_tclp_test(self):
-        # Test the tclp_test with samples of different ages
-        hazardous_2000 = []
-        hazardous_2010 = []
+        # Test the tclp_test with samples of different market-share years
+        hazardous_2035 = []
+        hazardous_2056 = []
         for _ in range(1000):
-            hazardous_2000.append(self.model.tclp_test(start_year=2000))
-            hazardous_2010.append(self.model.tclp_test(start_year=2010))
-        hazardous_2000_rate = sum(hazardous_2000) / len(hazardous_2000)
-        hazardous_2010_rate = sum(hazardous_2010) / len(hazardous_2010)
+            hazardous_2035.append(self.model.tclp_test(
+                self.model.tclp_market_share_df, current_year=2035, state='CA'))
+            hazardous_2056.append(self.model.tclp_test(
+                self.model.tclp_market_share_df, current_year=2056, state='CA'))
+        hazardous_2035_rate = sum(hazardous_2035) / len(hazardous_2035)
+        hazardous_2056_rate = sum(hazardous_2056) / len(hazardous_2056)
 
-        # Assert that older modules have a higher hazardous rate
-        self.assertGreater(hazardous_2000_rate, hazardous_2010_rate)
+        # Assert that higher BSF share year has a higher hazardous rate
+        self.assertGreater(hazardous_2035_rate, hazardous_2056_rate)
 
 
 if __name__ == '__main__':

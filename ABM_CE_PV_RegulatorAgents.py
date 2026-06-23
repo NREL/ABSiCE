@@ -21,12 +21,12 @@ class GeneratorSizeThreshold:
     A class to represent the thresholds for different generator sizes.
     Attributes:
         max_storage_kg: The maximum storage mass allowed for the generator size.
-        max_storage_years: The maximum storage limit allowed for the generator size.
+        max_storage_days: The maximum storage limit allowed for the generator size.
         waste_generation_limit_kg: The maximum waste generation limit for the generator size.
     """
     
     max_storage_kg: Optional[int]
-    max_storage_years: Optional[int]
+    max_storage_days: Optional[int]
     waste_generation_limit_kg: Optional[int]  
 
     @classmethod
@@ -35,42 +35,58 @@ class GeneratorSizeThreshold:
         Create a GeneratorSizeThreshold instance from a dictionary.
         """
         max_storage_kg = thresholds_dict.get("max_storage_kg")
-        max_storage_years = thresholds_dict.get("max_storage_years")
+        max_storage_days = thresholds_dict.get("max_storage_days")
         waste_generation_limit_kg = thresholds_dict.get("waste_generation_limit_kg")
         return cls(
             max_storage_kg=max_storage_kg if pd.notna(max_storage_kg) else None,
-            max_storage_years=max_storage_years if pd.notna(max_storage_years) else None,
+            max_storage_days=max_storage_days if pd.notna(max_storage_days) else None,
             waste_generation_limit_kg=waste_generation_limit_kg if pd.notna(waste_generation_limit_kg) else None
 
         )
 
 class Regulators(Agent):
     """
-    A regulator agent that sets the regulations for PV waste management. It requires two csv files:
-    - policy_by_state.csv: Contains the regulatory policies applicable to each state.
+    A regulator agent that sets the regulations for PV waste management.
+    It requires the following input files:
+    - policy_by_state.csv: Contains the base regulatory policies applicable to each state.
     - generator_threshold.csv: Contains the thresholds for different generator sizes.
+    - policy_schedule.yaml (optional): Configures dynamic activation/deactivation of policies
+      by state and simulation year.
     Attributes:
         unique_id: int - Unique identifier for the agent.
         model: Model - The model this agent belongs to.
-        policy_duration: list[dict] - A list of policy durations in years applicable to the agent.
-        For example, [{"policy_name": "policy1", "duration": 12}, {"policy_name": "policy2", "duration": 24}]
+        policy_schedule_path: Optional[str] - Path to the YAML policy schedule config file.
+            Defaults to policy_regulation/policy_schedule.yaml relative to this module.
+        thresholds: dict - A dictionary mapping generator sizes to their thresholds (for hazardous waste).
     """
 
-    def __init__(self, 
-                 unique_id: int, 
-                 model: Model, 
-                 policy_duration: list[dict] = [],             
+    def __init__(self,
+                 unique_id: int,
+                 model: Model,
+                 policy_schedule: Optional[dict] = None,
                  ):
         """
-        Creation of new regulator agent
+        Creation of new regulator agent.
+        Parameters:
+        unique_id (int): Unique identifier for the agent.
+        model (Model): The model this agent belongs to.
+        policy_schedule (Optional[dict]): Pre-parsed policy schedule for this state's
+            policies, keyed by policy column name. Each value is a dict with optional
+            keys 'start_year' (int) and 'end_year' (int). Typically provided by the
+            model after loading policy_schedule.yaml once. Defaults to no schedule.
         """
         super().__init__(model)
         self.unique_id = unique_id
-        self.internal_clock = 0  # Internal clock to track policy duration
         self.regulator_state = self.model.regulator_state_map[unique_id]
-        self.regulatory_policy = pd.read_csv(os.path.join(os.path.dirname(__file__), "policy_regulation", "policy_by_state.csv"))
-        self.current_regulatory_policy = self.regulatory_policy[self.regulatory_policy['state'] == self.regulator_state]
-        self.policy_duration = policy_duration
+        self.regulatory_policy = pd.read_csv(
+            os.path.join(os.path.dirname(__file__), "policy_regulation", "policy_by_state.csv"))
+        # Use a copy so that in-place updates during the simulation do not
+        # affect other agents sharing the same underlying DataFrame.
+        self.current_regulatory_policy = (
+            self.regulatory_policy[self.regulatory_policy['state'] == self.regulator_state]
+            .copy()
+        )
+        self._policy_schedule: dict[str, dict] = policy_schedule or {}
         # Initialize thresholds for different generator sizes
         generator_threshold_df = pd.read_csv(os.path.join(os.path.dirname(__file__), "policy_regulation", "generator_threshold.csv"))
         # Determine the applicable state for thresholds, defaulting to "FED" if not found
@@ -80,6 +96,12 @@ class Regulators(Agent):
         # Map generator sizes to their thresholds from the DataFrame
         for size, thresh_dict in thresholds.items():
             self.thresholds[GeneratorSize(size)] = GeneratorSizeThreshold.from_dict(thresh_dict)
+        # Initialize universal waste thresholds
+        universal_waste_threshold_df = pd.read_csv(os.path.join(os.path.dirname(__file__), "policy_regulation", "universal_waste_generator_threshold.csv"))
+        universal_waste_thresholds = universal_waste_threshold_df[universal_waste_threshold_df['state'] == threshold_state].set_index('generator_size').to_dict(orient='index')
+        self.universal_waste_thresholds = {}
+        for size, thresh_dict in universal_waste_thresholds.items():
+            self.universal_waste_thresholds[GeneratorSize(size)] = GeneratorSizeThreshold.from_dict(thresh_dict)
 
     def _is_transfer_based_exclusion(self, recycler_id: int):
         """
@@ -123,28 +145,83 @@ class Regulators(Agent):
             return True
         return False  # No universal waste regulations apply by default
 
-    def check_and_update_regulations(self):
+    def is_epr_applicable(self) -> bool:
         """
-        Check and update the regulatory policies based on the model's clock and the current policy duration.
+        Check if Extended Producer Responsibility (EPR) regulation is active
+        for this state. When True, the landfill pathway is disabled for all
+        PV owners in the state.
+        Returns:
+        bool: True if EPR is currently active for this state.
         """
+        if (not self.current_regulatory_policy.empty
+                and self.current_regulatory_policy["epr"].values[0] == True):
+            return True
+        return False
 
-        if self.current_regulatory_policy is not None:
-            # Check if policies have expired
-            if len(self.policy_duration) > 0:
-                # Mark expired policies as inactive
-                for policy_name in self.policy_duration:
-                    if policy_name in self.current_regulatory_policy.columns:
-                        if self.internal_clock // self.model.timestep.value >= self.policy_duration[policy_name]:
-                            self.current_regulatory_policy[policy_name] = False
-                            self.internal_clock = 0
+    def is_recycling_bonds_applicable(self) -> bool:
+        """
+        Check if recycling bonds are active for this state. When True, all
+        recycling costs (base cost, transportation, and waste management
+        premiums) are covered by the bonds and are effectively zero for
+        PV owners in the state.
+        Returns:
+        bool: True if recycling bonds are currently active for this state.
+        """
+        if (not self.current_regulatory_policy.empty
+                and self.current_regulatory_policy["recycling_bonds"].values[0] == True):
+            return True
+        return False
 
-    def step(self):
+    def check_and_update_regulations(self) -> None:
+        """
+        Check and update regulatory policy values for this state based on the
+        current simulation year and the entries in policy_schedule.yaml.
+
+        Scheduling rules (all year comparisons use the calendar year derived
+        from the model clock):
+        - start_year only  : policy is False before start_year, True from
+                             start_year to end of simulation.
+        - end_year only    : policy follows the initial CSV value until
+                             end_year, then becomes False for the remainder.
+        - both             : policy is True during [start_year, end_year),
+                             False otherwise.
+        - neither          : policy value is taken directly from
+                             policy_by_state.csv with no change.
+        """
+        if self.current_regulatory_policy.empty or not self._policy_schedule:
+            return
+
+        current_year: int = self.model.current_date.year
+
+        row_idx: int = self.current_regulatory_policy.index[0]
+        for policy_name, schedule in self._policy_schedule.items():
+            if policy_name not in self.current_regulatory_policy.columns:
+                continue
+
+            start_year: Optional[int] = schedule.get('start_year')
+            end_year: Optional[int] = schedule.get('end_year')
+
+            if start_year is not None and end_year is not None:
+                # Active window: [start_year, end_year)
+                new_value: bool = start_year <= current_year < end_year
+            elif start_year is not None:
+                # Activated at start_year, remains active to end of simulation
+                new_value = current_year >= start_year
+            elif end_year is not None:
+                # No change needed before end_year; deactivate from end_year onwards
+                if current_year < end_year:
+                    continue
+                new_value = False
+            else:
+                continue  # No schedule keys; skip
+
+            self.current_regulatory_policy.at[row_idx, policy_name] = new_value
+
+    def step(self) -> None:
         """
         The step function for the regulator agent.
-        It updates the regulatory policies based on the model's state.
+        It updates the regulatory policies based on the current simulation year.
         """
         self.check_and_update_regulations()
-        # Increment the internal clock
-        self.internal_clock += 1
 
         
