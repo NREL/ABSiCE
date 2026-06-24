@@ -19,6 +19,11 @@ from pathlib import Path
 
 import pandas as pd
 
+# Baseline recycling rate in $/kg, consistent across all shipment rows.
+# RecyclingCost_$ = Shipped_kg × _BASELINE_RECYCLING_RATE_PER_KG.
+# Used to convert an absolute cost rate to a scale multiplier.
+_BASELINE_RECYCLING_RATE_PER_KG: float = 0.40
+
 
 def _build_suffix(scale: float) -> str:
     """

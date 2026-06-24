@@ -1,0 +1,90 @@
+# ABSiCE Recycling Cost Sensitivity — TORC/Slurm Workflow
+#
+# Runs one (landfill_set × ratio) scenario per job, 100 model iterations each.
+# Total: 11 ratios × 2 landfill sets = 22 jobs.
+#
+# Submission:
+#   TORC_ACCOUNT=<your_account> ./hpc/submit.sh recycling
+#
+# Customising the ratio list:
+#   Edit the `ratio` parameter list below before submitting.
+#
+# Placeholders to fill in:
+#   <ACCOUNT>   — your Slurm account (or set TORC_ACCOUNT env var in submit.sh)
+#   <PARTITION> — your Slurm partition (e.g. "normal", "compute", "short")
+
+name: absice_recycling_sensitivity
+description: >
+  ABSiCE PV recycling cost sensitivity analysis.
+  Each job runs 100 model iterations for one (landfill_set × recycling_cost_ratio)
+  scenario and writes results to results/RTN_Iteration_3/.
+project: ABSiCE
+
+# ── Resource requirements per job ──────────────────────────────────────────────
+# The ABM is single-threaded; 4 CPUs gives headroom for OS and subprocesses.
+# 100 runs × ~3–4 min each ≈ 5–7 hrs → PT8H gives a safe buffer.
+resource_requirements:
+  - name: scenario
+    num_cpus: 4
+    num_gpus: 0
+    num_nodes: 1
+    memory: 16g
+    runtime: PT8H
+
+# ── Slurm scheduler ────────────────────────────────────────────────────────────
+# nodes: 4 allows 4 concurrent jobs (one per node).  With 22 jobs total, all
+# complete within ~6 scheduling windows.  Increase nodes to finish faster.
+slurm_schedulers:
+  - name: cpu_nodes
+    account: <ACCOUNT>
+    partition: <PARTITION>
+    nodes: 4
+    walltime: "10:00:00"
+
+# ── Workflow action: allocate nodes when workflow starts ───────────────────────
+actions:
+  - trigger_type: on_workflow_start
+    action_type: schedule_nodes
+    scheduler: cpu_nodes
+    scheduler_type: slurm
+    num_allocations: 1
+
+# ── Jobs ───────────────────────────────────────────────────────────────────────
+jobs:
+  - name: scenario_{landfill_set}_r{ratio:.2f}
+    command: >
+      conda run -n pv_abm python hpc/run_single_scenario.py
+      --landfill-set {landfill_set}
+      --ratio {ratio}
+      --cost-component recycling
+      --n-runs 100
+      --n-steps 11
+    resource_requirements: scenario
+    scheduler: cpu_nodes
+
+    # ── Parameter sweep (Cartesian product) ─────────────────────────────────
+    # OPTION A (default): ratio multipliers — edit the list to customise.
+    # Default: 11 points spanning ±25% around the baseline (1.0).
+    parameters:
+      landfill_set: "['all_landfills','true_landfills']"
+      ratio: "[0.75,0.80,0.85,0.90,0.95,1.0,1.05,1.10,1.15,1.20,1.25]"
+    parameter_mode: product
+
+    # OPTION B: specify absolute recycling cost in $/kg instead of a ratio.
+    # Baseline is $0.40/kg. To use, comment out OPTION A and uncomment below.
+    # The command above should also be changed:
+    #   replace "--ratio {ratio}" with "--cost-rate {cost_rate}"
+    #
+    # parameters:
+    #   landfill_set: "['all_landfills','true_landfills']"
+    #   cost_rate: "[0.30,0.32,0.34,0.36,0.38,0.40,0.42,0.44,0.46,0.48,0.50]"
+    # parameter_mode: product
+
+    # ── Retry on transient failures (e.g. I/O errors, node preemption) ───────
+    failure_handler: retry_once
+
+failure_handlers:
+  - name: retry_once
+    rules:
+      - match_all_exit_codes: true
+        max_retries: 1
