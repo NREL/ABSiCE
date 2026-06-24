@@ -109,6 +109,17 @@ def _parse_args() -> argparse.Namespace:
         metavar="N",
         help="Simulation length in years (default: 11).",
     )
+    parser.add_argument(
+        "--results-base",
+        type=Path,
+        default=_RESULTS_BASE,
+        metavar="DIR",
+        help=(
+            "Base directory for scenario output folders "
+            f"(default: {_RESULTS_BASE}). "
+            "Override on the cluster to point to a cluster-local path."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -137,7 +148,8 @@ def main() -> None:
 
     set_config: dict = _LANDFILL_SETS[args.landfill_set]
     suffix: str = _build_suffix(ratio, args.cost_component)
-    output_dir: Path = _RESULTS_BASE / f"{set_config['results_prefix']}{suffix}"
+    results_base: Path = Path(args.results_base).resolve()
+    output_dir: Path = results_base / f"{set_config['results_prefix']}{suffix}"
 
     rate_info: str = (
         f"cost_rate={args.cost_rate} $/kg (ratio={ratio:g})"

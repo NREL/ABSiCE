@@ -57,6 +57,7 @@ jobs:
       --cost-component transport
       --n-runs 100
       --n-steps 11
+      --results-base results/RTN_Iteration_3
     resource_requirements: scenario
     scheduler: cpu_nodes
 
