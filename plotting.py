@@ -680,6 +680,10 @@ def plot_recycling_rate_sensitivity(
         output_dir: str = "",
         year_range: tuple[int, int] | None = None,
         sensitivity_type: str = "recycling",
+        x_axis: str = "pct",
+        baseline_cost_per_kg: float = 0.4,
+        kg_per_w: float = 0.0077,
+        w_per_module: float = 270.0,
 ) -> None:
     """
     Sensitivity analysis: recycling rate vs. cost delta.
@@ -701,6 +705,11 @@ def plot_recycling_rate_sensitivity(
     sensitivity_type (str): 'recycling' (default) scans folders with plain
         ratio suffixes (e.g. _1.05, _neg0.75); 'transport' scans folders with
         _transport_ infix (e.g. _transport_1.05).
+    x_axis (str): 'pct' (default) plots cost change as a percentage; 
+        'cost_per_module' plots the absolute cost per module in USD.
+    baseline_cost_per_kg (float): Baseline recycling cost in $/kg (default 0.4).
+    kg_per_w (float): Average module mass in kg/W (default 0.0077).
+    w_per_module (float): Average module wattage in W (default 270).
     Returns:
     None
     """
@@ -792,15 +801,17 @@ def plot_recycling_rate_sensitivity(
                 total_recycle / total_waste if total_waste > 0 else 0.0
             )
             cost_delta_pct: float = round((ratio - 1.0) * 100, 4)
+            cost_per_module: float = round(ratio * baseline_cost_per_kg * kg_per_w * w_per_module)
 
             records.append(
                 {
                     "Landfill Set": label,
                     "Cost Delta (%)": cost_delta_pct,
+                    "Cost per Module ($)": cost_per_module,
                     "Recycling Rate": recycling_rate,
                 }
             )
-            print(f"  {label} | delta={cost_delta_pct:+.1f}% | rate={recycling_rate:.3%}")
+            print(f"  {label} | delta={cost_delta_pct:+.1f}% | cost/module=${cost_per_module} | rate={recycling_rate:.3%}")
 
     if not records:
         print(f"No scenario data found in {iteration_dir}")
@@ -808,13 +819,14 @@ def plot_recycling_rate_sensitivity(
 
     df_all: pd.DataFrame = pd.DataFrame(records)
 
-    # CSV: one row per cost delta, one column per landfill set
+    # CSV: one row per x value, one column per landfill set
+    x_col: str = "Cost Delta (%)" if x_axis == "pct" else "Cost per Module ($)"
     df_pivot: pd.DataFrame = (
         df_all.pivot(
-            index="Cost Delta (%)", columns="Landfill Set", values="Recycling Rate"
+            index=x_col, columns="Landfill Set", values="Recycling Rate"
         )
         .reset_index()
-        .sort_values("Cost Delta (%)")
+        .sort_values(x_col)
     )
     df_pivot.columns.name = None
     csv_path: str = os.path.join(output_dir, f"recycling_rate_sensitivity_{sensitivity_type}.csv")
@@ -831,10 +843,10 @@ def plot_recycling_rate_sensitivity(
     for label in ["All Landfills", "True Landfills"]:
         subset: pd.DataFrame = (
             df_all[df_all["Landfill Set"] == label]
-            .sort_values("Cost Delta (%)")
+            .sort_values(x_col)
         )
         ax.plot(
-            subset["Cost Delta (%)"],
+            subset[x_col],
             subset["Recycling Rate"],
             marker="o",
             label=label,
@@ -843,11 +855,17 @@ def plot_recycling_rate_sensitivity(
             markersize=6,
         )
 
-    ax.axvline(
-        x=0, color="gray", linestyle="--", linewidth=1, alpha=0.7, label="Baseline"
-    )
+    if x_axis == "pct":
+        ax.axvline(
+            x=0.0, color="gray", linestyle="--", linewidth=1, alpha=0.7, label="Baseline"
+        )
     cost_label: str = "Recycling Cost" if sensitivity_type == "recycling" else "Transport Cost"
-    ax.set_xlabel(f"{cost_label} Change (%)", fontsize=12)
+    if x_axis == "pct":
+        ax.set_xlabel(f"{cost_label} Change (%)", fontsize=12)
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:+.0f}%"))
+    else:
+        ax.set_xlabel(f"{cost_label} ($/module)", fontsize=12)
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:.0f}"))
     ax.set_ylabel("Recycling Rate", fontsize=12)
     ax.set_title(
         f"Recycling Rate Sensitivity to {cost_label}",
@@ -855,7 +873,6 @@ def plot_recycling_rate_sensitivity(
         fontweight="bold",
     )
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.1%}"))
-    ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:+.0f}%"))
     ax.legend(fontsize=11)
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
@@ -912,6 +929,14 @@ if __name__ == "__main__":
         help="Cost component for sensitivity analysis: 'recycling' or 'transport' (default: 'recycling')."
     )
 
+    parser.add_argument(
+        "--x_axis",
+        type=str,
+        choices=["pct", "cost_per_module"],
+        default="pct",
+        help="X-axis display for sensitivity plot: 'pct' for %% change (default) or 'cost_per_module' for $/module."
+    )
+
     args = parser.parse_args()
 
     if args.run_option == "aggregate_consumer_results":
@@ -937,6 +962,7 @@ if __name__ == "__main__":
         plot_recycling_rate_sensitivity(
             iteration_dir=args.iteration_dir,
             sensitivity_type=args.sensitivity_type,
+            x_axis=args.x_axis,
         )
     else:
         # Plot the waste data

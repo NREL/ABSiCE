@@ -26,7 +26,13 @@ from typing import Optional
 # ── Workspace-relative constants ─────────────────────────────────────────────
 _WORKSPACE_DIR: Path = Path(__file__).parent.resolve()
 _RTN_DIR: Path = _WORKSPACE_DIR / "RTN"
-_RTN_DATA_DIR: Path = Path("/Users/pghosh/SOLAR/RTN_Data/Round_3")
+_RTN_DATA_DIR: Path = next(
+    p for p in [
+        Path("/projects/pvabm/pghosh/RTN_Data/Round_3"),  # HPC (Kestrel)
+        Path("/Users/pghosh/SOLAR/RTN_Data/Round_3"),     # macOS local
+    ]
+    if p.exists()
+)
 _USPVDB_FILE: Path = (
     _WORKSPACE_DIR / "USPVDB" / "uspvdb_v3_0_20250430_with_pca.xlsx"
 )

@@ -56,7 +56,7 @@ class Refurbishers(Agent):
                                    in model.original_num_prod]
         #  Original repairing volume is based on previous years EoL volume
         # (from 2000 to 2019)
-        yearly_waste_file = pd.read_csv("all_pca_dataOut_95-by-35.Adv.csv")
+        yearly_waste_file = model.all_pca_df_out
         yearly_waste = yearly_waste_file[
             yearly_waste_file['year'] <= 2020]
         yearly_waste = sum(
@@ -78,7 +78,7 @@ class Refurbishers(Agent):
                             (1.14 - scndhand_mkt_pric_rate[0]) /
                             scndhand_mkt_pric_rate[1],
                             scndhand_mkt_pric_rate[0],
-                            scndhand_mkt_pric_rate[1]).rvs(1))
+                            scndhand_mkt_pric_rate[1]).rvs(1)[0])
         # attitude_level = float(distribution.rvs(1))
         self.refurbisher_margin = np.random.triangular(
             refurbisher_margin[0], refurbisher_margin[2],

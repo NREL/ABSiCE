@@ -31,17 +31,14 @@ resource_requirements:
     memory: 16g
     runtime: PT8H
 
-# ── Slurm scheduler ────────────────────────────────────────────────────────────
-# nodes: 4 allows 4 concurrent jobs (one per node).  With 22 jobs total, all
-# complete within ~6 scheduling windows.  Increase nodes to finish faster.
 slurm_schedulers:
   - name: cpu_nodes
-    account: <ACCOUNT>
-    partition: <PARTITION>
+    account: pvabm
+    partition: standard
     nodes: 4
-    walltime: "10:00:00"
+    walltime: "24:00:00"
+    extra: "--mail-user=pghosh@nlr.gov --mail-type=BEGIN,END,FAIL"
 
-# ── Workflow action: allocate nodes when workflow starts ───────────────────────
 actions:
   - trigger_type: on_workflow_start
     action_type: schedule_nodes
@@ -51,11 +48,13 @@ actions:
 
 # ── Jobs ───────────────────────────────────────────────────────────────────────
 jobs:
-  - name: scenario_{landfill_set}_r{ratio:.2f}
-    command: >
-      conda run -n pv_abm python hpc/run_single_scenario.py
+  - name: scenario_{landfill_set}_{cost_rate:.2f}
+    command: >-
+      module load conda &&
+      conda activate /projects/pvabm/pghosh/pv_abm &&
+      python hpc/run_single_scenario.py
       --landfill-set {landfill_set}
-      --ratio {ratio}
+      --cost-rate {cost_rate}
       --cost-component recycling
       --n-runs 100
       --n-steps 11
@@ -66,20 +65,20 @@ jobs:
     # ── Parameter sweep (Cartesian product) ─────────────────────────────────
     # OPTION A (default): ratio multipliers — edit the list to customise.
     # Default: 11 points spanning ±25% around the baseline (1.0).
-    parameters:
-      landfill_set: "['all_landfills','true_landfills']"
-      ratio: "[0.75,0.80,0.85,0.90,0.95,1.0,1.05,1.10,1.15,1.20,1.25]"
-    parameter_mode: product
+    # parameters:
+    #   landfill_set: "['all_landfills','true_landfills']"
+    #   ratio: "[0.75,0.80,0.85,0.90,0.95,1.0,1.05,1.10,1.15,1.20,1.25]"
+    # parameter_mode: product
 
     # OPTION B: specify absolute recycling cost in $/kg instead of a ratio.
     # Baseline is $0.40/kg. To use, comment out OPTION A and uncomment below.
     # The command above should also be changed:
     #   replace "--ratio {ratio}" with "--cost-rate {cost_rate}"
     #
-    # parameters:
-    #   landfill_set: "['all_landfills','true_landfills']"
-    #   cost_rate: "[0.30,0.32,0.34,0.36,0.38,0.40,0.42,0.44,0.46,0.48,0.50]"
-    # parameter_mode: product
+    parameters:
+      landfill_set: "['all_landfills','true_landfills']"
+      cost_rate: "[12.02, 14.43]" #7.21, 9.62
+    parameter_mode: product
 
     # ── Retry on transient failures (e.g. I/O errors, node preemption) ───────
     failure_handler: retry_once

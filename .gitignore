@@ -8,3 +8,5 @@ TEMP/Landfills_data.csv
 TEMP/Landfills_data_2023.csv
 .DS_Store
 *.log
+torc_output/
+torc.db*

@@ -15,6 +15,8 @@
 #   TORC_ACCOUNT=solar ./hpc/submit.sh recycling
 #   TORC_ACCOUNT=solar TORC_PARTITION=short ./hpc/submit.sh transport
 #   TORC_ACCOUNT=solar ./hpc/submit.sh recycling --poll-interval 30
+#
+# Each run is stamped with a timestamp; torc logs go to torc_output/<run_name>/
 
 set -euo pipefail
 
@@ -43,6 +45,11 @@ if [[ ! -f "$YAML_FILE" ]]; then
     exit 1
 fi
 
+# Timestamp-stamped run name and torc output directory
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+RUN_NAME="absice_${WORKFLOW}_sensitivity_${TIMESTAMP}"
+OUTPUT_DIR="torc_output/${RUN_NAME}"
+
 # Build optional extra flags for torc slurm generate
 GENERATE_EXTRA=()
 if [[ -n "${TORC_PARTITION:-}" ]]; then
@@ -53,16 +60,28 @@ if [[ -n "${TORC_NODES:-}" ]]; then
 fi
 
 echo "Submitting: $YAML_FILE"
+echo "  Run name : $RUN_NAME"
+echo "  Output   : $OUTPUT_DIR"
 echo "  Account  : $TORC_ACCOUNT"
 echo "  Partition: ${TORC_PARTITION:-<from YAML>}"
 echo "  Workspace: $WORKSPACE_DIR"
 echo ""
 
-# Generate Slurm-annotated spec and pipe directly to submit.
 # Run from workspace root so relative paths in the YAML resolve correctly.
 cd "$WORKSPACE_DIR"
-torc slurm generate \
-    --account "$TORC_ACCOUNT" \
-    "${GENERATE_EXTRA[@]}" \
-    "$YAML_FILE" \
-  | torc submit - "$@"
+
+# If the spec already defines slurm_schedulers, skip 'torc slurm generate'
+# (which would conflict) and submit directly.
+if grep -q '^slurm_schedulers:' "$YAML_FILE"; then
+    echo "Note: slurm_schedulers already defined in spec — skipping 'torc slurm generate'."
+    sed "s|^name:.*|name: ${RUN_NAME}|" "$YAML_FILE" \
+      | torc submit - --output-dir "$OUTPUT_DIR" "$@"
+else
+    # Generate Slurm-annotated spec and pipe directly to submit.
+    sed "s|^name:.*|name: ${RUN_NAME}|" "$YAML_FILE" \
+      | torc slurm generate \
+            --account "$TORC_ACCOUNT" \
+            "${GENERATE_EXTRA[@]}" \
+            - \
+      | torc submit - --output-dir "$OUTPUT_DIR" "$@"
+fi

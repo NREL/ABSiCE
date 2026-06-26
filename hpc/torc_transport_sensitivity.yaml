@@ -50,8 +50,10 @@ actions:
 # ── Jobs ───────────────────────────────────────────────────────────────────────
 jobs:
   - name: scenario_{landfill_set}_r{ratio:.2f}
-    command: >
-      conda run -n pv_abm python hpc/run_single_scenario.py
+    command: >-
+      module load conda &&
+      conda activate /projects/pvabm/pghosh/pv_abm &&
+      python hpc/run_single_scenario.py
       --landfill-set {landfill_set}
       --ratio {ratio}
       --cost-component transport

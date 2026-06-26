@@ -1129,6 +1129,8 @@ class ABM_CE_PV(Model):
                                         subset_df_init_cap_out])
         all_pca_df_in.to_csv('all_pca_datain_95-by-35.Adv.csv')
         all_pca_df_out.to_csv('all_pca_dataOut_95-by-35.Adv.csv')
+        # Store on model so agents can access without re-reading from disk
+        self.all_pca_df_out = all_pca_df_out
 
         all_pca_df_in = all_pca_df_in.groupby('year', as_index=False).sum()
         subset_df_init_cap = all_pca_df_in[all_pca_df_in['year'] < 2020]
@@ -1245,10 +1247,11 @@ class ABM_CE_PV(Model):
             pvice_mat_factor_copy['total_massperm2'].iloc[0]
         # NOTE: old PV ICE results — used only for product_average_wght baseline;
         # waste EOL values come from pvice_waste_eol_df (consolidated metric-ton file)
-        all_data_out_pca = pd.read_csv(
-            "all_pca_dataOut_95-by-35.Adv.csv", index_col=0)
+        # Use all_pca_df_out already in memory (avoids writing/reading a shared
+        # file in PV_ICE/TEMP/PCA/, which caused EmptyDataError race conditions
+        # when multiple HPC jobs ran concurrently).
         columns_to_expand = ['Yearly_Sum_Power_atEOL', 'Yearly_Sum_Area_atEOL']
-        all_data_out_pca = transform_pca_timeseries_timestep(all_data_out_pca, self.timestep, filtered_columns=columns_to_expand)
+        all_data_out_pca = transform_pca_timeseries_timestep(all_pca_df_out, self.timestep, filtered_columns=columns_to_expand)
         all_data_out_pca = all_data_out_pca.groupby(
             'year', as_index=False).mean(numeric_only=True)
         data_out_pca_copy = all_data_out_pca[

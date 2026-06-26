@@ -56,7 +56,7 @@ class Recyclers(Agent):
         self.total_repairable_volume = 0
         #  Original recycling volume is based on previous years EoL volume
         # (from 2000 to 2019)
-        yearly_waste_file = pd.read_csv("all_pca_dataOut_95-by-35.Adv.csv")
+        yearly_waste_file = model.all_pca_df_out
         yearly_waste = yearly_waste_file[
             yearly_waste_file['year'] <= 2020]
         yearly_waste = sum(
