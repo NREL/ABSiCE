@@ -82,26 +82,28 @@ outputs.
 #    if times allows
 
 from mesa import Model
-from ABM_CE_PV_ConsumerAgents import Consumers
+from ABM_CE_PV_ConsumerAgents import Consumers, report_output_consumer
 from ABM_CE_PV_RecyclerAgents import Recyclers
 from ABM_CE_PV_RefurbisherAgents import Refurbishers
 from ABM_CE_PV_ProducerAgents import Producers
+from ABM_CE_PV_RegulatorAgents import Regulators
 from mesa.space import NetworkGrid
 from mesa.datacollection import DataCollector
 import networkx as nx
 import numpy as np
-from math import e
+from math import e, gamma
 import pandas as pd
 import random
 import PV_ICE
 import os
 import csv
 import pandas as pd
+import yaml
 from geopy.geocoders import Nominatim
 import time
 from math import radians, sin, cos, sqrt, atan2
 from pathlib import Path
-from utils import TIMESTEP, transform_timeseries_timestep, transform_pca_timeseries_timestep
+from utils import TIMESTEP, ConsumerAgentResolution, PCA_MISSING_VALUE, transform_timeseries_timestep, transform_pca_timeseries_timestep, add_date_from_temporal_columns
 from datetime import datetime
 
 
@@ -115,6 +117,8 @@ class ABM_CE_PV(Model):
                  calibration_n_sensitivity_4=1,
                  calibration_n_sensitivity_5=1,
                  timestep=TIMESTEP.ANNUAL,
+                 consumer_agent_resolution=ConsumerAgentResolution.SITE,
+                 model_states=None,
                  num_consumers=1000,
                  consumers_node_degree=10,
                  consumers_network_type="small-world",
@@ -126,9 +130,9 @@ class ABM_CE_PV(Model):
                  num_refurbishers=15,
                  consumers_distribution={"residential": 1,
                                          "commercial": 0., "utility": 0.},
-                 init_eol_rate={"repair": 0.0, "sell": 0.0,
-                                "recycle": 0.1, "landfill": 0.9,
-                                "hoard": 0.0},
+                 init_eol_rate={"repair": 0.005, "sell": 0.01,
+                                "recycle": 0.1, "landfill": 0.885,
+                                "hoard": 0},
                  init_purchase_choice={"new": 0.9995, "used": 0.0005,
                                        "certified": 0},
                  total_number_product=[38, 38, 38, 38, 38, 38, 38, 139, 251,
@@ -139,21 +143,24 @@ class ABM_CE_PV(Model):
                  product_growth=[0.166, 0.045],
                  growth_threshold=10,
                  failure_rate_alpha=[2.4928, 5.3759, 3.93495],
-                 hoarding_cost=[0, 0.001, 0.0005],
-                 landfill_cost=[
-                     0.0089, 0.0074, 0.0071, 0.0069, 0.0056, 0.0043,
-                     0.0067, 0.0110, 0.0085, 0.0082, 0.0079, 0.0074, 0.0069,
-                     0.0068, 0.0068, 0.0052, 0.0052, 0.0051, 0.0074, 0.0062,
-                     0.0049, 0.0049, 0.0047, 0.0032, 0.0049, 0.0065, 0.0064,
-                     0.0062, 0.0052, 0.0048, 0.0048, 0.0044, 0.0042, 0.0039,
-                     0.0039, 0.0045, 0.0055, 0.0050, 0.0049, 0.0044, 0.0044,
-                     0.0039, 0.0033, 0.0030, 0.0041, 0.0050, 0.0040, 0.0040,
-                     0.0038, 0.0033],
+                 hoarding_cost=[0, 130, 65],  # [0, 0.001, 0.0005] $/W → $/ton
+                 landfill_cost=[  # $/ton (converted from $/W × 129,870)
+                     1156, 961, 922, 896, 727, 558,
+                     870, 1429, 1104, 1065, 1026, 961, 896,
+                     883, 883, 675, 675, 662, 961, 805,
+                     636, 636, 610, 416, 636, 844, 831,
+                     805, 675, 623, 623, 571, 545, 506,
+                     506, 584, 714, 649, 636, 571, 571,
+                     506, 429, 390, 533, 649, 520, 520,
+                     494, 429],
+                 hazardous_waste_management_cost={"repair": 0.0, "sell": 0.0,
+                                                    "recycle": 0.0, "landfill": 300.0,
+                                                    "hoard": 0.0}, # $/ton
                  theory_of_planned_behavior={
                      "residential": True, "commercial": True, "utility": True},
                  w_sn_eol=0.23,
                  w_pbc_eol=0.44,
-                 w_a_eol=0.5,
+                 w_a_eol=0.59,
                  w_sn_reuse=0.497,
                  w_pbc_reuse=0.382,
                  w_a_reuse=0.464,
@@ -162,15 +169,15 @@ class ABM_CE_PV(Model):
                                    "recycle": True, "landfill": True,
                                    "hoard": False},
                  max_storage=[1, 8, 4],
-                 att_distrib_param_eol=[0.805, 0.09],
-                 att_distrib_param_reuse=[0.223, 0.262],
-                 original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
-                 recycling_learning_shape_factor=-0.3,
+                 att_distrib_param_eol= [0.515, 0.1], # [0.805, 0.09],
+                 att_distrib_param_reuse=[0.01, 0.185], # [0.223, 0.262],
+                 original_recycling_cost=[400-1E-6, 400+1E-6, 400],  # 0.4 $/Kg → $/ton
+                 recycling_learning_shape_factor=-0.01, # -0.3,
                  repairability=0.55,
-                 original_repairing_cost=[0.1, 0.45, 0.23],
+                 original_repairing_cost=[12987, 58442, 29870],  # [0.1, 0.45, 0.23] $/W → $/ton
                  repairing_learning_shape_factor=-0.31,
                  scndhand_mkt_pric_rate=[0.4, 0.2],
-                 fsthand_mkt_pric=0.45,
+                 fsthand_mkt_pric=58442,  # 0.45 $/W → $/ton
                  fsthand_mkt_pric_reg_param=[1, 0.04],
                  refurbisher_margin=[0.4, 0.6, 0.5],
                  purchase_choices={"new": True, "used": True,
@@ -212,6 +219,7 @@ class ABM_CE_PV(Model):
                      'Wisconsin', 'Ohio', 'Kentucky', 'South Carolina'],
                  # transportation_cost=0.0314,
                  transportation_cost=0.095,
+                 hazardous_transportation_cost=0.095, # $/ton-km
                  used_product_substitution_rate=[0.6, 1, 0.8],
                  imperfect_substitution=0,
                  epr_business_model=False,
@@ -230,17 +238,61 @@ class ABM_CE_PV(Model):
                  seeding_recyc={"Seeding": False,
                                 "Year": 10, "number_seed": 50,
                                 "discount": 0.35},
+                # parameters for TCLP model. The default values are taken from
+                # Li, F., Tatapudi, S. R., Shaw, S. L., Libby, C., Bicer, B., & TamizhMani, G. (2025). 
+                # Photovoltaic module leach testing: Database development and statistical analysis. 
+                # Journal of Environmental Management, 377, 124666.
+                # BSF market-share inputs were estimated using Gemini combining multiple sources including:
+                # https://www.ise.fraunhofer.de/en/publications/studies/photovoltaics-report.html
+                # https://www.anernstore.com/blogs/diy-solar-guides/cell-type-market-shares-efficiency
+                 tclp_params = {
+                    "bsf_mean": 3.35,
+                    "bsf_std": 1.17,
+                    "non_bsf_mean": 1.85,
+                    "non_bsf_std": 0.97,
+                        "hazard_cutoff": {
+                            'federal': 5.0, 'AL': 5.0, 'AZ': 5.0, 'AR': 5.0, 'CA': 5.0, 'CO': 5.0, 'CT': 5.0,
+                            'DE': 5.0, 'FL': 5.0, 'GA': 5.0, 'ID': 5.0, 'IL': 5.0, 'IN': 5.0, 'IA': 5.0,
+                            'KS': 5.0, 'KY': 5.0, 'LA': 5.0, 'ME': 5.0, 'MD': 5.0, 'MA': 5.0, 'MI': 5.0,
+                            'MN': 5.0, 'MS': 5.0, 'MO': 5.0, 'MT': 5.0, 'NE': 5.0, 'NV': 5.0, 'NH': 5.0,
+                            'NJ': 5.0, 'NM': 5.0, 'NY': 5.0, 'NC': 5.0, 'ND': 5.0, 'OH': 5.0, 'OK': 5.0,
+                            'OR': 5.0, 'PA': 5.0, 'RI': 5.0, 'SC': 5.0, 'SD': 5.0, 'TN': 5.0, 'TX': 5.0,
+                            'UT': 5.0, 'VT': 5.0, 'VA': 5.0, 'WA': 5.0, 'WV': 5.0, 'WI': 5.0, 'WY': 5.0},
+                            # mg/L Pb threshold for hazard classification as per EPA 
+                            # (CA STLC test has same threshold)
+                        # Optional lower bound for std to avoid collapse
+                        "min_std": 0.05,
+                 },
                  pv_ice=False,
                  pca=False,
                  pca_scenario=False,
                  geopy=False,
                  calculate_distances=False,
                  rtn = False,
+                 solar_cycle =False,
+                 landfill_data_params = {
+                        "landfill_volume_column": "$/metric ton",
+                        "landfill_name_column": "Facility Name"},
+                 hazardous_waste_regulation_enabled=False,
+                 landfill_solar_waste_acceptance_ratio=0.4,
                  last_step=31,
-                 sa_landfill_costs=(False, 0.0037),
-                 file_name={'Landfill data': "Landfills_data.csv",
+                 sa_landfill_costs=(False, 481),  # 0.0037 $/W → $/ton
+                 file_name={'Landfill data': "Landfills_data_2023.csv",
                             'PCA-landfill distances':
-                                "pca_landfills_distances.csv"}):
+                                "pca_landfills_distances.csv",
+                            'Hazardous landfill data': "Landfills_data_SA.csv",
+                            'Hazardous PCA-landfill distances':
+                                "pca_landfills_distances_SA.csv",
+                            'Site-landfill distances':
+                                "site_landfills_distances.csv",
+                            'Recycler data': "Recyclers_data.csv",
+                            # California DTSC universal waste data sources:
+                            #   Landfills: https://dtsc.ca.gov/photovoltaic-modules-pv-modules-universal-waste-management-regulations_uw-handlers/
+                            #   Recyclers:  https://dtsc.ca.gov/list-of-universal-waste-recyclers-that-treat-pv-modules/
+                            'Universal Waste Landfills data':
+                                "Universal_Waste_Landfills_data.csv",
+                            'Universal Waste Recyclers data':
+                                "Universal_Waste_Recyclers_data.csv",}):
 
         """Initiate model.
 
@@ -260,6 +312,9 @@ class ABM_CE_PV(Model):
             timestep (TIMESTEP, optional): time step of the model. Defaults to
                 TIMESTEP.ANNUAL. Scaling is applied linearly to the model data
                 to match the time step.
+            consumer_agent_resolution (ConsumerAgentResolution, optional): Determines the resolution of consumer agents in the model.
+                Defaults to ConsumerAgentResolution.PCA.
+            model_states (list, optional): list of US states to model. Defaults to None (which means all states).
             num_consumers (int, optional): number of consumers.
                 Defaults to 1000.
             consumers_node_degree (int, optional): average node degree in the
@@ -301,8 +356,8 @@ class ABM_CE_PV(Model):
             failure_rate_alpha (list, optional): alpha parameter of the Weibull
                 function that models waste generation. Defaults to [2.4928,
                 5.3759, 3.93495].
-            hoarding_cost (list, optional): storage costs. Defaults to
-                [0, 0.001, 0.0005].
+            hoarding_cost (list, optional): storage costs in $/ton. Defaults to
+                [0, 130, 65].
             landfill_cost (list, optional): landfill costs. Defaults to
                 [ 0.0089, 0.0074, 0.0071, 0.0069, 0.0056, 0.0043, 0.0067,
                 0.0110, 0.0085, 0.0082, 0.0079, 0.0074, 0.0069, 0.0068, 0.0068,
@@ -433,6 +488,12 @@ class ABM_CE_PV(Model):
             seeding_recyc (dict, optional): seeding scenario for recycling
                 products. Defaults to {"Seeding": False, "Year": 10,
                 "number_seed": 50, "discount": 0.35}.
+            hazardous_waste_regulation_enabled: bool - Whether hazardous waste regulations are enabled.
+            landfill_solar_waste_acceptance_ratio: float - The ratio of landfills that accept solar waste. Defaults to 0.4.
+            as per research from Taylor Curtis.
+            rtn: bool - Whether to use the TAMU transportation, recycling, and landfill cost data.
+            solar_cycle: bool - Whether to use the solar cycle landfill cost data.
+            landfill_data_params: dict - Parameters for landfill data.
         """
         # Set up variables
         # att_distrib_param_eol[0] = calibration_n_sensitivity
@@ -451,6 +512,9 @@ class ABM_CE_PV(Model):
         self.seed = seed
         self.timestep = timestep
         self.rtn = rtn
+        self.solar_cycle = solar_cycle
+        self.landfill_data_params = landfill_data_params
+        self.model_states = model_states
 
         #Set path for data saving
         testfolder = str(Path().resolve() / 'PV_ICE' / 'TEMP' / 'PCA')
@@ -477,6 +541,28 @@ class ABM_CE_PV(Model):
         STATEs = list(rawdf.index.get_level_values('State').unique())
 
         self.file_names = file_name
+
+        # Consumer agent resolution determines what each consumer agent represents
+        self.consumer_agent_resolution = consumer_agent_resolution
+        # Load the USPVDB and ReEDS data if using site-level consumer agents
+        # this is needed to map sites to PCAs and get the utility-scale PV contribution factors
+        # If using PCA-level consumer agents, need to load the pca_longlat file instead
+        if self.consumer_agent_resolution == ConsumerAgentResolution.SITE:
+            self.uspvdb = pd.read_excel(os.path.join(
+                os.path.dirname(__file__), 'USPVDB', 'uspvdb_v3_0_20250430_with_pca.xlsx'))
+            self.uspvdb = self.uspvdb[self.uspvdb['PCA'] != PCA_MISSING_VALUE]
+
+            if self.model_states is not None:
+                self.uspvdb = self.uspvdb[self.uspvdb['p_state'].isin(self.model_states)]
+
+            self.reeds_data = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                                    'ReEDS', 'StdScen24_annual_balancingAreas_Mid_Case_CO2e_95by2035.xlsx'))
+            if self.model_states is not None:
+                self.reeds_data = self.reeds_data[self.reeds_data['state'].isin(self.model_states)]
+            # Pre-calculate utility-scale PV contribution factor for each PCA
+            self.reeds_data['utility_scale_pv_contribution_factor'] = \
+            self.reeds_data['upv_MW'] / (self.reeds_data['upv_MW'] +
+                                    self.reeds_data['distpv_MW'])
 
         GISfile = os.path.join(SupportingMaterialFolder, 'gis_centroid_n.csv')
         GIS = pd.read_csv(GISfile)
@@ -596,6 +682,18 @@ class ABM_CE_PV(Model):
         pca_longlat = pd.DataFrame(columns=["PCA", "Long", "Lat"])
 
         #     #### Create the 3 Scenarios and assign Baselines
+
+        if self.rtn:
+            # If using the RTN model results from Texas A&M University
+            # load the recycler data from the RTN model
+            self.recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "RTN", "recycler_data.csv"))
+        else:
+            self.recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "TEMP", 
+                                                    "recycler_data.csv"))
+
+        # Load Universal Waste Recyclers data
+        self.universal_waste_recyclers_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "TEMP", 
+                                                    self.file_names['Universal Waste Recyclers data']))
 
         if pca_scenario:
             i = 0
@@ -719,6 +817,10 @@ class ABM_CE_PV(Model):
                 self.df = self.df.join(self.year_column)
                 self.df.to_csv(output_filename, index=False)
 
+        # Load PCA data if needed for distance calculations and for consumer agent reporting
+        if self.consumer_agent_resolution == ConsumerAgentResolution.PCA:
+            self.pca_data = pd.read_csv("../../../TEMP/pca_longlat.csv")  # Replace with your PCA data file
+
         if pv_ice:
 
             testfolder = str(Path().resolve().parent.parent)
@@ -756,99 +858,341 @@ class ABM_CE_PV(Model):
                 c = 2 * atan2(sqrt(a), sqrt(1 - a))
                 return 6371 * c  # Radius of the Earth in kilometers
 
-            # Load the data for PCAs and recyclers from CSV files
-            if self.rtn:
-                # If using the RTN model results from Texas A&M University
-                # load the recycler data from the RTN model
-                recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "RTN", "recycler_data.csv"))
+            def haversine_vectorized(lat1: np.ndarray, lon1: np.ndarray, lat2: np.ndarray, lon2: np.ndarray) -> np.ndarray:
+                # Convert latitude and longitude from degrees to radians
+                lat1, lon1, lat2, lon2 = map(np.radians,
+                                             [lat1, lon1, lat2, lon2])
+
+                # Haversine formula
+                # Convert inputs to 2D arrays for broadcasting
+                # Let M and N be the lengths of lat1/lon1 and lat2/lon2 respectively
+                # Before broadcasting:
+                # lat1, lon1: shape (M,)
+                # lat2, lon2: shape (N,)
+                # After broadcasting: 
+                # lat2 and lon2 become shape (N, 1)
+                # Resulting distance matrix will have shape (N, M)
+                # This computes distances from each point in (lat2, lon2) to all points in (lat1, lon1)
+                dlon = lon2[:, np.newaxis] - lon1 
+                dlat = lat2[:, np.newaxis] - lat1 
+                a = np.sin(dlat / 2)**2 + np.cos(lat1[np.newaxis, :]) * np.cos(lat2[:, np.newaxis]) * \
+                    np.sin(dlon / 2)**2
+                c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+                return 6371 * c  # Radius of the Earth in kilometers
+            
+            if self.solar_cycle:
+                # If using the solar cycle landfill cost data
+                landfills_data = pd.read_csv(os.path.join(
+                    os.path.dirname(__file__),
+                    "SolarCycle", "wbj_solar_cycle_combined.csv"),
+                    index_col=0)
+                
             else:
-                recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "TEMP", 
-                                                     "recycler_data.csv"))
-            pca_data = pd.read_csv("../../../TEMP/pca_longlat.csv")  # Replace with your PCA data file
-            landfills_data = pd.read_csv("../../../TEMP/" +
-                                         self.file_names['Landfill data'])
+                landfills_data = pd.read_csv("../../../TEMP/" +
+                                                self.file_names['Landfill data'])
+                
+            if self.consumer_agent_resolution == ConsumerAgentResolution.PCA:
 
-            # Create an empty DataFrame to store distances
-            distance_df = pd.DataFrame(columns=pca_data['PCA'],
-                                       index=recycler_data['Recycler Name'])
-            distance_df2 = pd.DataFrame(columns=pca_data['PCA'],
-                                        index=landfills_data['Facility Name'])
+                # Create an empty DataFrame to store distances
+                distance_df = pd.DataFrame(columns=self.pca_data['PCA'],
+                                        index=self.recycler_data['Recycler Name'])
+                distance_df2 = pd.DataFrame(columns=self.pca_data['PCA'],
+                                            index=landfills_data[self.landfill_data_params['landfill_name_column']])
 
-            # Calculate distances between each PCA and each recycler
-            for pca_index, pca_row in pca_data.iterrows():
-                pca_lat = pca_row['Lat']
-                pca_lon = pca_row['Long']
+                # Calculate distances between each PCA and each recycler
+                for pca_index, pca_row in self.pca_data.iterrows():
+                    pca_lat = pca_row['Lat']
+                    pca_lon = pca_row['Long']
 
-                for recycler_index, recycler_row in recycler_data.iterrows():
-                    recycler_lat = recycler_row['Latitude']
-                    recycler_lon = recycler_row['Longitude']
-                    distance = haversine(float(pca_lat), float(pca_lon),
-                                         float(recycler_lat),
-                                         float(recycler_lon))
+                    for recycler_index, recycler_row in self.recycler_data.iterrows():
+                        recycler_lat = recycler_row['Latitude']
+                        recycler_lon = recycler_row['Longitude']
+                        distance = haversine(float(pca_lat), float(pca_lon),
+                                            float(recycler_lat),
+                                            float(recycler_lon))
 
-                    # Fill in the distance in the DataFrame
-                    distance_df.at[recycler_row['Recycler Name'],
-                                   pca_row['PCA']] = distance
+                        # Fill in the distance in the DataFrame
+                        distance_df.at[recycler_row['Recycler Name'],
+                                    pca_row['PCA']] = distance
 
-                for landfills_index, landfills_row in \
-                        landfills_data.iterrows():
-                    landfills_lat = landfills_row['Latitude']
-                    landfills_lon = landfills_row['Longitude']
+                    for landfills_index, landfills_row in \
+                            landfills_data.iterrows():
+                        landfills_lat = landfills_row['Latitude']
+                        landfills_lon = landfills_row['Longitude']
 
-                    distance2 = haversine(pca_lat, pca_lon,
-                                          landfills_lat, landfills_lon)
+                        distance2 = haversine(pca_lat, pca_lon,
+                                            landfills_lat, landfills_lon)
 
-                    # Fill in the distance in the DataFrame
-                    distance_df2.at[landfills_row['Facility Name'],
-                                    pca_row['PCA']] = distance2
+                        # Fill in the distance in the DataFrame
+                        distance_df2.at[landfills_row[self.landfill_data_params['landfill_name_column']],
+                                        pca_row['PCA']] = distance2
 
-            # Save the distances to a CSV file
-            if self.rtn:
-                # If using the RTN model results from Texas A&M University
-                # save the distances to the RTN model folder
-                distance_df.to_csv(os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
-            else:
-                distance_df.to_csv("../../../TEMP/pca_recycler_distances.csv")
-            distance_df2.to_csv("../../../TEMP/" +
-                                self.file_names['PCA-landfill distances'])
+                # Save the distances to a CSV file
+                if self.rtn:
+                    # If using the RTN model results from Texas A&M University
+                    # save the distances to the RTN model folder
+                    distance_df.to_csv(os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
+                    distance_df2.to_csv(os.path.join(os.path.dirname(__file__), "RTN",
+                                                    self.file_names['PCA-landfill distances']))                   
+                else:
+                    distance_df.to_csv("../../../TEMP/pca_recycler_distances.csv")
+                    if self.solar_cycle:
+                        # If using the solar cycle landfill cost data
+                        # save the landfill distances to the solar cycle folder
+                        distance_df2.to_csv(os.path.join(
+                        os.path.dirname(__file__), "SolarCycle",
+                        self.file_names['PCA-landfill distances']))
+                    else:
+                        distance_df2.to_csv("../../../TEMP/" +
+                                        self.file_names['PCA-landfill distances'])
 
-        if self.rtn:
-            # If using the RTN model results from Texas A&M University
-            # load the recycling costs from the RTN model
-            self.recycler_distance_df = pd.read_csv(
-                os.path.join(os.path.dirname(__file__), "RTN", "pca_recycler_distances.csv"))
-        else:
-            self.recycler_distance_df = pd.read_csv(
-            '../../../TEMP/pca_recycler_distances.csv')
-        self.landfill_distance_df = pd.read_csv(
-            '../../../TEMP/' + self.file_names['PCA-landfill distances'])
-        self.landfill_cost_df = pd.read_csv(
-            '../../../TEMP/' + self.file_names['Landfill data'])
+                # Calculate distances for Universal Waste Landfills (PCA resolution)
+                universal_waste_landfills_data = pd.read_csv("../../../TEMP/" + self.file_names['Universal Waste Landfills data'])
+                uw_landfill_distance_df = pd.DataFrame(columns=self.pca_data['PCA'],
+                                            index=universal_waste_landfills_data['Facility Name'])
+                
+                for pca_index, pca_row in self.pca_data.iterrows():
+                    pca_lat = pca_row['Lat']
+                    pca_lon = pca_row['Long']
+                    
+                    for uw_landfill_index, uw_landfill_row in universal_waste_landfills_data.iterrows():
+                        uw_landfill_lat = uw_landfill_row['Latitude']
+                        uw_landfill_lon = uw_landfill_row['Longitude']
+                        
+                        distance_uw_landfill = haversine(pca_lat, pca_lon,
+                                            uw_landfill_lat, uw_landfill_lon)
+                        
+                        uw_landfill_distance_df.at[uw_landfill_row['Facility Name'],
+                                        pca_row['PCA']] = distance_uw_landfill
+                
+                uw_landfill_distance_df.to_csv("../../../TEMP/universal_waste_pca_landfill_distances.csv")
+                
+                # Calculate distances for Universal Waste Recyclers (PCA resolution)
+                universal_waste_recyclers_data = pd.read_csv("../../../TEMP/" + self.file_names['Universal Waste Recyclers data'])
+                uw_recycler_distance_df = pd.DataFrame(columns=self.pca_data['PCA'],
+                                            index=universal_waste_recyclers_data['Recycler Name'])
+                
+                for pca_index, pca_row in self.pca_data.iterrows():
+                    pca_lat = pca_row['Lat']
+                    pca_lon = pca_row['Long']
+                    
+                    for uw_recycler_index, uw_recycler_row in universal_waste_recyclers_data.iterrows():
+                        uw_recycler_lat = uw_recycler_row['Latitude']
+                        uw_recycler_lon = uw_recycler_row['Longitude']
+                        
+                        distance_uw_recycler = haversine(pca_lat, pca_lon,
+                                            uw_recycler_lat, uw_recycler_lon)
+                        
+                        uw_recycler_distance_df.at[uw_recycler_row['Recycler Name'],
+                                        pca_row['PCA']] = distance_uw_recycler
+                
+                uw_recycler_distance_df.to_csv("../../../TEMP/universal_waste_pca_recycler_distances.csv")
+                
+            if self.consumer_agent_resolution == ConsumerAgentResolution.SITE:
+
+                # Calculate distances between each site and each recycler and landfill
+                
+                site_lats = self.uspvdb['Latitude'].to_numpy().astype(float)
+                site_lons = self.uspvdb['Longitude'].to_numpy().astype(float)
+                recycler_lats = self.recycler_data['Latitude'].to_numpy().astype(float)
+                recycler_lons = self.recycler_data['Longitude'].to_numpy().astype(float)
+                landfill_lats = landfills_data['Latitude'].to_numpy().astype(float)
+                landfill_lons = landfills_data['Longitude'].to_numpy().astype(float)
+
+                distance_matrix_recycler = haversine_vectorized(
+                    site_lats, site_lons, recycler_lats, recycler_lons)
+                distance_matrix_landfill = haversine_vectorized(
+                    site_lats, site_lons, landfill_lats, landfill_lons)
+                
+                landfill_distance_df = pd.DataFrame(distance_matrix_landfill,
+                                                        index=landfills_data[self.landfill_data_params['landfill_name_column']],
+                                                        columns=self.uspvdb['case_id'])
+                                                    
+                site_recycler_distance_df = pd.DataFrame(distance_matrix_recycler,
+                                                        index=self.recycler_data['Recycler Name'],
+                                                        columns=self.uspvdb['case_id'])
+                if self.rtn:
+                    # If using the RTN model results from Texas A&M University
+                    # save the distances to the RTN model folder
+                    site_recycler_distance_df.to_csv(os.path.join(
+                        os.path.dirname(__file__), "RTN",
+                        "site_recycler_distances.csv"))
+                    landfill_distance_df.to_csv(os.path.join(
+                        os.path.dirname(__file__), "RTN",
+                        "site_landfill_distances.csv"))
+                else:
+                    site_recycler_distance_df.to_csv("../../../TEMP/site_recycler_distances.csv")
+                    if self.solar_cycle:
+                        # If using the solar cycle landfill cost data
+                        # save the landfill distances to the solar cycle folder
+                        site_recycler_distance_df.to_csv("../../../TEMP/site_recycler_distances.csv")
+                        landfill_distance_df.to_csv(os.path.join(
+                            os.path.dirname(__file__), "SolarCycle",
+                            "site_landfill_distances.csv"))
+                    else:
+                        landfill_distance_df.to_csv("../../../TEMP/site_landfill_distances.csv")
+
+                hazardous_landfills_data = pd.read_csv("../../../TEMP/Landfills_data_SA.csv")
+                hazardous_landfill_lats = hazardous_landfills_data['Latitude'].to_numpy().astype(float)
+                hazardous_landfill_lons = hazardous_landfills_data['Longitude'].to_numpy().astype(float)
+                hazardous_landfill_distance_matrix = haversine_vectorized(
+                    site_lats, site_lons, hazardous_landfill_lats, hazardous_landfill_lons)
+                hazardous_landfill_distance_df = pd.DataFrame(hazardous_landfill_distance_matrix,
+                                                        index=hazardous_landfills_data['Facility Name'],
+                                                        columns=self.uspvdb['case_id'])
+                hazardous_landfill_distance_df.to_csv(
+                    os.path.join(
+                        os.path.dirname(__file__), "TEMP", 'hazardous_site_landfill_distances.csv'))
+
+                # Calculate distances for Universal Waste Landfills
+                universal_waste_landfills_data = pd.read_csv("../../../TEMP/" + self.file_names['Universal Waste Landfills data'])
+                uw_landfill_lats = universal_waste_landfills_data['Latitude'].to_numpy().astype(float)
+                uw_landfill_lons = universal_waste_landfills_data['Longitude'].to_numpy().astype(float)
+                uw_landfill_distance_matrix = haversine_vectorized(
+                    site_lats, site_lons, uw_landfill_lats, uw_landfill_lons)
+                uw_landfill_distance_df = pd.DataFrame(uw_landfill_distance_matrix,
+                                                        index=universal_waste_landfills_data['Facility Name'],
+                                                        columns=self.uspvdb['case_id'])
+                uw_landfill_distance_df.to_csv(
+                    os.path.join(
+                        os.path.dirname(__file__), "TEMP", 'universal_waste_site_landfill_distances.csv'))
+
+                # Calculate distances for Universal Waste Recyclers
+                universal_waste_recyclers_data = pd.read_csv("../../../TEMP/" + self.file_names['Universal Waste Recyclers data'])
+                uw_recycler_lats = universal_waste_recyclers_data['Latitude'].to_numpy().astype(float)
+                uw_recycler_lons = universal_waste_recyclers_data['Longitude'].to_numpy().astype(float)
+                uw_recycler_distance_matrix = haversine_vectorized(
+                    site_lats, site_lons, uw_recycler_lats, uw_recycler_lons)
+                uw_recycler_distance_df = pd.DataFrame(uw_recycler_distance_matrix,
+                                                        index=universal_waste_recyclers_data['Recycler Name'],
+                                                        columns=self.uspvdb['case_id'])
+                uw_recycler_distance_df.to_csv(
+                    os.path.join(
+                        os.path.dirname(__file__), "TEMP", 'universal_waste_site_recycler_distances.csv'))
+
         self.correct_mat_factor = pd.read_csv(
-            '../../../TEMP/correct_mat_factor.csv')
-        
+            '../../../TEMP/correct_mat_factor.csv')    
+        self.hazardous_landfill_cost_df = pd.read_csv(
+            '../../../TEMP/' + self.file_names['Hazardous landfill data'])
+        # Load Universal Waste Landfills data
+        self.universal_waste_landfills_data = pd.read_csv(
+            '../../../TEMP/' + self.file_names['Universal Waste Landfills data'])
+        # Use the same data for cost dataframe
+        self.universal_waste_landfill_cost_df = self.universal_waste_landfills_data.copy()
+
         self.correct_mat_factor = transform_timeseries_timestep(
             self.correct_mat_factor, self.timestep, scale=False)
         
         self.data = pd.read_excel(reedsFile)  # this is the pca file
-        self.recycling_costs_df = pd.DataFrame()
-        if True:
-            self.recycling_costs_df = pd.read_csv(
-                os.path.join(os.path.dirname(__file__), "RTN", "RecyclingCostsbyYearPCA.csv"))
+
+        # Filter to only include specified model states
+        if self.model_states is not None:
+            print("Model will run for the following states:", self.model_states)
+            self.data = self.data[self.data['State'].isin(self.model_states)]
+
+        if self.rtn:
             # If using the RTN model results from Texas A&M University
-            # filter the data to include only PCAs that are in the recycling costs DataFrame
-            self.data = self.data[self.data['PCA'].isin(
-                self.recycling_costs_df['PCA'].unique())]
-        self.agent_pca_map = self.create_agent_pca_map(num_consumers)
+            # load the recycling and landfill data from the RTN model
+            # Recycler distance is not required since
+            # the site to recycler distances are already calculated
+            # in the RTN model and costs are calculated based on those distances
+            # But we still load it from the RTN directory to only initialize those recycler agents
+            # that are relevant for the RTN model and not the full list of recyclers.
+            self.recycler_distance_df = self.recycler_distance_df = pd.read_csv(
+                '../../../TEMP/site_recycler_distances.csv')
+            self.recycling_costs_df = pd.read_csv(
+                os.path.join(os.path.dirname(__file__), "RTN", self.file_names['Recycling data']))
+            self.recycling_costs_df = add_date_from_temporal_columns(self.recycling_costs_df, self.timestep)
+            # Lanfill distances are also not required for the RTN model
+            self.landfill_distance_df = self.landfill_distance_df = pd.read_csv(
+                        '../../../TEMP/site_landfill_distances.csv')
+            self.landfill_cost_df = pd.read_csv(
+                os.path.join(os.path.dirname(__file__), "RTN",
+                             self.file_names['Landfill data']))
+            self.landfill_cost_df = add_date_from_temporal_columns(self.landfill_cost_df, self.timestep)
+            self.hazardous_landfill_distance_df = pd.read_csv(
+            '../../../TEMP/hazardous_site_landfill_distances.csv')
+        else:
+            if consumer_agent_resolution == ConsumerAgentResolution.PCA:
+
+                self.recycler_distance_df = pd.read_csv(
+                '../../../TEMP/pca_recycler_distances.csv')
+                if self.solar_cycle:
+                    # If using the solar cycle landfill cost data
+                    self.landfill_distance_df = pd.read_csv(os.path.join(
+                        os.path.dirname(__file__), "SolarCycle",
+                        self.file_names['PCA-landfill distances']))
+                else:
+                    self.landfill_distance_df = pd.read_csv(
+                        '../../../TEMP/' + self.file_names['PCA-landfill distances'])
+                self.hazardous_landfill_distance_df = pd.read_csv(
+            '../../../TEMP/' + self.file_names['Hazardous PCA-landfill distances'])
+                # Load Universal Waste distance files
+                self.universal_waste_landfill_distance_df = pd.read_csv(
+            '../../../TEMP/universal_waste_pca_landfill_distances.csv')
+                self.universal_waste_recycler_distance_df = pd.read_csv(
+            '../../../TEMP/universal_waste_pca_recycler_distances.csv')
+                
+            elif consumer_agent_resolution == ConsumerAgentResolution.SITE:
+
+                self.recycler_distance_df = pd.read_csv(
+                '../../../TEMP/site_recycler_distances.csv')
+                if self.solar_cycle:
+                    # If using the solar cycle landfill cost data
+                    self.landfill_distance_df = pd.read_csv(os.path.join(
+                        os.path.dirname(__file__), "SolarCycle",
+                        "site_landfill_distances.csv"))
+                else:
+                    self.landfill_distance_df = pd.read_csv(
+                        '../../../TEMP/site_landfill_distances.csv')
+                self.hazardous_landfill_distance_df = pd.read_csv(
+            '../../../TEMP/hazardous_site_landfill_distances.csv')
+                # Load Universal Waste distance files
+                self.universal_waste_landfill_distance_df = pd.read_csv(
+            '../../../TEMP/universal_waste_site_landfill_distances.csv')
+                self.universal_waste_recycler_distance_df = pd.read_csv(
+            '../../../TEMP/universal_waste_site_recycler_distances.csv')
+                
+            self.recycling_costs_df = pd.DataFrame()
+            
+            if self.solar_cycle:
+                # If using the solar cycle landfill cost data
+                self.landfill_cost_df = pd.read_csv(os.path.join(
+                    os.path.dirname(__file__),
+                    "SolarCycle", "wbj_solar_cycle_combined.csv"),
+                    index_col=0)
+            else:
+                self.landfill_cost_df = pd.read_csv(
+                '../../../TEMP/' + self.file_names['Landfill data'])
+
         self.pv_ice_yearly_waste = 0
 
-        self.num_consumers = num_consumers
+        self.num_consumers = self.get_num_consumers(num_consumers)
         self.consumers_node_degree = consumers_node_degree
         self.consumers_network_type = consumers_network_type
-        self.num_recyclers = len(self.recycler_distance_df[
+        if self.consumer_agent_resolution is ConsumerAgentResolution.PCA:
+            self.agent_pca_map = self.create_agent_pca_map(self.num_consumers)
+        elif self.consumer_agent_resolution is ConsumerAgentResolution.SITE:
+            self.agent_site_map = self.create_agent_site_map()
+        recycler_data_df = self.recycling_costs_df if self.rtn else self.recycler_distance_df
+        # Count total recyclers (regular + universal waste)
+        num_regular_recyclers = len(recycler_data_df['Recycler Name'].unique())
+        num_universal_waste_recyclers = len(self.universal_waste_recycler_distance_df[
             'Recycler Name'].unique())
-        self.recycler_names = self.recycler_distance_df[
+        self.num_recyclers = num_regular_recyclers + num_universal_waste_recyclers
+        # Combine recycler names from both sources
+        regular_recycler_names = recycler_data_df['Recycler Name'].unique().tolist()
+        universal_waste_recycler_names = self.universal_waste_recycler_distance_df[
             'Recycler Name'].to_list()
+        self.recycler_names = regular_recycler_names + universal_waste_recycler_names
+        # Map each recycler name to its agent node ID. Recyclers.__init__ calls
+        # self.model.recycler_names.pop(), so the first recycler node
+        # (num_consumers + 0) gets the LAST name in recycler_names. Reversing
+        # the list before enumeration produces the correct mapping.
+        self.recycler_name_to_id: dict[str, int] = {
+            name: self.num_consumers + i
+            for i, name in enumerate(reversed(self.recycler_names))
+        }
         self.num_producers = num_producers
         self.num_prod_n_recyc = self.num_recyclers + num_producers
         self.prod_n_recyc_node_degree = prod_n_recyc_node_degree
@@ -859,6 +1203,13 @@ class ABM_CE_PV(Model):
         self.clock = 0
         self.last_step = last_step
         self.sa_landfill_costs = sa_landfill_costs
+        self.hazardous_waste_management_cost = hazardous_waste_management_cost
+        self.hazardous_waste_regulation_enabled = hazardous_waste_regulation_enabled
+        # prune the list of landfills to those accepting solar waste using the acceptance ratio
+        # passed during initialization
+        self.landfill_solar_waste_acceptance_ratio = landfill_solar_waste_acceptance_ratio
+        if self.landfill_solar_waste_acceptance_ratio < 1.0:
+            self.filter_landfills_accepting_solar_waste()
 
         # ! Initialize model with PV_ICE historical installed cap
         # self.total_number_product = total_number_product
@@ -867,11 +1218,20 @@ class ABM_CE_PV(Model):
         # self.pca = self.create_agents(num_consumers)[self.unique_id][0]
         all_pca_df_in = pd.DataFrame()
         all_pca_df_out = pd.DataFrame()
-        for pca in PCAs:
+        valid_pcas = PCAs
+        # Filter to only include specified model states
+        if self.model_states is not None:
+            valid_pcas = self.data[self.data['State'].isin(self.model_states)]['PCA'].unique().tolist()
+        _pca_merged_dir = os.path.join(
+            os.path.dirname(__file__), "PV_ICE", "TEMP", "PCA_merged")
+        for pca in valid_pcas:
+            # Merged datain file: Solar Futures (2010–2025) + ReEDS StdScen24
+            # (2026+); used for installed capacity history (total_number_product).
             subset_df_init_cap = pd.read_csv(
-                "datain_95-by-35.Adv_" + pca + "_.csv")
+                os.path.join(_pca_merged_dir, "datain_95-by-35.Adv_" + pca + "_.csv"))
             subset_df_init_cap['pca'] = pca
             all_pca_df_in = pd.concat([all_pca_df_in, subset_df_init_cap])
+            # NOTE: old PV ICE results — used for product_average_wght baseline
             subset_df_init_cap_out = pd.read_csv(
                 "dataOut_95-by-35.Adv_" + pca + "_.csv")
             subset_df_init_cap_out['pca'] = pca
@@ -926,6 +1286,16 @@ class ABM_CE_PV(Model):
         self.pvice_mat_factor = df_mat_factor
         self.weight_factor = 0
         self.max_storage = max_storage
+
+        # Load consolidated waste EOL data (metric tons) once at model level.
+        # Agents slice this by PCA in their __init__ instead of reading
+        # individual per-PCA dataOut files for waste values.
+        _waste_eol_path = os.path.join(
+            os.path.dirname(__file__), "PV_ICE", "TEMP", "PCA_merged",
+            "PVICE_PCA_WasteEOL_by_Year_and_PCA.csv")
+        self.pvice_waste_eol_df = pd.read_csv(_waste_eol_path)
+        self.pvice_waste_eol_df = transform_pca_timeseries_timestep(
+            self.pvice_waste_eol_df, self.timestep, filtered_columns=['Yearly_Waste_EOL_Ton'])
         self.avg_weight_factor_stored_pv = 0
 
         self.iteration = 0
@@ -939,21 +1309,16 @@ class ABM_CE_PV(Model):
         self.pca_outputs = {}
         self.pca_install_test = 0
         self.pca_install = {}
-        self.pca_tot_waste_w = {}
-        self.pca_tot_waste_m2 = {}
-        for pca in PCAs:
-            # If using the RTN model results from Texas A&M University
-            # check if the PCA is in the recycling costs DataFrame
-            if True:
-                if pca not in self.recycling_costs_df['PCA'].unique():
-                    continue
+        self.pca_tot_waste_ton = {}
+        self.pca_tot_waste_m2 = {}  # deprecated: waste now tracked in metric tons
+        for pca in valid_pcas:
             pathway_dict = {}
             for pathway in self.all_EoL_pathways.keys():
                 pathway_dict[pathway] = 0
             self.pca_outputs[pca] = pathway_dict
             self.pca_install[pca] = 0
-            self.pca_tot_waste_w[pca] = 0
-            self.pca_tot_waste_m2[pca] = 0
+            self.pca_tot_waste_ton[pca] = 0
+            self.pca_tot_waste_m2[pca] = 0  # deprecated, always 0
         self.refurbisher_outputs_watt = {}
         self.refurbisher_outputs_kg = {}
         for pathway in self.all_EoL_pathways.keys():
@@ -988,6 +1353,8 @@ class ABM_CE_PV(Model):
             self.pvice_mat_factor['year'] == 2020]
         conversion_factor = \
             pvice_mat_factor_copy['total_massperm2'].iloc[0]
+        # NOTE: old PV ICE results — used only for product_average_wght baseline;
+        # waste EOL values come from pvice_waste_eol_df (consolidated metric-ton file)
         all_data_out_pca = pd.read_csv(
             "all_pca_dataOut_95-by-35.Adv.csv", index_col=0)
         columns_to_expand = ['Yearly_Sum_Power_atEOL', 'Yearly_Sum_Area_atEOL']
@@ -1008,6 +1375,7 @@ class ABM_CE_PV(Model):
         self.yearly_product_wght = pv_ice_product_average_wght
 
         self.transportation_cost = transportation_cost
+        self.hazardous_transportation_cost = hazardous_transportation_cost
         self.epr_business_model = epr_business_model
         # Here we keep the old code regarding landfill costs. This does not
         # affect the updates made during the NSF convergence project - phase I
@@ -1021,6 +1389,10 @@ class ABM_CE_PV(Model):
         self.extended_tpb = extended_tpb
         self.seeding = seeding
         self.seeding_recyc = seeding_recyc
+        self.tclp_params = tclp_params
+        self.tclp_market_share_df = pd.read_csv(
+            os.path.join(os.path.dirname(__file__), "policy_regulation",
+                         "tclp_market_share_interpolated.csv"))
 
         self.all_gba = pd.read_excel(reedsFile)  #importing all grid balancing areas in an excel file
 
@@ -1030,15 +1402,30 @@ class ABM_CE_PV(Model):
         self.update_dynamic_lifetime()
         self.original_recycling_cost = original_recycling_cost
         self.recycling_process = recycling_process
-        self.list_consumer_id = list(range(num_consumers))
+        self.list_consumer_id = list(range(self.num_consumers))
         random.shuffle(self.list_consumer_id)
-        self.list_consumer_id_seed = list(range(num_consumers))
+        self.list_consumer_id_seed = list(range(self.num_consumers))
         random.shuffle(self.list_consumer_id_seed)
         # Change recovery fractions and recycling costs depending on recycling
         # process
         self.recycling_process_change()
         self.product_growth = product_growth
         self.growth_threshold = growth_threshold
+        # Initialize Regulator parameters
+        unique_states = self.data.loc[:, 'State'].unique().tolist()
+        # DC is not included in the PV ICE data but is there in the USPVDB
+        # so we add it here
+        if self.consumer_agent_resolution == ConsumerAgentResolution.SITE:
+            site_states = self.uspvdb['p_state'].unique().tolist()
+            unique_states = set(unique_states).union(site_states)
+            unique_states = list(unique_states)
+        self.num_regulators = len(unique_states)
+        self.regulator_state_map = self.create_regulator_state_map(unique_states)
+        # Load the policy schedule YAML once and distribute per-state entries to agents
+        self.policy_schedule_by_state = self._load_policy_schedule_by_state()
+        # Create a map of agents to their unique IDs
+        # This is used to access agents by their unique ID
+        self.agent_map = {}
         # Builds graph and defines scheduler
         self.H1 = self.init_network(self.consumers_network_type,
                                     self.num_consumers,
@@ -1049,8 +1436,11 @@ class ABM_CE_PV(Model):
                                     rewiring_prob)
         self.H3 = self.init_network("complete graph", self.num_refurbishers,
                                     "NaN", rewiring_prob)
+        self.H4 = self.init_network("complete graph", self.num_regulators,
+                                    "NaN", rewiring_prob)
         self.G = nx.disjoint_union(self.H1, self.H2)
         self.G = nx.disjoint_union(self.G, self.H3)
+        self.G = nx.disjoint_union(self.G, self.H4)
         self.grid = NetworkGrid(self.G)
         # Compute distance for the repair, sell, recycle, landfill and storage
         # pathways. Assumptions: 1) Only certain states have recycling
@@ -1092,13 +1482,12 @@ class ABM_CE_PV(Model):
             sum(distances_to_recyclers) / len(distances_to_recyclers)]
         # Compute transportation costs
         self.transportation_cost_rcl = [
-            x * self.transportation_cost / 1E3 *
-            self.dynamic_product_average_wght for x in
-            self.mn_mx_av_distance_to_recycler]
+            x * self.transportation_cost for x in
+            self.mn_mx_av_distance_to_recycler]  # $/ton: dist [km] * cost [$/ton/km]
 
         # ! TODO: change landfill transportation costs
         self.transportation_cost_rpr_ldf = self.mean_distance_within_state * \
-            self.transportation_cost / 1E3 * self.dynamic_product_average_wght
+            self.transportation_cost  # $/ton: dist [km] * cost [$/ton/km]
 
         # ! We remove the use of the recycling distances calculated with the
         # ! shortest path algorithm to use the pca-recycler distances instead
@@ -1110,7 +1499,6 @@ class ABM_CE_PV(Model):
         # ! within states
         original_repairing_cost = [x + self.transportation_cost_rpr_ldf for
                                    x in original_repairing_cost]
-
         # Create agents, G nodes labels are equal to agents' unique_ID
         for node in self.G.nodes():
             if node < self.num_consumers:
@@ -1124,31 +1512,40 @@ class ABM_CE_PV(Model):
                               product_distribution)
                 # Add the agent to the node
                 self.grid.place_agent(a, node)
+                self.agent_map[node] = a
             elif node < self.num_recyclers + self.num_consumers:
                 b = Recyclers(node, self, self.original_recycling_cost,
                               self.recycling_costs_df,
                               init_eol_rate,
                               recycling_learning_shape_factor)
                 self.grid.place_agent(b, node)
+                self.agent_map[node] = b
             elif node < self.num_prod_n_recyc + self.num_consumers:
                 c = Producers(node, self, scd_mat_prices, virgin_mat_prices)
                 self.grid.place_agent(c, node)
-            else:
+                self.agent_map[node] = c
+            elif node < self.num_prod_n_recyc + self.num_consumers + \
+                    self.num_refurbishers:
                 d = Refurbishers(node, self, original_repairing_cost,
                                  init_eol_rate,
                                  repairing_learning_shape_factor,
                                  scndhand_mkt_pric_rate, refurbisher_margin,
                                  max_storage)
                 self.grid.place_agent(d, node)
+                self.agent_map[node] = d
+            else:
+                e = Regulators(node, self,
+                               self.policy_schedule_by_state.get(
+                                   self.regulator_state_map[node], {}))
+                self.grid.place_agent(e, node)
+                self.agent_map[node] = e
         # Draw initial graph
-        # nx.draw(self.G, with_labels=True)
+        nx.draw(self.G, with_labels=True)
         # plt.show()
 
         # Defines reporters and set up data collector
         ABM_CE_PV_model_reporters = {
             **self.get_temporal_data(),
-            "Average weight of waste": lambda c:
-            self.report_output("weight"),
             "Agents repairing": lambda c: self.count_EoL("repairing"),
             "Agents selling": lambda c: self.count_EoL("selling"),
             "Agents recycling": lambda c: self.count_EoL("recycling"),
@@ -1157,120 +1554,39 @@ class ABM_CE_PV(Model):
             "Agents buying new": lambda c: self.count_EoL("buy_new"),
             "Agents buying used": lambda c: self.count_EoL("buy_used"),
             "Agents buying certified": lambda c: self.count_EoL("certified"),
-            "Total product": lambda c:
-            self.report_output("product_stock"),
-            "New product": lambda c:
-            self.report_output("product_stock_new"),
-            "Used product": lambda c:
-            self.report_output("product_stock_used"),
-            "New product_mass": lambda c:
-            self.report_output("prod_stock_new_mass"),
-            "Used product_mass": lambda c:
-            self.report_output("prod_stock_used_mass"),
-            "End-of-life - repaired": lambda c:
-            self.report_output("product_repaired"),
-            "End-of-life - sold": lambda c: self.report_output("product_sold"),
-            "End-of-life - recycled": lambda c:
-            self.report_output("product_recycled"),
-            "End-of-life - landfilled": lambda c:
-            self.report_output("product_landfilled"),
-            "End-of-life - stored": lambda c:
-            self.report_output("product_hoarded"),
-            "eol - new repaired weight": lambda c:
-            self.report_output("product_new_repaired"),
-            "eol - new sold weight": lambda c:
-            self.report_output("product_new_sold"),
-            "eol - new recycled weight": lambda c:
-            self.report_output("product_new_recycled"),
-            "eol - new landfilled weight": lambda c:
-            self.report_output("product_new_landfilled"),
-            "eol - new stored weight": lambda c:
-            self.report_output("product_new_hoarded"),
-            "eol - used repaired weight": lambda c:
-            self.report_output("product_used_repaired"),
-            "eol - used sold weight": lambda c:
-            self.report_output("product_used_sold"),
-            "eol - used recycled weight": lambda c:
-            self.report_output("product_used_recycled"),
-            "eol - used landfilled weight": lambda c:
-            self.report_output("product_used_landfilled"),
-            "eol - used stored weight": lambda c:
-            self.report_output("product_used_hoarded"),
-            "Average landfilling cost": lambda c:
-            self.report_output("average_landfill_cost"),
-            "Average storing cost": lambda c:
-            self.report_output("average_hoarding_cost"),
-            "Average recycling cost": lambda c:
-            self.report_output("average_recycling_cost"),
-            "Average repairing cost": lambda c:
-            self.report_output("average_repairing_cost"),
-            "Average selling cost": lambda c:
-            self.report_output("average_second_hand_price"),
-            "Recycled material volume": lambda c:
-            self.report_output("recycled_mat_volume"),
-            "Recycled material value": lambda c:
-            self.report_output("recycled_mat_value"),
-            "Producer costs": lambda c:
-            self.report_output("producer_costs"),
-            "Consumer costs": lambda c:
-            self.report_output("consumer_costs"),
-            "Recycler costs": lambda c:
-            self.report_output("recycler_costs"),
-            "Refurbisher costs": lambda c:
-            self.report_output("refurbisher_costs"),
-            "Refurbisher costs w margins": lambda c:
-            self.report_output("refurbisher_costs_w_margins"),
             "Waste (kg) by pca": lambda c: str(self.pca_outputs),
             "Waste (kg) refurbishers": lambda c: str(
                 self.refurbisher_outputs_kg),
-            "Tot waste (W) by pca": lambda c: str(self.pca_tot_waste_w),
-            "Tot waste (m2) by pca": lambda c: str(self.pca_tot_waste_m2),
+            "Tot waste (ton) by pca": lambda c: str(self.pca_tot_waste_ton),
+            "Tot waste (m2) by pca": lambda c: str(self.pca_tot_waste_m2),  # deprecated, always 0
             "Tot install (W) by pca": lambda c: str(self.pca_install),
             "Tot install (W) by pca TEST": lambda c: str(
                 self.pca_install_test)}
-
-        ABM_CE_PV_agent_reporters = {
-            **self.get_temporal_data(),
-            "Number_product_repaired":
-                lambda a: getattr(a, "number_product_repaired", None),
-            "Number_product_sold":
-                lambda a: getattr(a, "number_product_sold", None),
-            "Number_product_recycled":
-                lambda a: getattr(a, "number_product_recycled", None),
-            "Number_product_landfilled":
-                lambda a: getattr(a, "number_product_landfilled", None),
-            "Number_product_hoarded":
-                lambda a: getattr(a, "number_product_hoarded", None),
-            "Recycling":
-                lambda a: getattr(a, "EoL_pathway", None),
-            "Landfilling costs":
-                lambda a: getattr(a, "landfill_cost", None),
-            "Storing costs":
-                lambda a: getattr(a, "hoarding_cost", None),
-            "Recycling costs":
-                lambda a: getattr(a, "recycling_cost", None),
-            "Repairing costs":
-                lambda a: getattr(a, "repairing_cost", None),
-            "Selling costs":
-                lambda a: getattr(a, "scd_hand_price", None),
-            "Material produced":
-                lambda a: getattr(a, "material_produced", None),
-            "Recycled volume":
-                lambda a: getattr(a, "recycled_material_volume", None),
-            "Recycled value":
-                lambda a: getattr(a, "recycled_material_value", None),
-            "Producer costs":
-                lambda a: getattr(a, "producer_costs", None),
-            "Consumer costs":
-                lambda a: getattr(a, "consumer_costs", None),
-            "Recycler costs":
-                lambda a: getattr(a, "recycler_costs", None),
-            "Refurbisher costs":
-                lambda a: getattr(a, "refurbisher_costs", None)}
+        
+        ABM_CE_PV_agenttype_reporters = {
+            Consumers: {
+                **self.get_temporal_data(),
+                "PCA": lambda a: getattr(a, "pca", None),
+                "State": lambda a: getattr(a, "state", None),
+                "Name": lambda a: report_output_consumer(a, "name"),
+                "Latitude": lambda a: report_output_consumer(a, "latitude"),
+                "Longitude": lambda a: report_output_consumer(a, "longitude"),
+                "Waste Repair (Kg)": lambda a: report_output_consumer(a, "repair_kg"),
+                "Waste Sell (Kg)": lambda a: report_output_consumer(a, "sell_kg"),
+                "Waste Recycle (Kg)": lambda a: report_output_consumer(a, "recycle_kg"),
+                "Waste Landfill (Kg)": lambda a: report_output_consumer(a, "landfill_kg"),
+                "Waste Hoard (Kg)": lambda a: report_output_consumer(a, "hoard_kg"),
+                "Total Waste (ton)": lambda a: report_output_consumer(a, "total_waste_ton"),
+                "Total Waste (m2)": lambda a: report_output_consumer(a, "total_waste_m2"),
+                "Installed Capacity (W)": lambda a: report_output_consumer(a, "total_installed_capacity_W"),
+                "TCLP Test Result": lambda a: report_output_consumer(a, "tclp_test_result"),
+            }
+        }
 
         self.datacollector = DataCollector(
             model_reporters=ABM_CE_PV_model_reporters,
-            agent_reporters=ABM_CE_PV_agent_reporters)
+            agenttype_reporters=ABM_CE_PV_agenttype_reporters
+        )
 
     # ## New edits
     def pv_ice_waste_calculation(self, clock, pv_ice_outputs):
@@ -1324,6 +1640,68 @@ class ABM_CE_PV(Model):
                 agent_id += 1
 
         return agents
+    
+    def create_agent_site_map(self):
+        """
+        Create a mapping of agent ids to their respective site names, PCA, state, and installation year.
+        """
+        case_ids = self.uspvdb['case_id'].unique()
+        agents = {}
+        agent_id = 0
+
+        for i, case_id in enumerate(case_ids):
+            site_name = self.uspvdb.loc[self.uspvdb['case_id'] == case_id,
+                                        'p_name'].iloc[0]
+            state_value = self.uspvdb.loc[self.uspvdb['case_id'] == case_id,
+                                           'p_state'].iloc[0]
+            pca_value = self.uspvdb.loc[self.uspvdb['p_name'] == site_name,
+                                        'PCA'].iloc[0]
+            p_year = self.uspvdb.loc[self.uspvdb['p_name'] == site_name,
+                                     'p_year'].iloc[0]
+            agents[agent_id] = (case_id, site_name, pca_value, state_value, p_year)
+            agent_id += 1
+
+        return agents
+    
+    def create_regulator_state_map(self, unique_states:list[str]) -> dict[int, str]:
+        """
+        Create a mapping of regulator agent ids to their respective states.
+        """
+        regulator_state_map = {}
+        agent_id = self.num_prod_n_recyc + self.num_consumers + \
+            self.num_refurbishers
+        for state in unique_states:
+            regulator_state_map[agent_id] = state
+            agent_id += 1
+        return regulator_state_map
+
+    def _load_policy_schedule_by_state(self) -> dict[str, dict]:
+        """
+        Load policy_schedule.yaml once and return a mapping of state abbreviation
+        to that state's policy schedule dict (keyed by policy column name).
+        Parameters:
+        None
+        Returns:
+        dict[str, dict]: Mapping of state abbreviation to its schedule, e.g.
+            {'CA': {'universal_waste_regulation': {'start_year': 2025}}, ...}
+        """
+        path: str = os.path.join(
+            os.path.dirname(__file__), "policy_regulation", "policy_schedule.yaml")
+        if not os.path.exists(path):
+            return {}
+        with open(path, 'r') as f:
+            config: dict = yaml.safe_load(f) or {}
+        raw_policies: dict = config.get('policies') or {}
+        schedule_by_state: dict[str, dict] = {}
+        for policy_name, entries in raw_policies.items():
+            if not entries:
+                continue
+            for entry in entries:
+                states: list[str] = entry.get('states', [])
+                entry_schedule: dict = {k: v for k, v in entry.items() if k != 'states'}
+                for state in states:
+                    schedule_by_state.setdefault(state, {})[policy_name] = entry_schedule
+        return schedule_by_state
 
     def shortest_paths(self, target_states, distances_to_target):
         """
@@ -1617,12 +1995,15 @@ class ABM_CE_PV(Model):
                     <= agent.unique_id < model.num_consumers + \
                     model.num_recyclers:
                 count += agent.recycling_cost / model.num_recyclers
-            elif condition == "average_repairing_cost" and model.num_consumers\
-                    + model.num_prod_n_recyc <= agent.unique_id:
+            elif condition == "average_repairing_cost" and \
+                model.num_consumers + model.num_prod_n_recyc <= \
+                    agent.unique_id < model.num_consumers + \
+                        model.num_prod_n_recyc + model.num_refurbishers:
                 count += agent.repairing_cost / model.num_refurbishers
             elif condition == "average_second_hand_price" and \
                     model.num_consumers + model.num_prod_n_recyc <= \
-                    agent.unique_id:
+                        agent.unique_id < model.num_consumers + \
+                            model.num_prod_n_recyc + model.num_refurbishers:
                 count += (-1 * agent.scd_hand_price) / model.num_refurbishers
             elif condition == "year":
                 count = model.current_date.year
@@ -1651,11 +2032,14 @@ class ABM_CE_PV(Model):
                     model.num_recyclers:
                 count += agent.recycler_costs
             elif condition == "refurbisher_costs" and model.num_consumers + \
-                    model.num_prod_n_recyc <= agent.unique_id:
+                    model.num_prod_n_recyc <= agent.unique_id \
+                    < model.num_consumers + model.num_prod_n_recyc + \
+                    model.num_refurbishers:
                 count += agent.refurbisher_costs
             elif condition == "refurbisher_costs_w_margins" and \
                 model.num_consumers + model.num_prod_n_recyc \
-                    <= agent.unique_id:
+                    <= agent.unique_id < model.num_consumers + \
+                    model.num_prod_n_recyc + model.num_refurbishers:
                 count += agent.refurbisher_costs_w_margins
         if condition == "product_sold":
             model.sold_repaired_waste += count2 - \
@@ -1706,24 +2090,99 @@ class ABM_CE_PV(Model):
             (self.pvice_mat_factor['date'] < self.current_date)]
         self.avg_weight_factor_stored_pv = pv_ice_mat_subset_stored_years[
             'total_massperm2'].mean()
-    def get_transportation_cost(self):
+    def get_transportation_cost(self, hazardous: bool = False):
         """
         Returns the transportation cost based on the current date and
         the rtn flag.
-        If the RTN model costs are enabled, it checks if the current year
-        is within the range of the recycling costs DataFrame. If it is,
-        it returns 0, since the transportation costs are accounted for
-        in the recycling costs. Otherwise, it returns the transportation cost.
-        If the RTN model costs are not enabled, it returns the transportation cost.
+        If the RTN model costs are enabled, it returns 0, since the transportation costs are accounted for. 
+        Otherwise, it returns the transportation cost.
         """
         if self.rtn:
-            min_year = self.recycling_costs_df['Year'].min()
-            max_year = self.recycling_costs_df['Year'].max()
-            if self.current_date.year >= min_year and \
-                    self.current_date.year <= max_year:
-                return 0
-            
+            return 0
+        if hazardous:
+            return self.hazardous_transportation_cost
         return self.transportation_cost
+    
+    def filter_landfills_accepting_solar_waste(self):
+        """
+        Filters the landfills that accept solar waste based on the
+        landfill_solar_waste_acceptance_ratio.
+        """
+        all_site_indices = range(len(self.landfill_distance_df))
+        valid_site_indices = random.sample(all_site_indices, int(len(all_site_indices) * self.landfill_solar_waste_acceptance_ratio))
+        self.landfill_distance_df = self.landfill_distance_df.iloc[valid_site_indices].reset_index(drop=True)
+
+    def tclp_test(self, tclp_market_share_df: pd.DataFrame,
+                  current_year: int, state: str = "federal") -> bool:
+        """Market-share-weighted Weibull TCLP hazard classification.
+
+        Uses annual BSF and Non-BSF market shares to compute weighted
+        combined mean and standard deviation, then samples a latent TCLP
+        value from a Weibull distribution parameterized from that combined
+        mean/std. Returns True if the sampled latent value exceeds the
+        hazard cutoff.
+
+        Parameters
+        ----------
+        tclp_market_share_df : pd.DataFrame
+            DataFrame containing annual BSF and Non-BSF market shares.
+        current_year : int
+            Current simulation year used to select market shares.
+        state : str
+            State of the module, used to determine hazard cutoff.
+
+        Returns
+        -------
+        bool
+            True if sampled latent value > hazard_cutoff.
+
+        Notes
+        -----
+        Initial TCLP market share values are based on U.S. panel sales
+        observed during 2005-2010. Assuming an average panel lifetime of
+        30 years, these sales shares are shifted forward by 30 years to
+        represent end-of-life market shares. Linear interpolation is then
+        applied to estimate intermediate yearly values between anchor years.
+        """
+
+        min_year = int(tclp_market_share_df["Year"].min())
+        max_year = int(tclp_market_share_df["Year"].max())
+        lookup_year = max(min_year, min(current_year, max_year))
+
+        market_share_row = tclp_market_share_df.loc[
+            tclp_market_share_df["Year"] == lookup_year].iloc[0]
+        bsf_share = float(market_share_row["BSF"])
+        non_bsf_share = float(market_share_row["Non-BSF"])
+
+        bsf_mean = self.tclp_params["bsf_mean"]
+        bsf_std = self.tclp_params["bsf_std"]
+        non_bsf_mean = self.tclp_params["non_bsf_mean"]
+        non_bsf_std = self.tclp_params["non_bsf_std"]
+        min_std = self.tclp_params.get("min_std", 0.0)
+
+        combined_mean = bsf_share * bsf_mean + non_bsf_share * non_bsf_mean
+        combined_std = bsf_share * bsf_std + non_bsf_share * non_bsf_std
+        combined_std = max(combined_std, min_std)
+
+        cutoff = self.tclp_params["hazard_cutoff"].get(
+            state, self.tclp_params["hazard_cutoff"]["federal"])
+
+        weibull_shape = (combined_std / combined_mean) ** -1.086
+        weibull_scale = combined_mean / gamma(1 + 1 / weibull_shape)
+        latent = np.random.weibull(weibull_shape) * weibull_scale
+        return latent > cutoff
+
+    def get_num_consumers(self, target_num_consumers: int) -> int:
+        """
+        Calculate the number of consumer agents based on the agent resolution.
+        """
+
+        if self.consumer_agent_resolution == ConsumerAgentResolution.PCA:
+            return target_num_consumers
+        elif self.consumer_agent_resolution == ConsumerAgentResolution.SITE:
+            return self.uspvdb.shape[0]
+        
+        raise ValueError("Invalid agent resolution specified.")
 
     def step(self):
         """
@@ -1744,8 +2203,8 @@ class ABM_CE_PV(Model):
         self.average_price_per_function_model()
         self.agents.do("step")
         self.clock = self.clock + 1
-        if self.clock == self.last_step:
-            self.datacollector.collect(self)
+        # if self.clock == self.last_step:
+        #     self.datacollector.collect(self)
 
         # Calculate yearly waste using pv_ice_waste_calculation method
         # pass pv_output
