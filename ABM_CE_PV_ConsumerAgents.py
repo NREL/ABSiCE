@@ -706,7 +706,7 @@ class Consumers(Agent):
         random.shuffle(shuffled_dic)
         self.pathways_and_BI = OrderedDict(shuffled_dic)
         for key, value in self.pathways_and_BI.items():
-            if value == np.nan:
+            if isinstance(value, float) and np.isnan(value):
                 return self.EoL_pathway
         conditions = False
         removed_choice = None

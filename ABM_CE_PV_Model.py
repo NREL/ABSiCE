@@ -1584,8 +1584,9 @@ class ABM_CE_PV(Model):
         Set up model's industrial symbiosis (IS) and consumers networks.
         """
         if network == "small-world":
+            random.seed(self.seed)
             return nx.watts_strogatz_graph(nodes, node_degree, rewiring_prob,
-                                           seed=random.seed(self.seed))
+                                           seed=self.seed)
         elif network == "complete graph":
             return nx.complete_graph(nodes)
         if network == "random":
