@@ -36,6 +36,7 @@ from run_rtn_scenarios import (  # noqa: E402
     _RESULTS_BASE,
     _HAZARDOUS_LANDFILL_FILE,
     _USPVDB_FILE,
+    _DEFAULT_INIT_EOL_RATE,
     _build_suffix,
     _prepare_cost_files,
     _run_scenario,
@@ -120,6 +121,18 @@ def _parse_args() -> argparse.Namespace:
             "Override on the cluster to point to a cluster-local path."
         ),
     )
+    parser.add_argument(
+        "--recycle-rate",
+        type=float,
+        default=0.10,
+        metavar="RATE",
+        help=(
+            "Initial recycling EoL rate (0.0–1.0). The delta vs the baseline "
+            "10%% is subtracted from the landfill rate so all rates sum to 1. "
+            "Default: 0.10 (baseline). Results go into a "
+            "recycle_rate_<XX>pct/ subdirectory."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -146,10 +159,25 @@ def main() -> None:
     else:
         ratio = args.ratio
 
+    # Build adjusted init_eol_rate: recycle absorbs the requested rate,
+    # landfill absorbs the delta so that all rates always sum to 1.
+    recycle_rate: float = args.recycle_rate
+    baseline_recycle: float = _DEFAULT_INIT_EOL_RATE["recycle"]
+    landfill_rate: float = _DEFAULT_INIT_EOL_RATE["landfill"] - (recycle_rate - baseline_recycle)
+    init_eol_rate: dict = {
+        **_DEFAULT_INIT_EOL_RATE,
+        "recycle": recycle_rate,
+        "landfill": round(landfill_rate, 10),
+    }
+    assert abs(sum(init_eol_rate.values()) - 1.0) < 1e-9, (
+        f"init_eol_rate does not sum to 1: {init_eol_rate}"
+    )
+
     set_config: dict = _LANDFILL_SETS[args.landfill_set]
     suffix: str = _build_suffix(ratio, args.cost_component)
     results_base: Path = Path(args.results_base).resolve()
-    output_dir: Path = results_base / f"{set_config['results_prefix']}{suffix}"
+    recycle_rate_label: str = f"recycle_rate_{int(round(recycle_rate * 100))}pct"
+    output_dir: Path = results_base / recycle_rate_label / f"{set_config['results_prefix']}{suffix}"
 
     rate_info: str = (
         f"cost_rate={args.cost_rate} $/kg (ratio={ratio:g})"
@@ -159,6 +187,7 @@ def main() -> None:
     print(
         f"\n=== Scenario: {args.landfill_set}{suffix} ===\n"
         f"  {rate_info}  cost_component={args.cost_component}\n"
+        f"  recycle_rate={recycle_rate:.0%}  landfill_rate={init_eol_rate['landfill']:.3f}\n"
         f"  n_runs={args.n_runs}  n_steps={args.n_steps}\n"
         f"  output_dir={output_dir}\n",
         flush=True,
@@ -190,6 +219,7 @@ def main() -> None:
         n_runs=args.n_runs,
         n_steps_years=args.n_steps,
         timestep_value=TIMESTEP.QUARTERLY.value,
+        init_eol_rate=init_eol_rate,
     )
 
     print(f"\n=== Done: {args.landfill_set}{suffix} ===\n", flush=True)

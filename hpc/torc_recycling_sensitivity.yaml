@@ -28,7 +28,7 @@ resource_requirements:
     num_cpus: 4
     num_gpus: 0
     num_nodes: 1
-    memory: 16g
+    memory: 32g
     runtime: PT8H
 
 slurm_schedulers:
@@ -36,7 +36,7 @@ slurm_schedulers:
     account: pvabm
     partition: standard
     nodes: 4
-    walltime: "24:00:00"
+    walltime: "48:00:00"
     extra: "--mail-user=pghosh@nlr.gov --mail-type=BEGIN,END,FAIL"
 
 actions:
@@ -48,7 +48,7 @@ actions:
 
 # ── Jobs ───────────────────────────────────────────────────────────────────────
 jobs:
-  - name: scenario_{landfill_set}_{cost_rate:.2f}
+  - name: scenario_{landfill_set}_{cost_rate:.2f}_r{recycle_rate:.0%}
     command: >-
       module load conda &&
       conda activate /projects/pvabm/pghosh/pv_abm &&
@@ -56,6 +56,7 @@ jobs:
       --landfill-set {landfill_set}
       --cost-rate {cost_rate}
       --cost-component recycling
+      --recycle-rate {recycle_rate}
       --n-runs 100
       --n-steps 11
       --results-base results/RTN_Iteration_3
@@ -74,10 +75,11 @@ jobs:
     # Baseline is $0.40/kg. To use, comment out OPTION A and uncomment below.
     # The command above should also be changed:
     #   replace "--ratio {ratio}" with "--cost-rate {cost_rate}"
-    #
+    #   add "--recycle-rate {recycle_rate}"
     parameters:
       landfill_set: "['all_landfills','true_landfills']"
-      cost_rate: "[12.02, 14.43]" #7.21, 9.62
+      cost_rate: "[0.00, 2.40, 4.81, 7.21, 9.62, 12.02, 14.43, 16.83]"
+      recycle_rate: "[0.10, 0.20, 0.30, 0.40, 0.50, 0.60]"
     parameter_mode: product
 
     # ── Retry on transient failures (e.g. I/O errors, node preemption) ───────

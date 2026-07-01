@@ -219,6 +219,11 @@ def _prepare_cost_files(
 
 # ── Worker function (runs in subprocess) ─────────────────────────────────────
 
+_DEFAULT_INIT_EOL_RATE: dict = {
+    "repair": 0.005, "sell": 0.01, "recycle": 0.1, "landfill": 0.885, "hoard": 0.0
+}
+
+
 def _run_scenario(
     recycling_filename: str,
     landfill_filename: str,
@@ -226,6 +231,7 @@ def _run_scenario(
     n_runs: int,
     n_steps_years: int,
     timestep_value: int,
+    init_eol_rate: dict = None,
 ) -> None:
     """
     Run n_runs model simulations for one (landfill_set, ratio) scenario.
@@ -241,10 +247,14 @@ def _run_scenario(
     n_runs (int): Number of model runs to perform.
     n_steps_years (int): Simulation length in years.
     timestep_value (int): TIMESTEP enum value (e.g. 4 for QUARTERLY).
+    init_eol_rate (dict, optional): Initial EoL pathway rates. Must sum to 1.
+        Defaults to the model baseline (10% recycle, 88.5% landfill).
 
     Returns:
     None
     """
+    if init_eol_rate is None:
+        init_eol_rate = _DEFAULT_INIT_EOL_RATE
     # Defer imports to subprocess — avoids triggering module-level code in the
     # main process and keeps each worker self-contained.
     from ABM_CE_PV_Model import ABM_CE_PV
@@ -279,6 +289,7 @@ def _run_scenario(
             model_states=["TX", "AZ", "NV", "NM"],
             solar_cycle=False,
             rtn=True,
+            init_eol_rate=init_eol_rate,
             file_name={
                 "Landfill data": landfill_filename,
                 "Recycling data": recycling_filename,
