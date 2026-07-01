@@ -276,6 +276,27 @@ def _run_scenario(
     # before every model instantiation.
     workspace_dir: str = str(Path(__file__).parent.resolve())
 
+    # All-or-nothing skip: if every expected output file is already present,
+    # the scenario is complete — skip it entirely.
+    completed_runs: int = sum(
+        1 for j in range(n_runs)
+        if (output_path / f"Results_model_run_{j}.csv").exists()
+        and (output_path / f"Results_agents_consumers_run_{j}.csv").exists()
+    )
+    if completed_runs == n_runs:
+        print(
+            f"[{scenario_label}] All {n_runs} runs already complete — skipping.",
+            flush=True,
+        )
+        return
+
+    if completed_runs > 0:
+        print(
+            f"[{scenario_label}] {completed_runs}/{n_runs} runs found but incomplete"
+            f" — re-running full suite.",
+            flush=True,
+        )
+
     for j in range(n_runs):
         os.chdir(workspace_dir)
         t0: float = time.time()
