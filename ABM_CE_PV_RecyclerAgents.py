@@ -87,7 +87,7 @@ class Recyclers(Agent):
     #         self.model.transportation_cost / 1E3 * \
     #         self.model.mn_mx_av_distance_to_recycler[2]
         
-    def get_recycling_cost(self, facility_id: int = None) -> float:
+    def get_recycling_cost(self, facility_id: int = None) -> float:  # facility_id UNUSED: parameter defined but never used in function body
         """
         Get the recycling cost of the recycler.
         Either from the recycling costs dataframe or the original recycling cost.

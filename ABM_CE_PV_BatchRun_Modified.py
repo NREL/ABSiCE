@@ -183,7 +183,8 @@ if __name__ == '__main__':
                 nr_processes=1,
                 iterations=1,
                 max_steps=30,
-                # model_reporters={
+                # DEAD CODE BLOCK 1: Commented model_reporters [Lines 186-273]
+                #  Kept for reference in case they're needed later.
                 #         "Year": lambda c: ABM_CE_PV.report_output(c, "year"),
                 #         "Agents repairing": lambda c:
                 #         ABM_CE_PV.count_EoL(c, "repairing"),
@@ -340,11 +341,12 @@ if __name__ == '__main__':
             fixed_params.pop("seed")
             results = mesa.batch_run(
                 ABM_CE_PV,
-                parameters={**fixed_params, **variable_params}, 
+                parameters={**fixed_params, **variable_params},
                 nr_processes=6,
                 iterations=1,
                 max_steps=30,
-                # model_reporters={
+                # DEAD CODE BLOCK 2: Duplicate commented model_reporters[Lines 347-429]
+                # Kept for reference in case they're needed later.
                 #     "Year": lambda c: ABM_CE_PV.report_output(c, "year"),
                 #     "Agents repairing": lambda c:
                 #     ABM_CE_PV.count_EoL(c, "repairing"),
@@ -434,6 +436,10 @@ if __name__ == '__main__':
                 run_data["x_%s" % k] = X[i][k]
             appended_data.append(run_data)
         appended_data = pd.concat(appended_data)
+        # WARNING: The following lines (441-478) reference column names that are defined
+        # in the commented-out model_reporters [DEAD CODE BLOCKS 1 & 2].
+        # If those columns don't exist in the results, this code will fail with KeyError.
+        # The model_reporters must be uncommented in the batch_run calls above for this to work.
         appended_data["Y1"] = \
             (appended_data["End-of-life - recycled"]) / \
             (appended_data["End-of-life - recycled"] +
