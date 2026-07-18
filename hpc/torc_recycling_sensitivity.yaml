@@ -17,7 +17,9 @@ name: absice_recycling_sensitivity
 description: >
   ABSiCE PV recycling cost sensitivity analysis.
   Each job runs 100 model iterations for one (landfill_set × recycling_cost_ratio)
-  scenario and writes results to results/RTN_Iteration_3/.
+  scenario and writes results to results/RTN_Iteration_3.1/.
+  att_distrib_param_eol mean recalibrated to 0.65 (targets ~20% recycling rate
+  at $25/module; see results/att_calibration/calibration_curve.csv).
 project: ABSiCE
 
 # ── Resource requirements per job ──────────────────────────────────────────────
@@ -28,7 +30,7 @@ resource_requirements:
     num_cpus: 4
     num_gpus: 0
     num_nodes: 1
-    memory: 32g
+    memory: 64g
     runtime: PT8H
 
 slurm_schedulers:
@@ -57,9 +59,11 @@ jobs:
       --cost-rate {cost_rate}
       --cost-component recycling
       --recycle-rate {recycle_rate}
+      --att-mean 0.64
+      --att-std 0.1
       --n-runs 100
       --n-steps 11
-      --results-base results/RTN_Iteration_3
+      --results-base results/RTN_Iteration_3.1
     resource_requirements: scenario
     scheduler: cpu_nodes
 

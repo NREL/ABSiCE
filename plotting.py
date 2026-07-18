@@ -219,6 +219,102 @@ def aggregate_and_plot_consumer_tclp_results(
     plt.savefig(os.path.join(results_dir, "consumer_tclp_results_by_year.jpg"), bbox_inches='tight')
     plt.close()
 
+
+def _calculate_waste_rates(
+        df: pd.DataFrame,
+        waste_columns: list[str],
+        group_cols: list[str] | None = None,
+) -> pd.DataFrame:
+    """
+    Calculate waste-management rates using summed masses.
+
+    This implements the same formula used by sensitivity plots:
+    rate = sum(component waste) / sum(total waste).
+
+    Parameters:
+    df (pd.DataFrame): Input dataframe containing waste columns.
+    waste_columns (list[str]): Waste mass columns in kg.
+    group_cols (list[str] | None): Optional grouping columns. If provided,
+        rates are calculated per group; otherwise one overall row is returned.
+    Returns:
+    pd.DataFrame: Dataframe containing group columns (if any) and rate columns.
+    """
+    if group_cols:
+        summed: pd.DataFrame = df.groupby(group_cols)[waste_columns].sum().reset_index()
+    else:
+        summed = pd.DataFrame([df[waste_columns].sum(numeric_only=True)])
+
+    summed["Total Waste (Kg)"] = summed[waste_columns].sum(axis=1)
+
+    rate_columns: list[str] = []
+    for col in waste_columns:
+        rate_col: str = col.replace('(Kg)', 'Rate')
+        rate_columns.append(rate_col)
+        summed[rate_col] = (summed[col] / summed["Total Waste (Kg)"]).fillna(0)
+
+    output_cols: list[str] = (group_cols or []) + rate_columns
+    return summed[output_cols]
+
+
+def _prepare_compare_waste_management_data(
+        results_dir1: str,
+        results_dir2: str,
+        use_sum_method: bool = True,
+) -> tuple[pd.DataFrame, list[str], dict[str, dict[str, float]]]:
+    """
+    Prepare grouped and overall waste-management rates for scenario comparison.
+
+    Parameters:
+    results_dir1 (str): Path to first results directory.
+    results_dir2 (str): Path to second results directory.
+    use_sum_method (bool): If True, use summed-mass rates by year/quarter.
+        If False, average site-level rates by year/quarter.
+    Returns:
+    tuple[pd.DataFrame, list[str], dict[str, dict[str, float]]]: Combined
+        year-quarter rates, rate column names, and scenario-wide overall rates.
+    """
+    df1 = pd.read_csv(os.path.join(results_dir1, "waste_kg_per_year_by_site.csv"))
+    df2 = pd.read_csv(os.path.join(results_dir2, "waste_kg_per_year_by_site.csv"))
+
+    df1 = df1[(df1['Year'] >= 2026) & (df1['Year'] <= 2030)]
+    df2 = df2[(df2['Year'] >= 2026) & (df2['Year'] <= 2030)]
+
+    waste_columns = ['Waste Repair (Kg)', 'Waste Sell (Kg)', 'Waste Recycle (Kg)',
+                     'Waste Landfill (Kg)', 'Waste Hoard (Kg)']
+    rate_columns = [col.replace('(Kg)', 'Rate') for col in waste_columns]
+
+    if use_sum_method:
+        df1_rates = _calculate_waste_rates(df1, waste_columns, group_cols=['Year', 'Quarter'])
+        df2_rates = _calculate_waste_rates(df2, waste_columns, group_cols=['Year', 'Quarter'])
+    else:
+        def calculate_rates(df: pd.DataFrame) -> pd.DataFrame:
+            df = df.copy()
+            df['Total Waste'] = df[waste_columns].sum(axis=1)
+            for col in waste_columns:
+                rate_col = col.replace('(Kg)', 'Rate')
+                df[rate_col] = (df[col] / df['Total Waste']).fillna(0)
+            return df
+
+        df1_rates = calculate_rates(df1).groupby(['Year', 'Quarter'])[rate_columns].mean().reset_index()
+        df2_rates = calculate_rates(df2).groupby(['Year', 'Quarter'])[rate_columns].mean().reset_index()
+
+    df1_rates = df1_rates[['Year', 'Quarter'] + rate_columns].copy()
+    df1_rates['Scenario'] = 'All Landfills'
+
+    df2_rates = df2_rates[['Year', 'Quarter'] + rate_columns].copy()
+    df2_rates['Scenario'] = 'True Landfills'
+
+    df_combined = pd.concat([df1_rates, df2_rates], ignore_index=True)
+    df_combined['Year-Quarter'] = (
+        df_combined['Year'].astype(str) + '-Q' + df_combined['Quarter'].astype(str)
+    )
+
+    overall_rates_map: dict[str, dict[str, float]] = {
+        'All Landfills': _calculate_waste_rates(df1, waste_columns).iloc[0].to_dict(),
+        'True Landfills': _calculate_waste_rates(df2, waste_columns).iloc[0].to_dict(),
+    }
+    return df_combined, rate_columns, overall_rates_map
+
 def compare_waste_management_rates(
         results_dir1: str = "results/RTN_run_all_landfills",
         results_dir2: str = "results/RTN_run_true_landfills",
@@ -236,78 +332,11 @@ def compare_waste_management_rates(
                                If False, calculate rates per site then average. Default is True.
     """
     
-    # Read the data
-    df1 = pd.read_csv(os.path.join(results_dir1, "waste_kg_per_year_by_site.csv"))
-    df2 = pd.read_csv(os.path.join(results_dir2, "waste_kg_per_year_by_site.csv"))
-    # df2 = pd.read_csv("/Users/pghosh/SOLAR/ABSiCE/results/waste_kg_per_year_by_site.csv")
-    
-    # Filter years 2026-2030
-    df1 = df1[(df1['Year'] >= 2026) & (df1['Year'] <= 2030)]
-    df2 = df2[(df2['Year'] >= 2026) & (df2['Year'] <= 2030)]
-    
-    # Define waste management columns
-    waste_columns = ['Waste Repair (Kg)', 'Waste Sell (Kg)', 'Waste Recycle (Kg)', 
-                     'Waste Landfill (Kg)', 'Waste Hoard (Kg)']
-    
-    if use_sum_method:
-        # Sum all waste amounts by Year and Quarter for each scenario
-        df1_sum = df1.groupby(['Year', 'Quarter'])[waste_columns].sum().reset_index()
-        df2_sum = df2.groupby(['Year', 'Quarter'])[waste_columns].sum().reset_index()
-        
-        # Calculate total waste for each year-quarter
-        df1_sum['Total Waste'] = df1_sum[waste_columns].sum(axis=1)
-        df2_sum['Total Waste'] = df2_sum[waste_columns].sum(axis=1)
-        
-        # Calculate rates from summed quantities
-        rate_columns = []
-        for col in waste_columns:
-            rate_col = col.replace('(Kg)', 'Rate')
-            rate_columns.append(rate_col)
-            df1_sum[rate_col] = df1_sum[col] / df1_sum['Total Waste']
-            df2_sum[rate_col] = df2_sum[col] / df2_sum['Total Waste']
-            # Handle division by zero
-            df1_sum[rate_col] = df1_sum[rate_col].fillna(0)
-            df2_sum[rate_col] = df2_sum[rate_col].fillna(0)
-        
-        # Add scenario labels
-        df1_avg = df1_sum[['Year', 'Quarter'] + rate_columns].copy()
-        df1_avg['Scenario'] = 'All Landfills'
-        
-        df2_avg = df2_sum[['Year', 'Quarter'] + rate_columns].copy()
-        df2_avg['Scenario'] = 'True Landfills'
-    else:
-        # Mean method: Calculate rates per site then average
-        def calculate_rates(df):
-            # Calculate total waste for each row
-            df['Total Waste'] = df[waste_columns].sum(axis=1)
-            
-            # Calculate rates for each waste management option
-            for col in waste_columns:
-                rate_col = col.replace('(Kg)', 'Rate')
-                df[rate_col] = df[col] / df['Total Waste']
-                # Handle division by zero
-                df[rate_col] = df[rate_col].fillna(0)
-            
-            return df
-        
-        # Calculate rates for both datasets
-        df1 = calculate_rates(df1)
-        df2 = calculate_rates(df2)
-        
-        # Group by Year and Quarter to get average rates
-        rate_columns = [col.replace('(Kg)', 'Rate') for col in waste_columns]
-        
-        df1_avg = df1.groupby(['Year', 'Quarter'])[rate_columns].mean().reset_index()
-        df1_avg['Scenario'] = 'All Landfills'
-        
-        df2_avg = df2.groupby(['Year', 'Quarter'])[rate_columns].mean().reset_index()
-        df2_avg['Scenario'] = 'True Landfills'
-    
-    # Combine both scenarios
-    df_combined = pd.concat([df1_avg, df2_avg], ignore_index=True)
-    
-    # Create a Year-Quarter label for plotting
-    df_combined['Year-Quarter'] = df_combined['Year'].astype(str) + '-Q' + df_combined['Quarter'].astype(str)
+    df_combined, rate_columns, overall_rates_map = _prepare_compare_waste_management_data(
+        results_dir1=results_dir1,
+        results_dir2=results_dir2,
+        use_sum_method=use_sum_method,
+    )
     
     # Plot each waste management option
     fig, axes = plt.subplots(3, 2, figsize=(16, 14))
@@ -330,8 +359,8 @@ def compare_waste_management_rates(
                 markersize=6
             )
             
-            # Calculate and plot overall average for this scenario
-            overall_avg = scenario_data[rate_col].mean()
+            # Plot scenario-wide average using global summed-mass ratio.
+            overall_avg = overall_rates_map[scenario][rate_col]
             ax.axhline(
                 y=overall_avg,
                 linestyle='--',
@@ -408,6 +437,81 @@ def compare_waste_management_rates(
     print(f"Plots saved to {output_dir}")
     print(f"  - waste_management_rates_comparison.jpg")
     print(f"  - waste_management_distribution_comparison.jpg")
+
+
+def plot_recycling_rate_comparison(
+        results_dir1: str = "results/RTN_run_all_landfills",
+        results_dir2: str = "results/RTN_run_true_landfills",
+        output_dir: str = "results",
+        use_sum_method: bool = True,
+        y_axis_min: float | None = 0.0,
+        y_axis_max: float | None = 0.4,
+) -> None:
+    """
+    Plot only the recycling-rate comparison by year-quarter.
+
+    Parameters:
+    results_dir1 (str): Path to first results directory.
+    results_dir2 (str): Path to second results directory.
+    output_dir (str): Directory to save the output plot.
+    use_sum_method (bool): If True, use summed-mass rates by year/quarter.
+    y_axis_min (float | None): Optional lower y-axis limit.
+    y_axis_max (float | None): Optional upper y-axis limit.
+    Returns:
+    None
+    """
+    df_combined, _, overall_rates_map = _prepare_compare_waste_management_data(
+        results_dir1=results_dir1,
+        results_dir2=results_dir2,
+        use_sum_method=use_sum_method,
+    )
+
+    rate_col: str = 'Waste Recycle Rate'
+    colors = {'All Landfills': '#1f77b4', 'True Landfills': '#ff7f0e'}
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    for scenario in ['All Landfills', 'True Landfills']:
+        scenario_data = df_combined[df_combined['Scenario'] == scenario]
+        ax.plot(
+            scenario_data['Year-Quarter'],
+            scenario_data[rate_col],
+            marker='o',
+            label=scenario,
+            color=colors[scenario],
+            linewidth=2,
+            markersize=6,
+        )
+
+        overall_avg = overall_rates_map[scenario][rate_col]
+        ax.axhline(
+            y=overall_avg,
+            linestyle='--',
+            color=colors[scenario],
+            linewidth=1.5,
+            alpha=0.5,
+            label=f'{scenario} Avg',
+        )
+
+    if y_axis_min is not None or y_axis_max is not None:
+        ax.set_ylim(
+            bottom=y_axis_min if y_axis_min is not None else None,
+            top=y_axis_max if y_axis_max is not None else None,
+        )
+
+    ax.set_title('Recycling Rate Comparison', fontsize=12, fontweight='bold')
+    ax.set_xlabel('Year-Quarter', fontsize=10)
+    ax.set_ylabel('Recycling Rate', fontsize=10)
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3)
+    ax.tick_params(axis='x', rotation=45)
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: '{:.0%}'.format(y)))
+
+    plt.tight_layout()
+    output_path = os.path.join(output_dir, 'recycling_rate_comparison.jpg')
+    plt.savefig(output_path, bbox_inches='tight', dpi=300)
+    plt.close()
+    print(f"Plot saved to {output_path}")
 
 
 def plot_statewise_waste_management_rates(
@@ -681,7 +785,7 @@ def plot_recycling_rate_sensitivity(
         year_range: tuple[int, int] | None = None,
         sensitivity_type: str = "recycling",
         x_axis: str = "pct",
-        baseline_cost_per_kg: float = 0.4,
+    baseline_cost_per_kg: float = 0.4,
         kg_per_w: float = 0.0077,
         w_per_module: float = 270.0,
 ) -> None:
@@ -883,6 +987,178 @@ def plot_recycling_rate_sensitivity(
     print(f"Plot saved to {plot_path}")
 
 
+def plot_recycling_rate_sensitivity_heatmap(
+        iteration_dir: str = "results/RTN_Iteration_3",
+        output_dir: str = "",
+        year_range: tuple[int, int] | None = None,
+    baseline_cost_per_kg: float = 0.4,
+        kg_per_w: float = 0.0077,
+        w_per_module: float = 270.0,
+) -> None:
+    """
+    Plot a heatmap of simulated recycling rate as a function of recycling cost
+    (x-axis, $/module) and initial recycling rate (y-axis, %).
+
+    The directory layout expected under iteration_dir is:
+        recycle_rate_<N>pct/
+            RTN_run_all_landfills_<ratio>/waste_kg_per_year_by_site.csv
+            RTN_run_true_landfills_<ratio>/waste_kg_per_year_by_site.csv
+
+    Two heatmaps are saved side-by-side: All Landfills and True Landfills.
+    Cost conversion uses the same formula as plot_recycling_rate_sensitivity:
+        cost_per_module = round(ratio * baseline_cost_per_kg * kg_per_w * w_per_module)
+
+    Parameters:
+    iteration_dir (str): Base directory containing recycle_rate_*pct subfolders.
+    output_dir (str): Directory to save outputs. Defaults to iteration_dir.
+    year_range (tuple[int,int] | None): Optional (start_year, end_year) inclusive filter.
+    baseline_cost_per_kg (float): Baseline recycling cost in $/kg (default 0.4).
+    kg_per_w (float): Average module mass in kg/W (default 0.0077).
+    w_per_module (float): Average module wattage in W (default 270).
+    Returns:
+    None
+    """
+    if not output_dir:
+        output_dir = iteration_dir
+
+    waste_columns: list[str] = [
+        "Waste Repair (Kg)",
+        "Waste Sell (Kg)",
+        "Waste Recycle (Kg)",
+        "Waste Landfill (Kg)",
+        "Waste Hoard (Kg)",
+    ]
+
+    _RATE_DIR_RE = re.compile(r"recycle_rate_(\d+)pct$")
+    _SET_PREFIXES: dict[str, str] = {
+        "All Landfills": "RTN_run_all_landfills",
+        "True Landfills": "RTN_run_true_landfills",
+    }
+
+    def _parse_cost_ratio(folder_name: str, prefix: str) -> float | None:
+        suffix: str = folder_name[len(prefix):]
+        if not suffix:
+            return 1.0
+        s: str = suffix.lstrip("_")
+        if not s or s.startswith("transport"):
+            return None
+        try:
+            return float(s[3:]) if s.startswith("neg") else float(s)
+        except ValueError:
+            return None
+
+    records: list[dict] = []
+
+    for rate_entry in sorted(os.scandir(iteration_dir), key=lambda e: e.name):
+        if not rate_entry.is_dir():
+            continue
+        m = _RATE_DIR_RE.match(rate_entry.name)
+        if not m:
+            continue
+        initial_rate_pct: int = int(m.group(1))
+
+        for label, prefix in _SET_PREFIXES.items():
+            seen_ratios: set[float] = set()
+            for scenario_entry in sorted(os.scandir(rate_entry.path), key=lambda e: e.name):
+                if not scenario_entry.is_dir() or not scenario_entry.name.startswith(prefix):
+                    continue
+                ratio: float | None = _parse_cost_ratio(scenario_entry.name, prefix)
+                if ratio is None or ratio in seen_ratios:
+                    continue
+                seen_ratios.add(ratio)
+
+                site_csv: str = os.path.join(scenario_entry.path, "waste_kg_per_year_by_site.csv")
+                if not os.path.isfile(site_csv):
+                    print(f"  Skipping {scenario_entry.name}: waste_kg_per_year_by_site.csv not found")
+                    continue
+
+                df: pd.DataFrame = pd.read_csv(site_csv)
+                if year_range is not None:
+                    df = df[(df["Year"] >= year_range[0]) & (df["Year"] <= year_range[1])]
+
+                rates_df: pd.DataFrame = _calculate_waste_rates(df, waste_columns)
+                recycling_rate: float = float(rates_df.iloc[0]["Waste Recycle Rate"])
+                cost_per_module: int = round(ratio * baseline_cost_per_kg * kg_per_w * w_per_module)
+
+                records.append({
+                    "Landfill Set": label,
+                    "Initial Rate (%)": initial_rate_pct,
+                    "Cost per Module ($)": cost_per_module,
+                    "Recycling Rate": recycling_rate,
+                })
+                print(
+                    f"  {label} | init={initial_rate_pct}% "
+                    f"| cost/module=${cost_per_module} "
+                    f"| rate={recycling_rate:.3%}"
+                )
+
+    if not records:
+        print(f"No data found in {iteration_dir}")
+        return
+
+    df_all: pd.DataFrame = pd.DataFrame(records)
+
+    # Save raw data
+    csv_path: str = os.path.join(output_dir, "recycling_rate_sensitivity_heatmap.csv")
+    df_all.to_csv(csv_path, index=False)
+    print(f"CSV saved to {csv_path}")
+
+    fig, axes = plt.subplots(1, 2, figsize=(18, 7))
+
+    for ax, label in zip(axes, ["All Landfills", "True Landfills"]):
+        subset: pd.DataFrame = df_all[df_all["Landfill Set"] == label]
+        pivot: pd.DataFrame = subset.pivot_table(
+            index="Initial Rate (%)",
+            columns="Cost per Module ($)",
+            values="Recycling Rate",
+            aggfunc="mean",
+        )
+        pivot = pivot.sort_index(ascending=False)   # highest initial rate at top
+        pivot = pivot[sorted(pivot.columns)]         # ascending cost left → right
+
+        im = ax.imshow(
+            pivot.values,
+            aspect="auto",
+            cmap="RdYlGn",
+            vmin=0,
+            vmax=1,
+            interpolation="nearest",
+        )
+        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        cbar.set_label("Recycling Rate", fontsize=10)
+        cbar.ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
+
+        ax.set_xticks(range(len(pivot.columns)))
+        ax.set_xticklabels([f"${c}" for c in pivot.columns], fontsize=10)
+        ax.set_yticks(range(len(pivot.index)))
+        ax.set_yticklabels([f"{r}%" for r in pivot.index], fontsize=10)
+        ax.set_xlabel("Recycling Cost ($/module)", fontsize=11)
+        ax.set_ylabel("Initial Recycling Rate (%)", fontsize=11)
+        ax.set_title(label, fontsize=12, fontweight="bold")
+
+        for row_idx in range(pivot.shape[0]):
+            for col_idx in range(pivot.shape[1]):
+                val: float = pivot.values[row_idx, col_idx]
+                if not np.isnan(val):
+                    ax.text(
+                        col_idx, row_idx,
+                        f"{val:.1%}",
+                        ha="center", va="center",
+                        fontsize=9,
+                        color="black" if 0.2 < val < 0.8 else "white",
+                    )
+
+    plt.suptitle(
+        "Recycling Rate Sensitivity: Cost vs. Initial Recycling Rate",
+        fontsize=14, fontweight="bold",
+    )
+    plt.tight_layout()
+    out_path: str = os.path.join(output_dir, "recycling_rate_sensitivity_heatmap.jpg")
+    plt.savefig(out_path, bbox_inches="tight", dpi=200)
+    plt.close()
+    print(f"Heatmap saved to {out_path}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Plot waste data by PCA components.")
     parser.add_argument(
@@ -895,7 +1171,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--run_option",
         type=str,
-        choices=["plot_waste_by_pca", "aggregate_consumer_results", "aggregate_tclp_results", "compare_waste_management_rates", "plot_statewise_waste_management_rates", "plot_total_waste_by_state", "recycling_rate_sensitivity"],
+        choices=["plot_waste_by_pca", "aggregate_consumer_results", "aggregate_tclp_results", "compare_waste_management_rates", "plot_recycling_rate_comparison", "plot_statewise_waste_management_rates", "plot_total_waste_by_state", "recycling_rate_sensitivity", "recycling_rate_sensitivity_heatmap"],
         default="plot_waste_by_pca",
         help="Choose the operation to perform (default: 'plot_waste_by_pca')."
     )
@@ -937,6 +1213,41 @@ if __name__ == "__main__":
         help="X-axis display for sensitivity plot: 'pct' for %% change (default) or 'cost_per_module' for $/module."
     )
 
+    parser.add_argument(
+        "--baseline_cost_per_kg",
+        type=float,
+        default=0.4,
+        help="Baseline recycling cost in $/kg used for $/module conversion (default: 0.4)."
+    )
+
+    parser.add_argument(
+        "--results_dir1",
+        type=str,
+        default="results/RTN_Iteration_3.1/att_mean_0.64/recycle_rate_20pct/RTN_run_all_landfills_30.05",
+        help="Path to the first scenario directory for waste-rate comparison plots."
+    )
+
+    parser.add_argument(
+        "--results_dir2",
+        type=str,
+        default="results/RTN_Iteration_3.1/att_mean_0.64/recycle_rate_20pct/RTN_run_true_landfills_30.05",
+        help="Path to the second scenario directory for waste-rate comparison plots."
+    )
+
+    parser.add_argument(
+        "--y_axis_min",
+        type=float,
+        default=None,
+        help="Optional lower y-axis limit for recycling-rate-only comparison plots."
+    )
+
+    parser.add_argument(
+        "--y_axis_max",
+        type=float,
+        default=None,
+        help="Optional upper y-axis limit for recycling-rate-only comparison plots, for example 0.4 or 0.5."
+    )
+
     args = parser.parse_args()
 
     if args.run_option == "aggregate_consumer_results":
@@ -947,12 +1258,19 @@ if __name__ == "__main__":
         aggregate_and_plot_consumer_tclp_results(results_dir=args.results_dir)
     elif args.run_option == "compare_waste_management_rates":
         compare_waste_management_rates(
-            results_dir1="results/RTN_Iteration_3/RTN_run_all_landfills",
-            # results_dir1="results/run_test_all",
-            results_dir2="results/RTN_Iteration_3/RTN_run_true_landfills",
-            # results_dir2="results/run_1",
+            results_dir1=args.results_dir1,
+            results_dir2=args.results_dir2,
             output_dir=args.results_dir,
             use_sum_method=not args.use_mean_method
+        )
+    elif args.run_option == "plot_recycling_rate_comparison":
+        plot_recycling_rate_comparison(
+            results_dir1=args.results_dir1,
+            results_dir2=args.results_dir2,
+            output_dir=args.results_dir,
+            use_sum_method=not args.use_mean_method,
+            y_axis_min=args.y_axis_min,
+            y_axis_max=args.y_axis_max,
         )
     elif args.run_option == "plot_statewise_waste_management_rates":
         plot_statewise_waste_management_rates(results_dir=args.results_dir)
@@ -963,6 +1281,12 @@ if __name__ == "__main__":
             iteration_dir=args.iteration_dir,
             sensitivity_type=args.sensitivity_type,
             x_axis=args.x_axis,
+            baseline_cost_per_kg=args.baseline_cost_per_kg,
+        )
+    elif args.run_option == "recycling_rate_sensitivity_heatmap":
+        plot_recycling_rate_sensitivity_heatmap(
+            iteration_dir=args.iteration_dir,
+            baseline_cost_per_kg=args.baseline_cost_per_kg,
         )
     else:
         # Plot the waste data

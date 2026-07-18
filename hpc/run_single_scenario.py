@@ -44,6 +44,11 @@ from run_rtn_scenarios import (  # noqa: E402
 from scale_recycling_cost import _BASELINE_RECYCLING_RATE_PER_KG  # noqa: E402
 from utils import TIMESTEP  # noqa: E402
 
+# Default attitude mean — matches ABM_CE_PV_Model.py model default.
+# Runs that do not pass --att-mean use this value and the output path
+# is unchanged (no att_mean_X.XX subdirectory inserted).
+_ATT_MEAN_DEFAULT: float = 0.515
+
 
 def _parse_args() -> argparse.Namespace:
     """
@@ -133,6 +138,28 @@ def _parse_args() -> argparse.Namespace:
             "recycle_rate_<XX>pct/ subdirectory."
         ),
     )
+    parser.add_argument(
+        "--att-mean",
+        type=float,
+        default=_ATT_MEAN_DEFAULT,
+        metavar="FLOAT",
+        help=(
+            "Mean of the bounded-normal attitude-toward-EoL-recycling distribution "
+            f"(att_distrib_param_eol[0]). Default: {_ATT_MEAN_DEFAULT}. "
+            "Values outside the default insert an att_mean_X.XX/ subdirectory "
+            "into the output path so calibration sweeps stay isolated."
+        ),
+    )
+    parser.add_argument(
+        "--att-std",
+        type=float,
+        default=0.1,
+        metavar="FLOAT",
+        help=(
+            "Standard deviation of the attitude distribution "
+            "(att_distrib_param_eol[1]). Default: 0.1."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -177,7 +204,19 @@ def main() -> None:
     suffix: str = _build_suffix(ratio, args.cost_component)
     results_base: Path = Path(args.results_base).resolve()
     recycle_rate_label: str = f"recycle_rate_{int(round(recycle_rate * 100))}pct"
-    output_dir: Path = results_base / recycle_rate_label / f"{set_config['results_prefix']}{suffix}"
+    # Insert an att_mean_X.XX/ component only when sweeping a non-default
+    # value — existing runs (no --att-mean flag) are unaffected.
+    att_mean: float = args.att_mean
+    att_std: float = args.att_std
+    if abs(att_mean - _ATT_MEAN_DEFAULT) > 1e-9:
+        output_dir: Path = (
+            results_base
+            / f"att_mean_{att_mean:.2f}"
+            / recycle_rate_label
+            / f"{set_config['results_prefix']}{suffix}"
+        )
+    else:
+        output_dir: Path = results_base / recycle_rate_label / f"{set_config['results_prefix']}{suffix}"
 
     rate_info: str = (
         f"cost_rate={args.cost_rate} $/kg (ratio={ratio:g})"
@@ -188,6 +227,7 @@ def main() -> None:
         f"\n=== Scenario: {args.landfill_set}{suffix} ===\n"
         f"  {rate_info}  cost_component={args.cost_component}\n"
         f"  recycle_rate={recycle_rate:.0%}  landfill_rate={init_eol_rate['landfill']:.3f}\n"
+        f"  att_distrib_param_eol=[{att_mean}, {att_std}]\n"
         f"  n_runs={args.n_runs}  n_steps={args.n_steps}\n"
         f"  output_dir={output_dir}\n",
         flush=True,
@@ -220,6 +260,7 @@ def main() -> None:
         n_steps_years=args.n_steps,
         timestep_value=TIMESTEP.QUARTERLY.value,
         init_eol_rate=init_eol_rate,
+        att_distrib_param_eol=[att_mean, att_std],
     )
 
     print(f"\n=== Done: {args.landfill_set}{suffix} ===\n", flush=True)

@@ -232,6 +232,7 @@ def _run_scenario(
     n_steps_years: int,
     timestep_value: int,
     init_eol_rate: dict = None,
+    att_distrib_param_eol: list = None,
 ) -> None:
     """
     Run n_runs model simulations for one (landfill_set, ratio) scenario.
@@ -255,6 +256,8 @@ def _run_scenario(
     """
     if init_eol_rate is None:
         init_eol_rate = _DEFAULT_INIT_EOL_RATE
+    if att_distrib_param_eol is None:
+        att_distrib_param_eol = [0.515, 0.1]
     # Defer imports to subprocess — avoids triggering module-level code in the
     # main process and keeps each worker self-contained.
     from ABM_CE_PV_Model import ABM_CE_PV
@@ -311,6 +314,7 @@ def _run_scenario(
             solar_cycle=False,
             rtn=True,
             init_eol_rate=init_eol_rate,
+            att_distrib_param_eol=att_distrib_param_eol,
             file_name={
                 "Landfill data": landfill_filename,
                 "Recycling data": recycling_filename,
