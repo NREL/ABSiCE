@@ -1,0 +1,409 @@
+run:
+  seed: null
+  last_step: 31
+  timestep: annual
+calibration:
+  calibration_n_sensitivity: 1.0
+  calibration_n_sensitivity_2: 1.0
+  calibration_n_sensitivity_3: 1.0
+  calibration_n_sensitivity_4: 1.0
+  calibration_n_sensitivity_5: 1.0
+network:
+  num_consumers: 1000
+  consumers_node_degree: 10
+  consumers_network_type: small-world
+  rewiring_prob: 0.1
+  num_recyclers: 16
+  num_producers: 60
+  num_refurbishers: 15
+  prod_n_recyc_node_degree: 5
+  prod_n_recyc_network_type: small-world
+consumer:
+  resolution: site
+  model_states: null
+  consumers_distribution:
+    residential: 1.0
+    commercial: 0.0
+    utility: 0.0
+  product_distribution:
+    residential: 1.0
+    commercial: 0.0
+    utility: 0.0
+product:
+  total_number_product:
+  - 38
+  - 38
+  - 38
+  - 38
+  - 38
+  - 38
+  - 38
+  - 139
+  - 251
+  - 378
+  - 739
+  - 1670
+  - 2935
+  - 4146
+  - 5432
+  - 6525
+  - 3609
+  - 4207
+  - 4905
+  - 5719
+  product_growth:
+  - 0.166
+  - 0.045
+  growth_threshold: 10
+  failure_rate_alpha:
+  - 2.4928
+  - 5.3759
+  - 3.93495
+  product_lifetime: 30
+  product_average_wght: 0.1
+  mass_to_function_reg_coeff: 0.03
+  max_storage:
+  - 1.0
+  - 8.0
+  - 4.0
+eol:
+  init_eol_rate:
+    repair: 0.005
+    sell: 0.01
+    recycle: 0.1
+    landfill: 0.885
+    hoard: 0.0
+  all_eol_pathways:
+    repair: true
+    sell: true
+    recycle: true
+    landfill: true
+    hoard: false
+  init_purchase_choice:
+    new: 0.9995
+    used: 0.0005
+    certified: 0.0
+  purchase_choices:
+    new: true
+    used: true
+    certified: false
+tpb:
+  theory_of_planned_behavior:
+    residential: true
+    commercial: true
+    utility: true
+  w_sn_eol: 0.23
+  w_pbc_eol: 0.44
+  w_a_eol: 0.59
+  w_sn_reuse: 0.497
+  w_pbc_reuse: 0.382
+  w_a_reuse: 0.464
+  att_distrib_param_eol:
+  - 0.515
+  - 0.1
+  att_distrib_param_reuse:
+  - 0.01
+  - 0.185
+  extended_tpb:
+    Extended tpb: false
+    w_convenience: 0.28
+    w_knowledge: -0.51
+    knowledge_distrib:
+    - 0.5
+    - 0.49
+cost:
+  hoarding_cost:
+  - 0.0
+  - 130.0
+  - 65.0
+  landfill_cost:
+  - 1156.0
+  - 961.0
+  - 922.0
+  - 896.0
+  - 727.0
+  - 558.0
+  - 870.0
+  - 1429.0
+  - 1104.0
+  - 1065.0
+  - 1026.0
+  - 961.0
+  - 896.0
+  - 883.0
+  - 883.0
+  - 675.0
+  - 675.0
+  - 662.0
+  - 961.0
+  - 805.0
+  - 636.0
+  - 636.0
+  - 610.0
+  - 416.0
+  - 636.0
+  - 844.0
+  - 831.0
+  - 805.0
+  - 675.0
+  - 623.0
+  - 623.0
+  - 571.0
+  - 545.0
+  - 506.0
+  - 506.0
+  - 584.0
+  - 714.0
+  - 649.0
+  - 636.0
+  - 571.0
+  - 571.0
+  - 506.0
+  - 429.0
+  - 390.0
+  - 533.0
+  - 649.0
+  - 520.0
+  - 520.0
+  - 494.0
+  - 429.0
+  hazardous_waste_management_cost:
+    repair: 0.0
+    sell: 0.0
+    recycle: 0.0
+    landfill: 0.0
+    hoard: 0.0
+  original_recycling_cost:
+  - 399.999999
+  - 400.000001
+  - 400.0
+  recycling_learning_shape_factor: -0.01
+  repairability: 0.55
+  original_repairing_cost:
+  - 12987.0
+  - 58442.0
+  - 29870.0
+  repairing_learning_shape_factor: -0.31
+  scndhand_mkt_pric_rate:
+  - 0.4
+  - 0.2
+  fsthand_mkt_pric: 58442.0
+  fsthand_mkt_pric_reg_param:
+  - 1.0
+  - 0.04
+  refurbisher_margin:
+  - 0.4
+  - 0.6
+  - 0.5
+  transportation_cost: 0.095
+  hazardous_transportation_cost: 0.395
+  used_product_substitution_rate:
+  - 0.6
+  - 1.0
+  - 0.8
+  imperfect_substitution: 0.0
+  sa_landfill_costs:
+  - false
+  - 481.0
+material:
+  product_mass_fractions:
+    Product: 1.0
+    Aluminum: 0.08
+    Glass: 0.76
+    Copper: 0.01
+    Insulated cable: 0.012
+    Silicon: 0.036
+    Silver: 0.00032
+  established_scd_mkt:
+    Product: true
+    Aluminum: true
+    Glass: true
+    Copper: true
+    Insulated cable: true
+    Silicon: false
+    Silver: false
+  scd_mat_prices:
+    Product:
+    - .nan
+    - .nan
+    - .nan
+    Aluminum:
+    - 0.66
+    - 1.98
+    - 1.32
+    Glass:
+    - 0.01
+    - 0.06
+    - 0.035
+    Copper:
+    - 3.77
+    - 6.75
+    - 5.75
+    Insulated cable:
+    - 3.22
+    - 3.44
+    - 3.33
+    Silicon:
+    - 2.2
+    - 3.18
+    - 2.69
+    Silver:
+    - 453.0
+    - 653.0
+    - 582.0
+  virgin_mat_prices:
+    Product:
+    - .nan
+    - .nan
+    - .nan
+    Aluminum:
+    - 1.76
+    - 2.51
+    - 2.14
+    Glass:
+    - 0.04
+    - 0.07
+    - 0.055
+    Copper:
+    - 4.19
+    - 7.5
+    - 6.39
+    Insulated cable:
+    - 3.22
+    - 3.44
+    - 3.33
+    Silicon:
+    - 2.2
+    - 3.18
+    - 2.69
+    Silver:
+    - 453.0
+    - 653.0
+    - 582.0
+  material_waste_ratio:
+    Product: 0.0
+    Aluminum: 0.0
+    Glass: 0.0
+    Copper: 0.0
+    Insulated cable: 0.0
+    Silicon: 0.4
+    Silver: 0.0
+  recovery_fractions:
+    Product: .nan
+    Aluminum: 0.92
+    Glass: 0.85
+    Copper: 0.72
+    Insulated cable: 1.0
+    Silicon: 0.0
+    Silver: 0.0
+scenario:
+  recycling_states:
+  - Texas
+  - Arizona
+  - Oregon
+  - Oklahoma
+  - Wisconsin
+  - Ohio
+  - Kentucky
+  - South Carolina
+  epr_business_model: false
+  recycling_process:
+    frelp: false
+    asu: false
+    hybrid: false
+  dynamic_lifetime_model:
+    Dynamic lifetime: false
+    d_lifetime_intercept: 15.9
+    d_lifetime_reg_coeff: 0.87
+    Seed: false
+    Year: 5
+    avg_lifetime: 50.0
+  seeding:
+    Seeding: false
+    Year: 10
+    number_seed: 50
+  seeding_recyc:
+    Seeding: false
+    Year: 10
+    number_seed: 50
+    discount: 0.35
+  hazardous_waste_regulation_enabled: false
+  landfill_solar_waste_acceptance_ratio: 0.4
+tclp:
+  bsf_mean: 2.18
+  bsf_std: 0.86
+  non_bsf_mean: 3.2
+  non_bsf_std: 1.33
+  k: 0.3
+  a50: 15.0
+  hazard_cutoff:
+    federal: 5.0
+    AL: 5.0
+    AZ: 5.0
+    AR: 5.0
+    CA: 5.0
+    CO: 5.0
+    CT: 5.0
+    DE: 5.0
+    FL: 5.0
+    GA: 5.0
+    ID: 5.0
+    IL: 5.0
+    IN: 5.0
+    IA: 5.0
+    KS: 5.0
+    KY: 5.0
+    LA: 5.0
+    ME: 5.0
+    MD: 5.0
+    MA: 5.0
+    MI: 5.0
+    MN: 5.0
+    MS: 5.0
+    MO: 5.0
+    MT: 5.0
+    NE: 5.0
+    NV: 5.0
+    NH: 5.0
+    NJ: 5.0
+    NM: 5.0
+    NY: 5.0
+    NC: 5.0
+    ND: 5.0
+    OH: 5.0
+    OK: 5.0
+    OR: 5.0
+    PA: 5.0
+    RI: 5.0
+    SC: 5.0
+    SD: 5.0
+    TN: 5.0
+    TX: 5.0
+    UT: 5.0
+    VT: 5.0
+    VA: 5.0
+    WA: 5.0
+    WV: 5.0
+    WI: 5.0
+    WY: 5.0
+  min_std: 0.05
+  distribution: weibull
+data_source:
+  pv_ice: false
+  pca: false
+  pca_scenario: false
+  geopy: false
+  calculate_distances: false
+  rtn: false
+  solar_cycle: false
+legacy_data:
+  landfill_data_params:
+    landfill_volume_column: $/metric ton
+    landfill_name_column: Facility Name
+  file_name:
+    Landfill data: Landfills_data_2023.csv
+    PCA-landfill distances: pca_landfills_distances.csv
+    Hazardous landfill data: Landfills_data_SA.csv
+    Hazardous PCA-landfill distances: pca_landfills_distances_SA.csv
+    Site-landfill distances: site_landfills_distances.csv
+    Recycler data: Recyclers_data.csv
