@@ -1,0 +1,5 @@
+generator_size,max_storage_kg,max_storage_days,waste_generation_limit_kg,state
+small,,365,5000,CA
+large,,365,,CA
+small,,365,5000,HI
+large,,365,,HI

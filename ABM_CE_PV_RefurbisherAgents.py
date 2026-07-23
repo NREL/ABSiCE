@@ -78,7 +78,7 @@ class Refurbishers(Agent):
                             (1.14 - scndhand_mkt_pric_rate[0]) /
                             scndhand_mkt_pric_rate[1],
                             scndhand_mkt_pric_rate[0],
-                            scndhand_mkt_pric_rate[1]).rvs(1))
+                            scndhand_mkt_pric_rate[1]).rvs(1)[0])
         # attitude_level = float(distribution.rvs(1))
         self.refurbisher_margin = np.random.triangular(
             refurbisher_margin[0], refurbisher_margin[2],

@@ -98,6 +98,7 @@ import PV_ICE
 import os
 import csv
 import pandas as pd
+import yaml
 from geopy.geocoders import Nominatim
 import time
 from math import radians, sin, cos, sqrt, atan2
@@ -153,7 +154,7 @@ class ABM_CE_PV(Model):
                      506, 429, 390, 533, 649, 520, 520,
                      494, 429],
                  hazardous_waste_management_cost={"repair": 0.0, "sell": 0.0,
-                                                    "recycle": 0.0, "landfill": 0.0,
+                                                    "recycle": 0.0, "landfill": 300.0,
                                                     "hoard": 0.0}, # $/ton
                  theory_of_planned_behavior={
                      "residential": True, "commercial": True, "utility": True},
@@ -218,7 +219,7 @@ class ABM_CE_PV(Model):
                      'Wisconsin', 'Ohio', 'Kentucky', 'South Carolina'],
                  # transportation_cost=0.0314,
                  transportation_cost=0.095,
-                 hazardous_transportation_cost=0.395, # $/ton-km
+                 hazardous_transportation_cost=0.095, # $/ton-km
                  used_product_substitution_rate=[0.6, 1, 0.8],
                  imperfect_substitution=0,
                  epr_business_model=False,
@@ -241,13 +242,14 @@ class ABM_CE_PV(Model):
                 # Li, F., Tatapudi, S. R., Shaw, S. L., Libby, C., Bicer, B., & TamizhMani, G. (2025). 
                 # Photovoltaic module leach testing: Database development and statistical analysis. 
                 # Journal of Environmental Management, 377, 124666.
+                # BSF market-share inputs were estimated using Gemini combining multiple sources including:
+                # https://www.ise.fraunhofer.de/en/publications/studies/photovoltaics-report.html
+                # https://www.anernstore.com/blogs/diy-solar-guides/cell-type-market-shares-efficiency
                  tclp_params = {
-                        "fresh_mean": 2.18,   # observed mean (mg/L Pb) for fresh modules
-                        "fresh_std": 0.86,    # observed std (mg/L Pb) for fresh modules
-                        "aged_mean": 3.20,    # observed mean (mg/L Pb) for field aged modules
-                        "aged_std": 1.33,     # observed std (mg/L Pb) for field aged modules
-                        "k": 0.30,            # rate of degradation
-                        "a50": 15,  # midpoint age
+                    "bsf_mean": 3.35,
+                    "bsf_std": 1.17,
+                    "non_bsf_mean": 1.85,
+                    "non_bsf_std": 0.97,
                         "hazard_cutoff": {
                             'federal': 5.0, 'AL': 5.0, 'AZ': 5.0, 'AR': 5.0, 'CA': 5.0, 'CO': 5.0, 'CT': 5.0,
                             'DE': 5.0, 'FL': 5.0, 'GA': 5.0, 'ID': 5.0, 'IL': 5.0, 'IN': 5.0, 'IA': 5.0,
@@ -260,7 +262,6 @@ class ABM_CE_PV(Model):
                             # (CA STLC test has same threshold)
                         # Optional lower bound for std to avoid collapse
                         "min_std": 0.05,
-                        "distribution": "weibull"  # distribution type: "normal" or "weibull"
                  },
                  pv_ice=False,
                  pca=False,
@@ -284,7 +285,14 @@ class ABM_CE_PV(Model):
                                 "pca_landfills_distances_SA.csv",
                             'Site-landfill distances':
                                 "site_landfills_distances.csv",
-                            'Recycler data': "Recyclers_data.csv",}):
+                            'Recycler data': "Recyclers_data.csv",
+                            # California DTSC universal waste data sources:
+                            #   Landfills: https://dtsc.ca.gov/photovoltaic-modules-pv-modules-universal-waste-management-regulations_uw-handlers/
+                            #   Recyclers:  https://dtsc.ca.gov/list-of-universal-waste-recyclers-that-treat-pv-modules/
+                            'Universal Waste Landfills data':
+                                "Universal_Waste_Landfills_data.csv",
+                            'Universal Waste Recyclers data':
+                                "Universal_Waste_Recyclers_data.csv",}):
 
         """Initiate model.
 
@@ -683,6 +691,10 @@ class ABM_CE_PV(Model):
             self.recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "TEMP", 
                                                     "recycler_data.csv"))
 
+        # Load Universal Waste Recyclers data
+        self.universal_waste_recyclers_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "TEMP", 
+                                                    self.file_names['Universal Waste Recyclers data']))
+
         if pca_scenario:
             i = 0
             r1 = PV_ICE.Simulation(name=SFscenarios[i], path=testfolder)
@@ -933,6 +945,48 @@ class ABM_CE_PV(Model):
                     else:
                         distance_df2.to_csv("../../../TEMP/" +
                                         self.file_names['PCA-landfill distances'])
+
+                # Calculate distances for Universal Waste Landfills (PCA resolution)
+                universal_waste_landfills_data = pd.read_csv("../../../TEMP/" + self.file_names['Universal Waste Landfills data'])
+                uw_landfill_distance_df = pd.DataFrame(columns=self.pca_data['PCA'],
+                                            index=universal_waste_landfills_data['Facility Name'])
+                
+                for pca_index, pca_row in self.pca_data.iterrows():
+                    pca_lat = pca_row['Lat']
+                    pca_lon = pca_row['Long']
+                    
+                    for uw_landfill_index, uw_landfill_row in universal_waste_landfills_data.iterrows():
+                        uw_landfill_lat = uw_landfill_row['Latitude']
+                        uw_landfill_lon = uw_landfill_row['Longitude']
+                        
+                        distance_uw_landfill = haversine(pca_lat, pca_lon,
+                                            uw_landfill_lat, uw_landfill_lon)
+                        
+                        uw_landfill_distance_df.at[uw_landfill_row['Facility Name'],
+                                        pca_row['PCA']] = distance_uw_landfill
+                
+                uw_landfill_distance_df.to_csv("../../../TEMP/universal_waste_pca_landfill_distances.csv")
+                
+                # Calculate distances for Universal Waste Recyclers (PCA resolution)
+                universal_waste_recyclers_data = pd.read_csv("../../../TEMP/" + self.file_names['Universal Waste Recyclers data'])
+                uw_recycler_distance_df = pd.DataFrame(columns=self.pca_data['PCA'],
+                                            index=universal_waste_recyclers_data['Recycler Name'])
+                
+                for pca_index, pca_row in self.pca_data.iterrows():
+                    pca_lat = pca_row['Lat']
+                    pca_lon = pca_row['Long']
+                    
+                    for uw_recycler_index, uw_recycler_row in universal_waste_recyclers_data.iterrows():
+                        uw_recycler_lat = uw_recycler_row['Latitude']
+                        uw_recycler_lon = uw_recycler_row['Longitude']
+                        
+                        distance_uw_recycler = haversine(pca_lat, pca_lon,
+                                            uw_recycler_lat, uw_recycler_lon)
+                        
+                        uw_recycler_distance_df.at[uw_recycler_row['Recycler Name'],
+                                        pca_row['PCA']] = distance_uw_recycler
+                
+                uw_recycler_distance_df.to_csv("../../../TEMP/universal_waste_pca_recycler_distances.csv")
                 
             if self.consumer_agent_resolution == ConsumerAgentResolution.SITE:
 
@@ -990,10 +1044,41 @@ class ABM_CE_PV(Model):
                     os.path.join(
                         os.path.dirname(__file__), "TEMP", 'hazardous_site_landfill_distances.csv'))
 
+                # Calculate distances for Universal Waste Landfills
+                universal_waste_landfills_data = pd.read_csv("../../../TEMP/" + self.file_names['Universal Waste Landfills data'])
+                uw_landfill_lats = universal_waste_landfills_data['Latitude'].to_numpy().astype(float)
+                uw_landfill_lons = universal_waste_landfills_data['Longitude'].to_numpy().astype(float)
+                uw_landfill_distance_matrix = haversine_vectorized(
+                    site_lats, site_lons, uw_landfill_lats, uw_landfill_lons)
+                uw_landfill_distance_df = pd.DataFrame(uw_landfill_distance_matrix,
+                                                        index=universal_waste_landfills_data['Facility Name'],
+                                                        columns=self.uspvdb['case_id'])
+                uw_landfill_distance_df.to_csv(
+                    os.path.join(
+                        os.path.dirname(__file__), "TEMP", 'universal_waste_site_landfill_distances.csv'))
+
+                # Calculate distances for Universal Waste Recyclers
+                universal_waste_recyclers_data = pd.read_csv("../../../TEMP/" + self.file_names['Universal Waste Recyclers data'])
+                uw_recycler_lats = universal_waste_recyclers_data['Latitude'].to_numpy().astype(float)
+                uw_recycler_lons = universal_waste_recyclers_data['Longitude'].to_numpy().astype(float)
+                uw_recycler_distance_matrix = haversine_vectorized(
+                    site_lats, site_lons, uw_recycler_lats, uw_recycler_lons)
+                uw_recycler_distance_df = pd.DataFrame(uw_recycler_distance_matrix,
+                                                        index=universal_waste_recyclers_data['Recycler Name'],
+                                                        columns=self.uspvdb['case_id'])
+                uw_recycler_distance_df.to_csv(
+                    os.path.join(
+                        os.path.dirname(__file__), "TEMP", 'universal_waste_site_recycler_distances.csv'))
+
         self.correct_mat_factor = pd.read_csv(
             '../../../TEMP/correct_mat_factor.csv')    
         self.hazardous_landfill_cost_df = pd.read_csv(
             '../../../TEMP/' + self.file_names['Hazardous landfill data'])
+        # Load Universal Waste Landfills data
+        self.universal_waste_landfills_data = pd.read_csv(
+            '../../../TEMP/' + self.file_names['Universal Waste Landfills data'])
+        # Use the same data for cost dataframe
+        self.universal_waste_landfill_cost_df = self.universal_waste_landfills_data.copy()
 
         self.correct_mat_factor = transform_timeseries_timestep(
             self.correct_mat_factor, self.timestep, scale=False)
@@ -1042,6 +1127,11 @@ class ABM_CE_PV(Model):
                         '../../../TEMP/' + self.file_names['PCA-landfill distances'])
                 self.hazardous_landfill_distance_df = pd.read_csv(
             '../../../TEMP/' + self.file_names['Hazardous PCA-landfill distances'])
+                # Load Universal Waste distance files
+                self.universal_waste_landfill_distance_df = pd.read_csv(
+            '../../../TEMP/universal_waste_pca_landfill_distances.csv')
+                self.universal_waste_recycler_distance_df = pd.read_csv(
+            '../../../TEMP/universal_waste_pca_recycler_distances.csv')
                 
             elif consumer_agent_resolution == ConsumerAgentResolution.SITE:
 
@@ -1057,6 +1147,11 @@ class ABM_CE_PV(Model):
                         '../../../TEMP/site_landfill_distances.csv')
                 self.hazardous_landfill_distance_df = pd.read_csv(
             '../../../TEMP/hazardous_site_landfill_distances.csv')
+                # Load Universal Waste distance files
+                self.universal_waste_landfill_distance_df = pd.read_csv(
+            '../../../TEMP/universal_waste_site_landfill_distances.csv')
+                self.universal_waste_recycler_distance_df = pd.read_csv(
+            '../../../TEMP/universal_waste_site_recycler_distances.csv')
                 
             self.recycling_costs_df = pd.DataFrame()
             
@@ -1080,8 +1175,24 @@ class ABM_CE_PV(Model):
         elif self.consumer_agent_resolution is ConsumerAgentResolution.SITE:
             self.agent_site_map = self.create_agent_site_map()
         recycler_data_df = self.recycling_costs_df if self.rtn else self.recycler_distance_df
-        self.num_recyclers = len(recycler_data_df['Recycler Name'].unique())
-        self.recycler_names = recycler_data_df['Recycler Name'].unique().tolist()
+        # Count total recyclers (regular + universal waste)
+        num_regular_recyclers = len(recycler_data_df['Recycler Name'].unique())
+        num_universal_waste_recyclers = len(self.universal_waste_recycler_distance_df[
+            'Recycler Name'].unique())
+        self.num_recyclers = num_regular_recyclers + num_universal_waste_recyclers
+        # Combine recycler names from both sources
+        regular_recycler_names = recycler_data_df['Recycler Name'].unique().tolist()
+        universal_waste_recycler_names = self.universal_waste_recycler_distance_df[
+            'Recycler Name'].to_list()
+        self.recycler_names = regular_recycler_names + universal_waste_recycler_names
+        # Map each recycler name to its agent node ID. Recyclers.__init__ calls
+        # self.model.recycler_names.pop(), so the first recycler node
+        # (num_consumers + 0) gets the LAST name in recycler_names. Reversing
+        # the list before enumeration produces the correct mapping.
+        self.recycler_name_to_id: dict[str, int] = {
+            name: self.num_consumers + i
+            for i, name in enumerate(reversed(self.recycler_names))
+        }
         self.num_producers = num_producers
         self.num_prod_n_recyc = self.num_recyclers + num_producers
         self.prod_n_recyc_node_degree = prod_n_recyc_node_degree
@@ -1279,6 +1390,9 @@ class ABM_CE_PV(Model):
         self.seeding = seeding
         self.seeding_recyc = seeding_recyc
         self.tclp_params = tclp_params
+        self.tclp_market_share_df = pd.read_csv(
+            os.path.join(os.path.dirname(__file__), "policy_regulation",
+                         "tclp_market_share_interpolated.csv"))
 
         self.all_gba = pd.read_excel(reedsFile)  #importing all grid balancing areas in an excel file
 
@@ -1307,6 +1421,8 @@ class ABM_CE_PV(Model):
             unique_states = list(unique_states)
         self.num_regulators = len(unique_states)
         self.regulator_state_map = self.create_regulator_state_map(unique_states)
+        # Load the policy schedule YAML once and distribute per-state entries to agents
+        self.policy_schedule_by_state = self._load_policy_schedule_by_state()
         # Create a map of agents to their unique IDs
         # This is used to access agents by their unique ID
         self.agent_map = {}
@@ -1418,7 +1534,9 @@ class ABM_CE_PV(Model):
                 self.grid.place_agent(d, node)
                 self.agent_map[node] = d
             else:
-                e = Regulators(node, self)
+                e = Regulators(node, self,
+                               self.policy_schedule_by_state.get(
+                                   self.regulator_state_map[node], {}))
                 self.grid.place_agent(e, node)
                 self.agent_map[node] = e
         # Draw initial graph
@@ -1556,6 +1674,34 @@ class ABM_CE_PV(Model):
             regulator_state_map[agent_id] = state
             agent_id += 1
         return regulator_state_map
+
+    def _load_policy_schedule_by_state(self) -> dict[str, dict]:
+        """
+        Load policy_schedule.yaml once and return a mapping of state abbreviation
+        to that state's policy schedule dict (keyed by policy column name).
+        Parameters:
+        None
+        Returns:
+        dict[str, dict]: Mapping of state abbreviation to its schedule, e.g.
+            {'CA': {'universal_waste_regulation': {'start_year': 2025}}, ...}
+        """
+        path: str = os.path.join(
+            os.path.dirname(__file__), "policy_regulation", "policy_schedule.yaml")
+        if not os.path.exists(path):
+            return {}
+        with open(path, 'r') as f:
+            config: dict = yaml.safe_load(f) or {}
+        raw_policies: dict = config.get('policies') or {}
+        schedule_by_state: dict[str, dict] = {}
+        for policy_name, entries in raw_policies.items():
+            if not entries:
+                continue
+            for entry in entries:
+                states: list[str] = entry.get('states', [])
+                entry_schedule: dict = {k: v for k, v in entry.items() if k != 'states'}
+                for state in states:
+                    schedule_by_state.setdefault(state, {})[policy_name] = entry_schedule
+        return schedule_by_state
 
     def shortest_paths(self, target_states, distances_to_target):
         """
@@ -1966,24 +2112,22 @@ class ABM_CE_PV(Model):
         valid_site_indices = random.sample(all_site_indices, int(len(all_site_indices) * self.landfill_solar_waste_acceptance_ratio))
         self.landfill_distance_df = self.landfill_distance_df.iloc[valid_site_indices].reset_index(drop=True)
 
-    def tclp_test(self, start_year: int = 2020, state: str = "federal") -> bool:
-        """Age-varying (logistic) mean & std TCLP hazard classification.
+    def tclp_test(self, tclp_market_share_df: pd.DataFrame,
+                  current_year: int, state: str = "federal") -> bool:
+        """Market-share-weighted Weibull TCLP hazard classification.
 
-        compute an age-dependent mean and standard deviation
-        by smoothly interpolating between "fresh" and "aged"
-        parameters using a logistic weight w(age). Then,
-        sample a latent variable from a Weibull distribution
-        parameterized to match the interpolated mean and std.
-        Return True if the sampled latent value exceeds
-        the hazard cutoff.
-
-        This preserves gradual broadening of variance with age while avoiding
-        discrete mixture sampling.
+        Uses annual BSF and Non-BSF market shares to compute weighted
+        combined mean and standard deviation, then samples a latent TCLP
+        value from a Weibull distribution parameterized from that combined
+        mean/std. Returns True if the sampled latent value exceeds the
+        hazard cutoff.
 
         Parameters
         ----------
-        start_year : int
-            Year the module was installed.
+        tclp_market_share_df : pd.DataFrame
+            DataFrame containing annual BSF and Non-BSF market shares.
+        current_year : int
+            Current simulation year used to select market shares.
         state : str
             State of the module, used to determine hazard cutoff.
 
@@ -1991,36 +2135,41 @@ class ABM_CE_PV(Model):
         -------
         bool
             True if sampled latent value > hazard_cutoff.
+
+        Notes
+        -----
+        Initial TCLP market share values are based on U.S. panel sales
+        observed during 2005-2010. Assuming an average panel lifetime of
+        30 years, these sales shares are shifted forward by 30 years to
+        represent end-of-life market shares. Linear interpolation is then
+        applied to estimate intermediate yearly values between anchor years.
         """
 
-        module_age_years = self.current_date.year - start_year
+        min_year = int(tclp_market_share_df["Year"].min())
+        max_year = int(tclp_market_share_df["Year"].max())
+        lookup_year = max(min_year, min(current_year, max_year))
 
-        fresh_mu = self.tclp_params["fresh_mean"]
-        fresh_sd = self.tclp_params["fresh_std"]
-        aged_mu  = self.tclp_params["aged_mean"]
-        aged_sd  = self.tclp_params["aged_std"]
-        k        = self.tclp_params["k"]
-        a50      = self.tclp_params["a50"]
-        cutoff   = self.tclp_params["hazard_cutoff"][state]
-        min_std  = self.tclp_params.get("min_std", 0.0)
+        market_share_row = tclp_market_share_df.loc[
+            tclp_market_share_df["Year"] == lookup_year].iloc[0]
+        bsf_share = float(market_share_row["BSF"])
+        non_bsf_share = float(market_share_row["Non-BSF"])
 
-        # Logistic weight w(age) in [0,1]
-        w = 1.0 / (1.0 + e ** (-k * (module_age_years - a50)))
+        bsf_mean = self.tclp_params["bsf_mean"]
+        bsf_std = self.tclp_params["bsf_std"]
+        non_bsf_mean = self.tclp_params["non_bsf_mean"]
+        non_bsf_std = self.tclp_params["non_bsf_std"]
+        min_std = self.tclp_params.get("min_std", 0.0)
 
-        # Interpolated mean & std
-        mu_age = (1 - w) * fresh_mu + w * aged_mu
-        sd_age = (1 - w) * fresh_sd + w * aged_sd
-        sd_age = max(sd_age, min_std)
+        combined_mean = bsf_share * bsf_mean + non_bsf_share * non_bsf_mean
+        combined_std = bsf_share * bsf_std + non_bsf_share * non_bsf_std
+        combined_std = max(combined_std, min_std)
 
-        if self.tclp_params["distribution"] == "normal":
-            # Normal distribution sampling
-            latent = np.random.normal(mu_age, sd_age)
-            
-        elif self.tclp_params["distribution"] == "weibull":
-            # Weibull shape parameters estimated from mean & std
-            weibull_shape = (sd_age / mu_age) ** -1.086
-            weibull_scale = mu_age / gamma(1 + 1 / weibull_shape)
-            latent = np.random.weibull(weibull_shape) * weibull_scale
+        cutoff = self.tclp_params["hazard_cutoff"].get(
+            state, self.tclp_params["hazard_cutoff"]["federal"])
+
+        weibull_shape = (combined_std / combined_mean) ** -1.086
+        weibull_scale = combined_mean / gamma(1 + 1 / weibull_shape)
+        latent = np.random.weibull(weibull_shape) * weibull_scale
         return latent > cutoff
 
     def get_num_consumers(self, target_num_consumers: int) -> int:

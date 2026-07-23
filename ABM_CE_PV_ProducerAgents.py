@@ -181,6 +181,8 @@ class Producers(Agent):
             self.model.recovery_fractions[self.material_produced]
             # tons → kg
 
+        # ! TODO: replace code below with PV_ICE material waste value - STOP
+
         self.recycled_material_volume += recl_vol
         self.yearly_recycled_material_volume = recl_vol
         self.recycled_material_value = self.recycled_mat_price * \

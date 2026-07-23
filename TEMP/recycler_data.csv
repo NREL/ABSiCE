@@ -1,33 +1,33 @@
-﻿Recycler Name,State,City,Latitude,Longitude,RCRA permit
-3R Recycling,Ohio,cincinnati,39.1014537,-84.5124602,FALSE
-Cascade Eco Minerals LLC,Missouri,Joplin,37.0841838,-94.5133385,FALSE
-Cleanlites  Recycling,Michigan,Mason,43.9778831,-86.246291,FALSE
-Cleanlites  Recycling 2,Ohio,Cincinnati,39.103119,-84.512016,FALSE
-Cleanlites  Recycling 3,Minnesota,Lakeville,44.649689,-93.242722,FALSE
-Cleanlites  Recycling 4,South Carolina,Spartanburg,34.950634,-81.926541,FALSE
-Cleanlites  Recycling 5,Ohio,Wauseon,41.549218,-84.141615,FALSE
-"Dynamic Lifecycle Innovation, Wisconsin Headquarters:",wisconsin,Onalaska,43.8830606,-91.2343539,FALSE
-"Echo Environmental, LLC",Texas,Carollton (Dallas),32.9518354,-96.9072286,FALSE
-EcoTech Recycling,Washington,Port of Kalama,46.00557395,-122.847259,FALSE
-Electronic Recycling & IT Asset Disposition Services,California,Fresno,36.7295295,-119.7088613,FALSE
-Electronic Recycling & IT Asset Disposition Services 2,Washington,Sumner, 47.203157,-122.240397,FALSE
-Electronic Recycling & IT Asset Disposition Services 3,Arizona,Goodyear,33.435341,-112.358253,FALSE
-Electronic Recycling & IT Asset Disposition Services 4,Texas,FlowerMound,33.014568,-97.096954,FALSE
-Electronic Recycling & IT Asset Disposition Services 5,Indiana,Plainfield,39.704212,-86.399439,FALSE
-Electronic Recycling & IT Asset Disposition Services 6,North Carolina,Raleigh,35.787743,-78.644257,FALSE
-Electronic Recycling & IT Asset Disposition Services 7,New Jersey,Lincoln Park,40.924265,-74.302093,FALSE
-Electronic Recycling & IT Asset Disposition Services 8,Massachusetts,Holliston,42.200097,-71.424505,FALSE
-Green Century Electronics Recycling,Oregon,Portland,45.5202471,-122.674194,FALSE
-"INTERCO TRADING, INC.",illinois,Madison,38.811063,-89.9017112,FALSE
-Recycle1234,California,Union City,37.5872576,-122.0215737,FALSE
-RecyclePVSolar,Nevada,Reno/Sparks,39.48554315,-119.7912686,FALSE
-SolarCycle,Texas,Odessa,31.845682,-102.367645,FALSE
-TBF Computing Inc,Georgia,Atlanta,33.7489924,-84.3902644,FALSE
-TG Companies,Arizona,Tucson,32.2228765,-110.974847,FALSE
-United Electronic Recycling,Texas,Coppell,32.9552598,-97.0155703,FALSE
-"We Recycle Solar, Inc.",Arizona,Phoenix,33.4484367,-112.074141,FALSE
-"ZEEP Technology, LLC",Mass,South Hadley,42.2591392,-72.5751341,FALSE
-Ontility,Tennessee,Sparta,35.9259,-85.4641,FALSE
-Okon Recycling,Texas,Dallas,32.779167,-96.808891,FALSE
-Powerhouse Recycling,North Carolina,Salisbury,35.671,-80.4742,FALSE
-FabTech Solar Solutions,Arizona,Gilbert,33.352763,-111.78904,FALSE
+Recycler Name,State,City,Latitude,Longitude,RCRA permit,Universal Waste Permit
+3R Recycling,Ohio,cincinnati,39.1014537,-84.5124602,FALSE,FALSE
+Cascade Eco Minerals LLC,Missouri,Joplin,37.0841838,-94.5133385,FALSE,FALSE
+Cleanlites  Recycling,Michigan,Mason,43.9778831,-86.246291,FALSE,FALSE
+Cleanlites  Recycling 2,Ohio,Cincinnati,39.103119,-84.512016,FALSE,FALSE
+Cleanlites  Recycling 3,Minnesota,Lakeville,44.649689,-93.242722,FALSE,FALSE
+Cleanlites  Recycling 4,South Carolina,Spartanburg,34.950634,-81.926541,FALSE,FALSE
+Cleanlites  Recycling 5,Ohio,Wauseon,41.549218,-84.141615,FALSE,FALSE
+"Dynamic Lifecycle Innovation, Wisconsin Headquarters:",wisconsin,Onalaska,43.8830606,-91.2343539,FALSE,FALSE
+"Echo Environmental, LLC",Texas,Carollton (Dallas),32.9518354,-96.9072286,FALSE,FALSE
+EcoTech Recycling,Washington,Port of Kalama,46.00557395,-122.847259,FALSE,FALSE
+Electronic Recycling & IT Asset Disposition Services,California,Fresno,36.7295295,-119.7088613,FALSE,FALSE
+Electronic Recycling & IT Asset Disposition Services 2,Washington,Sumner, 47.203157,-122.240397,FALSE,FALSE
+Electronic Recycling & IT Asset Disposition Services 3,Arizona,Goodyear,33.435341,-112.358253,FALSE,FALSE
+Electronic Recycling & IT Asset Disposition Services 4,Texas,FlowerMound,33.014568,-97.096954,FALSE,FALSE
+Electronic Recycling & IT Asset Disposition Services 5,Indiana,Plainfield,39.704212,-86.399439,FALSE,FALSE
+Electronic Recycling & IT Asset Disposition Services 6,North Carolina,Raleigh,35.787743,-78.644257,FALSE,FALSE
+Electronic Recycling & IT Asset Disposition Services 7,New Jersey,Lincoln Park,40.924265,-74.302093,FALSE,FALSE
+Electronic Recycling & IT Asset Disposition Services 8,Massachusetts,Holliston,42.200097,-71.424505,FALSE,FALSE
+Green Century Electronics Recycling,Oregon,Portland,45.5202471,-122.674194,FALSE,FALSE
+"INTERCO TRADING, INC.",illinois,Madison,38.811063,-89.9017112,FALSE,FALSE
+Recycle1234,California,Union City,37.5872576,-122.0215737,FALSE,FALSE
+RecyclePVSolar,Nevada,Reno/Sparks,39.48554315,-119.7912686,FALSE,FALSE
+SolarCycle,Texas,Odessa,31.845682,-102.367645,FALSE,FALSE
+TBF Computing Inc,Georgia,Atlanta,33.7489924,-84.3902644,FALSE,FALSE
+TG Companies,Arizona,Tucson,32.2228765,-110.974847,FALSE,FALSE
+United Electronic Recycling,Texas,Coppell,32.9552598,-97.0155703,FALSE,FALSE
+"We Recycle Solar, Inc.",Arizona,Phoenix,33.4484367,-112.074141,FALSE,FALSE
+"ZEEP Technology, LLC",Mass,South Hadley,42.2591392,-72.5751341,FALSE,FALSE
+Ontility,Tennessee,Sparta,35.9259,-85.4641,FALSE,FALSE
+Okon Recycling,Texas,Dallas,32.779167,-96.808891,FALSE,FALSE
+Powerhouse Recycling,North Carolina,Salisbury,35.671,-80.4742,FALSE,FALSE
+FabTech Solar Solutions,Arizona,Gilbert,33.352763,-111.78904,FALSE,FALSE

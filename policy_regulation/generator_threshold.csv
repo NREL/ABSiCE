@@ -1,9 +1,9 @@
-﻿generator_size,max_storage_kg,max_storage_years,waste_generation_limit_kg,state
+﻿generator_size,max_storage_kg,max_storage_days,waste_generation_limit_kg,state
 very_small,1000,,100,FED
-small,6000,0,1000,FED
-large,,0,,FED
-small,,0,1000,CA
-large,1000,0,,CA
+small,6000,180,1000,FED
+large,,90,,FED
+small,,180,1000,CA
+large,1000,90,,CA
 very_small,100,0,100,WA
-small,1000,0,1000,WA
-large,,0,,WA
+small,1000,180,1000,WA
+large,,90,,WA
