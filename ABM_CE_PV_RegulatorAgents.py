@@ -113,11 +113,11 @@ class Regulators(Agent):
                 return True
         return False  # No transport-based exclusion applies by default
 
-    # def _is_chemical_based_exclusion(self):  # DEAD CODE: always returns False, never called
-    #     """
-    #     Check if the product is exempt from regulations based on chemical-based exclusions.
-    #     """
-    #     return False  # From Taylor's study, unclear if this applies to PV modules, but included for completeness
+    def _is_chemical_based_exclusion(self): 
+        """
+        Check if the product is exempt from regulations based on chemical-based exclusions.
+        """
+        return False  # From Taylor's study, unclear if this applies to PV modules, but included for completeness
 
     def _is_verified_recycler_based_exclusion(self, recycler_id: int):
         """
