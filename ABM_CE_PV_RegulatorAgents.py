@@ -8,7 +8,6 @@ Agent - Regulator
 """
 
 from mesa import Agent, Model
-# import numpy as np  # UNUSED: imported but never used in file
 import pandas as pd
 from dataclasses import dataclass
 from utils import GeneratorSize
