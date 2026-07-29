@@ -106,409 +106,138 @@ from pathlib import Path
 from utils import TIMESTEP, ConsumerAgentResolution, PCA_MISSING_VALUE, transform_timeseries_timestep, transform_pca_timeseries_timestep, add_date_from_temporal_columns
 from datetime import datetime
 
+from absice.data.data_loader import LoadedData
+from absice.schemas.simulation_config import SimulationConfig
 
 
 class ABM_CE_PV(Model):
-    def __init__(self,
-                 seed=None,
-                 calibration_n_sensitivity=1,
-                 calibration_n_sensitivity_2=1,
-                 calibration_n_sensitivity_3=1,
-                 calibration_n_sensitivity_4=1,
-                 calibration_n_sensitivity_5=1,
-                 timestep=TIMESTEP.ANNUAL,
-                 consumer_agent_resolution=ConsumerAgentResolution.SITE,
-                 model_states=None,
-                 num_consumers=1000,
-                 consumers_node_degree=10,
-                 consumers_network_type="small-world",
-                 rewiring_prob=0.1,
-                 num_recyclers=16,
-                 num_producers=60,
-                 prod_n_recyc_node_degree=5,
-                 prod_n_recyc_network_type="small-world",
-                 num_refurbishers=15,
-                 consumers_distribution={"residential": 1,
-                                         "commercial": 0., "utility": 0.},
-                 init_eol_rate={"repair": 0.005, "sell": 0.01,
-                                "recycle": 0.1, "landfill": 0.885,
-                                "hoard": 0},
-                 init_purchase_choice={"new": 0.9995, "used": 0.0005,
-                                       "certified": 0},
-                 total_number_product=[38, 38, 38, 38, 38, 38, 38, 139, 251,
-                                       378, 739, 1670, 2935, 4146, 5432, 6525,
-                                       3609, 4207, 4905, 5719],
-                 product_distribution={"residential": 1,
-                                       "commercial": 0., "utility": 0.},
-                 product_growth=[0.166, 0.045],
-                 growth_threshold=10,
-                 failure_rate_alpha=[2.4928, 5.3759, 3.93495],
-                 hoarding_cost=[0, 130, 65],  # [0, 0.001, 0.0005] $/W → $/ton
-                 landfill_cost=[  # $/ton (converted from $/W × 129,870)
-                     1156, 961, 922, 896, 727, 558,
-                     870, 1429, 1104, 1065, 1026, 961, 896,
-                     883, 883, 675, 675, 662, 961, 805,
-                     636, 636, 610, 416, 636, 844, 831,
-                     805, 675, 623, 623, 571, 545, 506,
-                     506, 584, 714, 649, 636, 571, 571,
-                     506, 429, 390, 533, 649, 520, 520,
-                     494, 429],
-                 hazardous_waste_management_cost={"repair": 0.0, "sell": 0.0,
-                                                    "recycle": 0.0, "landfill": 300.0,
-                                                    "hoard": 0.0}, # $/ton
-                 theory_of_planned_behavior={
-                     "residential": True, "commercial": True, "utility": True},
-                 w_sn_eol=0.23,
-                 w_pbc_eol=0.44,
-                 w_a_eol=0.59,
-                 w_sn_reuse=0.497,
-                 w_pbc_reuse=0.382,
-                 w_a_reuse=0.464,
-                 product_lifetime=30,
-                 all_EoL_pathways={"repair": True, "sell": True,
-                                   "recycle": True, "landfill": True,
-                                   "hoard": False},
-                 max_storage=[1, 8, 4],
-                 att_distrib_param_eol= [0.515, 0.1], # [0.805, 0.09],
-                 att_distrib_param_reuse=[0.01, 0.185], # [0.223, 0.262],
-                 original_recycling_cost=[400-1E-6, 400+1E-6, 400],  # 0.4 $/Kg → $/ton
-                 recycling_learning_shape_factor=-0.01, # -0.3,
-                 repairability=0.55,
-                 original_repairing_cost=[12987, 58442, 29870],  # [0.1, 0.45, 0.23] $/W → $/ton
-                 repairing_learning_shape_factor=-0.31,
-                 scndhand_mkt_pric_rate=[0.4, 0.2],
-                 fsthand_mkt_pric=58442,  # 0.45 $/W → $/ton
-                 fsthand_mkt_pric_reg_param=[1, 0.04],
-                 refurbisher_margin=[0.4, 0.6, 0.5],
-                 purchase_choices={"new": True, "used": True,
-                                   "certified": False},
-                 product_mass_fractions={"Product": 1, "Aluminum": 0.08,
-                                         "Glass": 0.76, "Copper": 0.01,
-                                         "Insulated cable": 0.012,
-                                         "Silicon": 0.036, "Silver": 0.00032},
-                 established_scd_mkt={"Product": True, "Aluminum": True,
-                                      "Glass": True, "Copper": True,
-                                      "Insulated cable": True,
-                                      "Silicon": False, "Silver": False},
-                 scd_mat_prices={"Product": [np.nan, np.nan, np.nan],
-                                 "Aluminum": [0.66, 1.98, 1.32],
-                                 "Glass": [0.01, 0.06, 0.035],
-                                 "Copper": [3.77, 6.75, 5.75],
-                                 "Insulated cable": [3.22, 3.44, 3.33],
-                                 "Silicon": [2.20, 3.18, 2.69],
-                                 "Silver": [453, 653, 582]},
-                 virgin_mat_prices={"Product": [np.nan, np.nan, np.nan],
-                                    "Aluminum": [1.76, 2.51, 2.14],
-                                    "Glass": [0.04, 0.07, 0.055],
-                                    "Copper": [4.19, 7.50, 6.39],
-                                    "Insulated cable": [3.22, 3.44, 3.33],
-                                    "Silicon": [2.20, 3.18, 2.69],
-                                    "Silver": [453, 653, 582]},
-                 material_waste_ratio={"Product": 0., "Aluminum": 0.,
-                                       "Glass": 0., "Copper": 0.,
-                                       "Insulated cable": 0., "Silicon": 0.4,
-                                       "Silver": 0.},
-                 recovery_fractions={"Product": np.nan, "Aluminum": 0.92,
-                                     "Glass": 0.85, "Copper": 0.72,
-                                     "Insulated cable": 1, "Silicon": 0,
-                                     "Silver": 0},
-                 product_average_wght=0.1,
-                 mass_to_function_reg_coeff=0.03,
-                 recycling_states=[
-                     'Texas', 'Arizona', 'Oregon', 'Oklahoma',
-                     'Wisconsin', 'Ohio', 'Kentucky', 'South Carolina'],
-                 # transportation_cost=0.0314,
-                 transportation_cost=0.095,
-                 hazardous_transportation_cost=0.095, # $/ton-km
-                 used_product_substitution_rate=[0.6, 1, 0.8],
-                 imperfect_substitution=0,
-                 epr_business_model=False,
-                 recycling_process={"frelp": False, "asu": False,
-                                    "hybrid": False},
-                 dynamic_lifetime_model={"Dynamic lifetime": False,
-                                         "d_lifetime_intercept": 15.9,
-                                         "d_lifetime_reg_coeff": 0.87,
-                                         "Seed": False, "Year": 5,
-                                         "avg_lifetime": 50},
-                 extended_tpb={"Extended tpb": False,
-                               "w_convenience": 0.28, "w_knowledge": -0.51,
-                               "knowledge_distrib": [0.5, 0.49]},
-                 seeding={"Seeding": False,
-                          "Year": 10, "number_seed": 50},
-                 seeding_recyc={"Seeding": False,
-                                "Year": 10, "number_seed": 50,
-                                "discount": 0.35},
-                # parameters for TCLP model. The default values are taken from
-                # Li, F., Tatapudi, S. R., Shaw, S. L., Libby, C., Bicer, B., & TamizhMani, G. (2025). 
-                # Photovoltaic module leach testing: Database development and statistical analysis. 
-                # Journal of Environmental Management, 377, 124666.
-                # BSF market-share inputs were estimated using Gemini combining multiple sources including:
-                # https://www.ise.fraunhofer.de/en/publications/studies/photovoltaics-report.html
-                # https://www.anernstore.com/blogs/diy-solar-guides/cell-type-market-shares-efficiency
-                 tclp_params = {
-                    "bsf_mean": 3.35,
-                    "bsf_std": 1.17,
-                    "non_bsf_mean": 1.85,
-                    "non_bsf_std": 0.97,
-                        "hazard_cutoff": {
-                            'federal': 5.0, 'AL': 5.0, 'AZ': 5.0, 'AR': 5.0, 'CA': 5.0, 'CO': 5.0, 'CT': 5.0,
-                            'DE': 5.0, 'FL': 5.0, 'GA': 5.0, 'ID': 5.0, 'IL': 5.0, 'IN': 5.0, 'IA': 5.0,
-                            'KS': 5.0, 'KY': 5.0, 'LA': 5.0, 'ME': 5.0, 'MD': 5.0, 'MA': 5.0, 'MI': 5.0,
-                            'MN': 5.0, 'MS': 5.0, 'MO': 5.0, 'MT': 5.0, 'NE': 5.0, 'NV': 5.0, 'NH': 5.0,
-                            'NJ': 5.0, 'NM': 5.0, 'NY': 5.0, 'NC': 5.0, 'ND': 5.0, 'OH': 5.0, 'OK': 5.0,
-                            'OR': 5.0, 'PA': 5.0, 'RI': 5.0, 'SC': 5.0, 'SD': 5.0, 'TN': 5.0, 'TX': 5.0,
-                            'UT': 5.0, 'VT': 5.0, 'VA': 5.0, 'WA': 5.0, 'WV': 5.0, 'WI': 5.0, 'WY': 5.0},
-                            # mg/L Pb threshold for hazard classification as per EPA 
-                            # (CA STLC test has same threshold)
-                        # Optional lower bound for std to avoid collapse
-                        "min_std": 0.05,
-                 },
-                 pv_ice=False,
-                 pca=False,
-                 pca_scenario=False,
-                 geopy=False,
-                 calculate_distances=False,
-                 rtn = False,
-                 solar_cycle =False,
-                 landfill_data_params = {
-                        "landfill_volume_column": "$/metric ton",
-                        "landfill_name_column": "Facility Name"},
-                 hazardous_waste_regulation_enabled=False,
-                 landfill_solar_waste_acceptance_ratio=0.4,
-                 last_step=31,
-                 sa_landfill_costs=(False, 481),  # 0.0037 $/W → $/ton
-                 file_name={'Landfill data': "Landfills_data_2023.csv",
-                            'PCA-landfill distances':
-                                "pca_landfills_distances.csv",
-                            'Hazardous landfill data': "Landfills_data_SA.csv",
-                            'Hazardous PCA-landfill distances':
-                                "pca_landfills_distances_SA.csv",
-                            'Site-landfill distances':
-                                "site_landfills_distances.csv",
-                            'Recycler data': "Recyclers_data.csv",
-                            # California DTSC universal waste data sources:
-                            #   Landfills: https://dtsc.ca.gov/photovoltaic-modules-pv-modules-universal-waste-management-regulations_uw-handlers/
-                            #   Recyclers:  https://dtsc.ca.gov/list-of-universal-waste-recyclers-that-treat-pv-modules/
-                            'Universal Waste Landfills data':
-                                "Universal_Waste_Landfills_data.csv",
-                            'Universal Waste Recyclers data':
-                                "Universal_Waste_Recyclers_data.csv",}):
-
-        """Initiate model.
-
-        Args:
-            seed (int, optional): number used to initialize the random
-                generator. Defaults to None.
-            calibration_n_sensitivity (int, optional): enable varying
-                different type of input parameters . Defaults to 1.
-            calibration_n_sensitivity_2 (int, optional): enable varying
-                different type of input parameters . Defaults to 1.
-            calibration_n_sensitivity_3 (int, optional): enable varying
-                different type of input parameters . Defaults to 1.
-            calibration_n_sensitivity_4 (int, optional): enable varying
-                different type of input parameters . Defaults to 1.
-            calibration_n_sensitivity_5 (int, optional): enable varying
-                different type of input parameters . Defaults to 1.
-            timestep (TIMESTEP, optional): time step of the model. Defaults to
-                TIMESTEP.ANNUAL. Scaling is applied linearly to the model data
-                to match the time step.
-            consumer_agent_resolution (ConsumerAgentResolution, optional): Determines the resolution of consumer agents in the model.
-                Defaults to ConsumerAgentResolution.PCA.
-            model_states (list, optional): list of US states to model. Defaults to None (which means all states).
-            num_consumers (int, optional): number of consumers.
-                Defaults to 1000.
-            consumers_node_degree (int, optional): average node degree in the
-                network. Defaults to 10.
-            consumers_network_type (str, optional): network type.
-                Defaults to "small-world".
-            rewiring_prob (float, optional): probability of rewiring an edge in
-                the network. Defaults to 0.1.
-            num_recyclers (int, optional): number of recyclers. Defaults to 16.
-            num_producers (int, optional): number of producers. Defaults to 60.
-            prod_n_recyc_node_degree (int, optional): average node degree in
-                the network. Defaults to 5.
-            prod_n_recyc_network_type (str, optional): network type.
-                Defaults to "small-world".
-            num_refurbishers (int, optional): number of refurbishers.
-                Defaults to 15.
-            consumers_distribution (dict, optional): type of consumers.
-                Defaults to {"residential": 1, "commercial": 0.,
-                "utility": 0.}.
-            init_eol_rate (dict, optional): initial distribution of end-of-life
-                (eol) pathways adoption in the consumer population. Defaults to
-                {"repair": 0.005, "sell": 0.01, "recycle": 0.1, "landfill":
-                0.4425, "hoard": 0.4425}.
-            init_purchase_choice (dict, optional): initial distribution of
-                purchase option adoption in the consumer population. Defaults
-                to {"new": 0.9995, "used": 0.0005, "certified": 0}.
-            total_number_product (list, optional): Total number of products
-                expressed in relevant units (e.g., kg or kW) for the first
-                initial years. Defaults to [38, 38, 38, 38, 38, 38, 38, 139,
-                251, 378, 739, 1670, 2935, 4146, 5432, 6525, 3609, 4207, 4905,
-                5719].
-            product_distribution (dict, optional): product shares among
-            consumer types. Defaults to {"residential": 1, "commercial": 0.,
-                "utility": 0.}.
-            product_growth (list, optional): compounded annual growth rate
-                (CAGR). Defaults to [0.166, 0.045].
-            growth_threshold (int, optional): threshold separating period of
-                different CAGR. Defaults to 10.
-            failure_rate_alpha (list, optional): alpha parameter of the Weibull
-                function that models waste generation. Defaults to [2.4928,
-                5.3759, 3.93495].
-            hoarding_cost (list, optional): storage costs in $/ton. Defaults to
-                [0, 130, 65].
-            landfill_cost (list, optional): landfill costs. Defaults to
-                [ 0.0089, 0.0074, 0.0071, 0.0069, 0.0056, 0.0043, 0.0067,
-                0.0110, 0.0085, 0.0082, 0.0079, 0.0074, 0.0069, 0.0068, 0.0068,
-                0.0052,
-                0.0052, 0.0051, 0.0074, 0.0062, 0.0049, 0.0049, 0.0047, 0.0032,
-                0.0049, 0.0065, 0.0064, 0.0062, 0.0052, 0.0048, 0.0048, 0.0044,
-                0.0042, 0.0039, 0.0039, 0.0045, 0.0055, 0.0050, 0.0049, 0.0044,
-                0.0044, 0.0039, 0.0033, 0.0030, 0.0041, 0.0050, 0.0040, 0.0040,
-                0.0038, 0.0033].
-            theory_of_planned_behavior (dict, optional): define how the
-                different population types make choices. Defaults to
-                { "residential": True, "commercial": True, "utility": True}.
-            w_sn_eol (float, optional): weight of the subjective norms variable
-                in the decision-making model (i.e., the theory of planned
-                behavior (TPB)) for the eol options. Defaults to 0.27.
-            w_pbc_eol (float, optional): weight of the perceived behavioral
-                control variable in the TPB for the eol options. Defaults to
-                0.44.
-            w_a_eol (float, optional): weight of the attitude  variable in the
-                TPB for the eol options. Defaults to 0.39.
-            w_sn_reuse (float, optional): weight of the subjective norms
-                variable in the TPB for the purchase options. Defaults to
-                0.497.
-            w_pbc_reuse (float, optional): weight of the perceived behavioral
-                control variable in the TPB for the purchase options. Defaults
-                to 0.382.
-            w_a_reuse (float, optional): weight of the attitude variable in the
-                TPB for the purchase options. Defaults to 0.464.
-            product_lifetime (int, optional): product lifetime, beta parameter
-                of the Weibull function that models waste generation. Defaults
-                to 30.
-            all_EoL_pathways (dict, optional): eol options that are available.
-                Defaults to {"repair": True, "sell": True, "recycle": True,
-                "landfill": True, "hoard": True}.
-            max_storage (list, optional): parameters defining the potential
-                storage time for the product. Defaults to [1, 8, 4].
-            att_distrib_param_eol (list, optional): parameters used to
-                distribute attitude values regarding eol options within the
-                population. Defaults to [0.544, 0.1].
-            att_distrib_param_reuse (list, optional): parameters used to
-                distribute attitude values regarding purchase options within
-                the population. Defaults to [0.223, 0.262].
-            original_recycling_cost (list, optional): parameters used to
-                distribute recycling costs at the start of the simulation.
-                Defaults to [0.106, 0.128, 0.117].
-            recycling_learning_shape_factor (float, optional): learning effect
-                parameter defining how recycling costs decrease as recycling
-                volumes increase. Defaults to -0.39.
-            repairability (float, optional): share of products that can be
-                repaired. Defaults to 0.55.
-            original_repairing_cost (list, optional): parameters used to
-                distribute repair costs at the start of the simulation.
-                Defaults to [0.1, 0.45, 0.23].
-            repairing_learning_shape_factor (float, optional): learning effect
-                parameter defining how repair costs decrease as repair volumes
-                increase. Defaults to -0.31.
-            scndhand_mkt_pric_rate (list, optional): parameters used to
-                distribute the ratio between used product price to new product
-                price. Defaults to [0.4, 0.2].
-            fsthand_mkt_pric (float, optional): new product price. Defaults to
-                0.45.
-            fsthand_mkt_pric_reg_param (list, optional):  parameters used to
-                model new product price decrease. Defaults to [1, 0.04].
-            refurbisher_margin (list, optional):  parameters used to
-                distribute refurbisher's margins. Defaults to [0.4, 0.6, 0.5].
-            purchase_choices (dict, optional): purchase options that are
-                available. Defaults to {"new": True, "used": True, "certified":
-                False}.
-            product_mass_fractions (dict, optional): product material
-                composition. Defaults to {"Product": 1, "Aluminum": 0.08,
-                "Glass": 0.76, "Copper": 0.01, "Insulated cable": 0.012,
-                "Silicon": 0.036, "Silver": 0.00032}.
-            established_scd_mkt (dict, optional): defines if materials can be
-                recycled in an established end market or not. Defaults to
-                {"Product": True, "Aluminum": True, "Glass": True, "Copper":
-                True, "Insulated cable": True, "Silicon": False, "Silver":
-                False}.
-            scd_mat_prices (dict, optional): parameters used to
-                distribute secondary (scrap) material prices. Defaults to
-                {"Product": [np.nan, np.nan, np.nan], "Aluminum":
-                [0.66, 1.98, 1.32], "Glass": [0.01, 0.06, 0.035], "Copper":
-                [3.77, 6.75, 5.75], "Insulated cable": [3.22, 3.44, 3.33],
-                "Silicon": [2.20, 3.18, 2.69], "Silver": [453, 653, 582]}.
-            virgin_mat_prices (dict, optional): parameters used to
-                distribute primary (raw) material prices. Defaults to
-                {"Product": [np.nan, np.nan, np.nan], "Aluminum":
-                [1.76, 2.51, 2.14], "Glass": [0.04, 0.07, 0.055], "Copper":
-                [4.19, 7.50, 6.39], "Insulated cable": [3.22, 3.44, 3.33],
-                "Silicon": [2.20, 3.18, 2.69], "Silver": [453, 653, 582]}.
-            material_waste_ratio (dict, optional): industrial material waste
-                ratios. Defaults to {"Product": 0., "Aluminum": 0., "Glass":
-                0., "Copper": 0., "Insulated cable": 0., "Silicon": 0.4,
-                "Silver": 0.}.
-            recovery_fractions (dict, optional): material recovery fractions
-                from the recycling process. Defaults to {"Product": np.nan,
-                "Aluminum": 0.92, "Glass": 0.85, "Copper": 0.72,
-                "Insulated cable": 1, "Silicon": 0, "Silver": 0}.
-            product_average_wght (float, optional): average weight of the
-                product. Defaults to 0.1.
-            mass_to_function_reg_coeff (float, optional): parameter used to
-                model the product weight decrease. Defaults to 0.03.
-            recycling_states (list, optional): states with recycling
-                facilities. Defaults to [ 'Texas', 'Arizona', 'Oregon',
-                'Oklahoma', 'Wisconsin', 'Ohio', 'Kentucky', 'South Carolina'].
-            transportation_cost (float, optional): cost of product
-                transportation. Defaults to 0.0314.
-            used_product_substitution_rate (list, optional): substitution rate
-                of used product to new product. Defaults to [0.6, 1, 0.8].
-            imperfect_substitution (int, optional): additional substitution
-                rate due to unintended consequences such as the rebound effect.
-                Defaults to 0.
-            epr_business_model (bool, optional): parameter to activate an
-                extended producer responsibility (EPR) scenario. Defaults to
-                False.
-            recycling_process (dict, optional): parameter to activate different
-                recycling process scenarios. Defaults to {"frelp": False,
-                "asu": False, "hybrid": False}.
-            dynamic_lifetime_model (dict, optional): parameter to activate
-                product lifetime scenarios. Defaults to {"Dynamic lifetime":
-                False, "d_lifetime_intercept": 15.9, "d_lifetime_reg_coeff":
-                0.87, "Seed": False, "Year": 5, "avg_lifetime": 50}.
-            extended_tpb (dict, optional): optional parameters for the
-                decision-making model. Defaults to {"Extended tpb": False,
-                "w_convenience": 0.28, "w_knowledge": -0.51,
-                "knowledge_distrib": [0.5, 0.49]}.
-            seeding (dict, optional): seeding scenario for used products.
-                Defaults to {"Seeding": False, "Year": 10, "number_seed": 50}.
-            seeding_recyc (dict, optional): seeding scenario for recycling
-                products. Defaults to {"Seeding": False, "Year": 10,
-                "number_seed": 50, "discount": 0.35}.
-            hazardous_waste_regulation_enabled: bool - Whether hazardous waste regulations are enabled.
-            landfill_solar_waste_acceptance_ratio: float - The ratio of landfills that accept solar waste. Defaults to 0.4.
-            as per research from Taylor Curtis.
-            rtn: bool - Whether to use the TAMU transportation, recycling, and landfill cost data.
-            solar_cycle: bool - Whether to use the solar cycle landfill cost data.
-            landfill_data_params: dict - Parameters for landfill data.
+    def __init__(self, config: SimulationConfig, data: LoadedData) -> None:
         """
-        # Set up variables
-        # att_distrib_param_eol[0] = calibration_n_sensitivity
-        # att_distrib_param_reuse[0] = calibration_n_sensitivity_2
-        # original_recycling_cost = [x * calibration_n_sensitivity_3 for x in
-        #                          original_recycling_cost]
-        # landfill_cost = [x * calibration_n_sensitivity_4 for x in
-        #                landfill_cost]
-        # att_distrib_param_eol[1] = att_distrib_param_eol[1] * \
-        #   calibration_n_sensitivity_4
-        # w_sn_eol = w_sn_eol * calibration_n_sensitivity_5
+        Initialize the ABSiCE model.
+
+        Parameters
+        ----------
+        config
+            Validated simulation parameters loaded from YAML.
+        data
+            Preloaded datasets created by DataLoader.
+        """
+        super().__init__(seed=config.run.seed)
+
+        self.config = config
+        self.loaded_data = data
+
+        # Run configuration
+        seed = config.run.seed
+        timestep = config.run.timestep
+        last_step = config.run.last_step
+
+        # Calibration configuration
+        calibration_n_sensitivity = 1.0
+        calibration_n_sensitivity_2 = 1.0
+        calibration_n_sensitivity_3 = 1.0
+        calibration_n_sensitivity_4 = 1.0
+        calibration_n_sensitivity_5 = 1.0
+
+        # Network configuration
+        num_consumers = config.network.num_consumers
+        consumers_node_degree = config.network.consumers_node_degree
+        consumers_network_type = config.network.consumers_network_type
+        rewiring_prob = config.network.rewiring_prob
+        num_recyclers = config.network.num_recyclers
+        num_producers = config.network.num_producers
+        num_refurbishers = config.network.num_refurbishers
+        prod_n_recyc_node_degree = config.network.prod_n_recyc_node_degree
+        prod_n_recyc_network_type = config.network.prod_n_recyc_network_type
+
+        # Consumer configuration
+        consumer_agent_resolution = config.consumer.resolution
+        model_states = config.consumer.model_states
+        consumers_distribution = config.consumer.consumers_distribution
+        product_distribution = config.consumer.product_distribution
+
+        # Product configuration
+        total_number_product = config.product.total_number_product
+        product_growth = config.product.product_growth
+        growth_threshold = config.product.growth_threshold
+        failure_rate_alpha = config.product.failure_rate_alpha
+        product_lifetime = config.product.product_lifetime
+        product_average_wght = config.product.product_average_wght
+        mass_to_function_reg_coeff = config.product.mass_to_function_reg_coeff
+        max_storage = config.product.max_storage
+
+        # End-of-life configuration
+        init_eol_rate = config.eol.init_eol_rate
+        init_purchase_choice = config.eol.init_purchase_choice
+        all_EoL_pathways = config.eol.all_eol_pathways
+        purchase_choices = config.eol.purchase_choices
+
+        # Theory of Planned Behavior configuration
+        theory_of_planned_behavior = config.tpb.theory_of_planned_behavior
+        w_sn_eol = config.tpb.w_sn_eol
+        w_pbc_eol = config.tpb.w_pbc_eol
+        w_a_eol = config.tpb.w_a_eol
+        w_sn_reuse = config.tpb.w_sn_reuse
+        w_pbc_reuse = config.tpb.w_pbc_reuse
+        w_a_reuse = config.tpb.w_a_reuse
+        att_distrib_param_eol = config.tpb.att_distrib_param_eol
+        att_distrib_param_reuse = config.tpb.att_distrib_param_reuse
+        extended_tpb = config.tpb.extended_tpb.model_dump(by_alias=True)
+
+        # Cost configuration
+        hoarding_cost = config.cost.hoarding_cost
+        landfill_cost = config.cost.landfill_cost
+        hazardous_waste_management_cost = config.cost.hazardous_waste_management_cost
+        original_recycling_cost = config.cost.original_recycling_cost
+        recycling_learning_shape_factor = config.cost.recycling_learning_shape_factor
+        repairability = config.cost.repairability
+        original_repairing_cost = config.cost.original_repairing_cost
+        repairing_learning_shape_factor = config.cost.repairing_learning_shape_factor
+        scndhand_mkt_pric_rate = config.cost.scndhand_mkt_pric_rate
+        fsthand_mkt_pric = config.cost.fsthand_mkt_pric
+        fsthand_mkt_pric_reg_param = config.cost.fsthand_mkt_pric_reg_param
+        refurbisher_margin = config.cost.refurbisher_margin
+        transportation_cost = config.cost.transportation_cost
+        hazardous_transportation_cost = config.cost.hazardous_transportation_cost
+        used_product_substitution_rate = config.cost.used_product_substitution_rate
+        imperfect_substitution = config.cost.imperfect_substitution
+        sa_landfill_costs = config.cost.sa_landfill_costs
+
+        # Material configuration
+        product_mass_fractions = config.material.product_mass_fractions
+        established_scd_mkt = config.material.established_scd_mkt
+        scd_mat_prices = config.material.scd_mat_prices
+        virgin_mat_prices = config.material.virgin_mat_prices
+        material_waste_ratio = config.material.material_waste_ratio
+        recovery_fractions = config.material.recovery_fractions
+
+        # Scenario configuration
+        recycling_states = config.scenario.recycling_states
+        epr_business_model = config.scenario.epr_business_model
+        recycling_process = config.scenario.recycling_process.model_dump()
+        dynamic_lifetime_model = config.scenario.dynamic_lifetime_model.model_dump(by_alias=True)
+        seeding = config.scenario.seeding.model_dump(by_alias=True)
+        seeding_recyc = config.scenario.seeding_recyc.model_dump(by_alias=True)
+        hazardous_waste_regulation_enabled = config.scenario.hazardous_waste_regulation_enabled
+        landfill_solar_waste_acceptance_ratio = config.scenario.landfill_solar_waste_acceptance_ratio
+
+        # TCLP configuration
+        tclp_params = config.tclp.model_dump()
+
+        # Data-source configuration
+        pv_ice = config.data_source.pv_ice
+        pca = config.data_source.pca
+        pca_scenario = config.data_source.pca_scenario
+        geopy = config.data_source.geopy
+        calculate_distances = config.data_source.calculate_distances
+        rtn = config.data_source.rtn
+        solar_cycle = config.data_source.solar_cycle
+
+        # Temporary legacy settings
+        landfill_data_params = config.legacy_data.landfill_data_params.model_dump()
+        file_name = config.legacy_data.file_name.model_dump(by_alias=True)
 
         super().__init__(seed=seed)
-        # np.random.seed(self.seed)
-        # random.seed(self.seed)
         self.seed = seed
         self.timestep = timestep
         self.rtn = rtn
@@ -530,9 +259,9 @@ class ABM_CE_PV(Model):
         reedsFile = os.path.join(SupportingMaterialFolder, 'December Core Scenarios ReEDS Outputs Solar Futures v3a.xlsx')
         # print ("Input file is stored in %s" % reedsFile)
 
-        rawdf = pd.read_excel(reedsFile,
-                        sheet_name="new installs PV")
-
+        # rawdf = pd.read_excel(reedsFile,
+        #                 sheet_name="new installs PV")
+        rawdf = data.reeds_raw.copy()
         rawdf.drop(columns=['Tech'], inplace=True)
         rawdf.set_index(['Scenario','Year','PCA', 'State'], inplace=True)
 
@@ -548,15 +277,17 @@ class ABM_CE_PV(Model):
         # this is needed to map sites to PCAs and get the utility-scale PV contribution factors
         # If using PCA-level consumer agents, need to load the pca_longlat file instead
         if self.consumer_agent_resolution == ConsumerAgentResolution.SITE:
-            self.uspvdb = pd.read_excel(os.path.join(
-                os.path.dirname(__file__), 'USPVDB', 'uspvdb_v3_0_20250430_with_pca.xlsx'))
+            # self.uspvdb = pd.read_excel(os.path.join(
+            #     os.path.dirname(__file__), 'USPVDB', 'uspvdb_v3_0_20250430_with_pca.xlsx'))
             self.uspvdb = self.uspvdb[self.uspvdb['PCA'] != PCA_MISSING_VALUE]
 
             if self.model_states is not None:
                 self.uspvdb = self.uspvdb[self.uspvdb['p_state'].isin(self.model_states)]
 
-            self.reeds_data = pd.read_excel(os.path.join(os.path.dirname(__file__),
-                                                    'ReEDS', 'StdScen24_annual_balancingAreas_Mid_Case_CO2e_95by2035.xlsx'))
+            # self.reeds_data = pd.read_excel(os.path.join(os.path.dirname(__file__),
+            #                                         'ReEDS', 'StdScen24_annual_balancingAreas_Mid_Case_CO2e_95by2035.xlsx'))
+            self.reeds_data = data.reeds_data.copy() if data.reeds_data is not None else None
+
             if self.model_states is not None:
                 self.reeds_data = self.reeds_data[self.reeds_data['state'].isin(self.model_states)]
             # Pre-calculate utility-scale PV contribution factor for each PCA
@@ -565,8 +296,9 @@ class ABM_CE_PV(Model):
                                     self.reeds_data['distpv_MW'])
 
         GISfile = os.path.join(SupportingMaterialFolder, 'gis_centroid_n.csv')
-        GIS = pd.read_csv(GISfile)
-        GIS = GIS.set_index('id')
+        # GIS = pd.read_csv(GISfile)
+        # GIS = GIS.set_index('id')
+        GIS = data.gis_centroids.copy()
         GIS.head()
         GIS.loc['p1'].long
 
@@ -726,79 +458,6 @@ class ABM_CE_PV(Model):
                 # Append data to pca_longlat using pd.concat
                 pca_longlat = pd.concat([pca_longlat, data_to_append],
                                         ignore_index=True)
-
-            # Calculate distances from the current PCA to all recyclers
-                # for index, row in df.iterrows():
-                #     if geopy:
-                #         recycler_name = row['Recycler Name']
-                #         state = row['State']
-                #         city = row['City']
-
-                #         try:
-                #             # Fetch latitude and longitude for the recycler
-                #             location = geolocator.geocode(f"{city}, {state}", timeout=10)
-                #             if location:
-                #                 recycler_latitude = location.latitude
-                #                 recycler_longitude = location.longitude
-                #             else:
-                #                 recycler_latitude = None
-                #                 recycler_longitude = None
-                #         except Exception as e:
-                #             print(f"Error geocoding for {recycler_name}: {str(e)}")
-                #             recycler_latitude = None
-                #             recycler_longitude = None
-                #     else:
-                #         recycler_name = row['Recycler Name']
-                #         recycler_latitude = row['Latitude']
-                #         recycler_longitude = row['Longitude']
-
-                #     # Calculate the distance from the PCA to the recycler
-                #     if recycler_latitude is not None and \
-                #             recycler_longitude is not None:
-                #         pca_latitude = GIS.loc[PCAs[jj]].lat
-                #         pca_longitude = GIS.loc[PCAs[jj]].long
-                #         distance = haversine(pca_latitude, pca_longitude, recycler_latitude, recycler_longitude)
-
-                #         # Append the distance to the DataFrame
-                #         data_to_append = pd.DataFrame({"PCA": PCAs[jj], "Recycler": recycler_name, "Distance (km)": distance}, ignore_index=True)
-                # distance_df = pd.concat([distance_df, data_to_append], ignore_index=True)
-
-            #     # # Calculate distances from the current PCA to all recyclers
-                # for index, row in df.iterrows():
-                #     if geopy:
-                #         recycler_name = row['Recycler Name']
-                #         state = row['State']
-                #         city = row['City']
-
-                #         try:
-                #             # Fetch latitude and longitude for the recycler
-                #             location = geolocator.geocode(f"{city}, {state}", timeout=10)
-                #             if location:
-                #                 recycler_latitude = location.latitude
-                #                 recycler_longitude = location.longitude
-                #             else:
-                #                 recycler_latitude = None
-                #                 recycler_longitude = None
-                #         except Exception as e:
-                #             print(f"Error geocoding for {recycler_name}: {str(e)}")
-                #             recycler_latitude = None
-                #             recycler_longitude = None
-                #     else:
-                #         recycler_name = row['Recycler Name']
-                #         recycler_latitude = row['Latitude']
-                #         recycler_longitude = row['Longitude']
-
-                #     # Calculate the distance from the PCA to the recycler
-                #     if recycler_latitude is not None and \
-                #             recycler_longitude is not None:
-                #         pca_latitude = GIS.loc[PCAs[jj]].lat
-                #         pca_longitude = GIS.loc[PCAs[jj]].long
-                #         distance = haversine(pca_latitude, pca_longitude, recycler_latitude, recycler_longitude)
-
-                #         # Append the distance to the DataFrame
-                #         distance_df = distance_df.append({"PCA": PCAs[jj], "Recycler": recycler_name, "Distance (km)": distance}, ignore_index=True)
-
-                # distance_df.to_csv("../../../TEMP/pca_recycler_distances.csv", index=False)
 
                 pca_longlat.to_csv("../../../TEMP/pca_longlat.csv",
                                    index=False)
