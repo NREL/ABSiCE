@@ -52,8 +52,8 @@ class Refurbishers(Agent):
             np.random.triangular(original_repairing_cost[0],
                                  original_repairing_cost[2],
                                  original_repairing_cost[1])
-        original_reused_volumes = [x / model.num_refurbishers * 1E6 for x
-                                   in model.original_num_prod]
+        # original_reused_volumes = [x / model.num_refurbishers * 1E6 for x  # UNUSED: computed but never referenced
+        #                            in model.original_num_prod]
         #  Original repairing volume is based on previous years EoL volume
         # (from 2000 to 2019)
         yearly_waste_file = pd.read_csv("all_pca_dataOut_95-by-35.Adv.csv")
@@ -87,7 +87,7 @@ class Refurbishers(Agent):
             self.model.fsthand_mkt_pric
         self.count_consumers = 0
         self.count_consumers_tot = 0
-        self.storage_decision = False
+        # self.storage_decision = False  # UNUSED: initialized but never read or modified anywhere
         self.storage_yr = 0
         self.storage_yr_recycle = 0
         self.max_storage_ref = np.random.triangular(

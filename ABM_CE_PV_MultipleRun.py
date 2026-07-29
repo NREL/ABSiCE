@@ -11,7 +11,7 @@ from ABM_CE_PV_Model import *
 import matplotlib.pyplot as plt
 import time
 import os
-from itertools import product
+from itertools import product  
 from utils import TIMESTEP
 from ABM_CE_PV_ConsumerAgents import Consumers
 
@@ -388,61 +388,17 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                 timestep=timestep,)
         elif j < 20:
             model = ABM_CE_PV(
-                seed=(j - 19), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data.csv",
-                            'PCA-landfill distances':
-                                "pca_landfills_distances.csv"},
-                init_eol_rate={"repair": 1E-6, "sell": 1E-6,
-                                "recycle": 1E-6, "landfill": 1,
-                                "hoard": 1E-6},
-                recycling_learning_shape_factor=-0.0,
-                # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
-                # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
-                original_recycling_cost=[1E-12, 3E-12, 2E-12],
-                transportation_cost=1,
-                w_sn_eol=0,
-                w_pbc_eol=1,
-                w_a_eol=0,
-                timestep=timestep,)
-        elif j < 21:
+                seed=(j - 10),
+                last_step=number_steps,
+                att_distrib_param_eol=[0.65, 0.1])  # this can be used for scenario analysis
+        elif j < 30:
             model = ABM_CE_PV(
-                seed=(j - 20), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data.csv",
-                            'PCA-landfill distances':
-                                "pca_landfills_distances.csv"},
-                init_eol_rate={"repair": 1E-6, "sell": 1E-6,
-                                "recycle": 1E-6, "landfill": 1,
-                                "hoard": 1E-6},
-                recycling_learning_shape_factor=-0.0,
-                # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
-                # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
-                original_recycling_cost=[1E-12, 3E-12, 2E-12],
-                transportation_cost=0.5,
-                w_sn_eol=0,
-                w_pbc_eol=1,
-                w_a_eol=0,
-                timestep=timestep,)
-        elif j < 22:
-            model = ABM_CE_PV(
-                seed=(j - 21), last_step=number_steps,
-                file_name={'Landfill data': "Landfills_data.csv",
-                            'PCA-landfill distances':
-                                "pca_landfills_distances.csv"},
-                init_eol_rate={"repair": 1E-6, "sell": 1E-6,
-                                "recycle": 1E-6, "landfill": 1,
-                                "hoard": 1E-6},
-                recycling_learning_shape_factor=-0.0,
-                # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
-                # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
-                original_recycling_cost=[1E-12, 3E-12, 2E-12],
-                transportation_cost=1E-12,
-                w_sn_eol=0,
-                w_pbc_eol=1,
-                w_a_eol=0,
-                timestep=timestep,)
+                seed=(j - 20),
+                last_step=number_steps,
+                att_distrib_param_eol=[0.5, 0.1])
         elif j < 33:
             model = ABM_CE_PV(
-                seed=(j - 22), last_step=number_steps,
+                seed=(j - 30), last_step=number_steps,
                 file_name={'Landfill data': "Landfills_data.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv"},
@@ -531,7 +487,7 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                 w_a_eol=0,
                 timestep=timestep)
         elif j < 240:
-            model = ABM_CE_PV(seed=(j - 210),
+            model = ABM_CE_PV(seed=(j - 160),
                               dynamic_lifetime_model={
                                   "Dynamic lifetime": True,
                                   "d_lifetime_intercept": 15.9,
@@ -575,6 +531,390 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                 "Copper": 0.97, "Insulated cable": 1., "Silicon": 0.97,
                 "Silver": 0.94},
                 timestep=timestep)
+        # unreachable code below:
+        # elif j < 4:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 3), last_step=number_steps,
+        #         sa_landfill_costs=(True, 0.0000),
+        #         file_name={'Landfill data': "Landfills_data_SA.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances_SA.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         original_recycling_cost=[1000-1E-6, 1000+1E-6, 1000],  # 0.0077 $/W → $/ton
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         # original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         # transportation_cost=1.25,
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 5:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 4), last_step=number_steps,
+        #         sa_landfill_costs=(True, 1000),  # 0.0077 $/W → $/ton
+        #         file_name={'Landfill data': "Landfills_data_SA.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances_SA.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         original_recycling_cost=[1000-1E-6, 1000+1E-6, 1000],  # 0.0077 $/W → $/ton
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         # original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         # transportation_cost=1.25,
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 6:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 5), last_step=number_steps,
+        #         sa_landfill_costs=(True, 1740),  # 0.0134 $/W → $/ton
+        #         file_name={'Landfill data': "Landfills_data_SA.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances_SA.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         original_recycling_cost=[1000-1E-6, 1000+1E-6, 1000],  # 0.0077 $/W → $/ton
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         # original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         # transportation_cost=1.25,
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 7:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 6), last_step=number_steps,
+        #         sa_landfill_costs=(True, 0.0000),  # 0.0 $/W (no change)
+        #         file_name={'Landfill data': "Landfills_data_SA.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances_SA.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         original_recycling_cost=[1E-12, 3E-12, 2E-12],  # near-zero, no conversion needed
+        #         # transportation_cost=1.25,
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 8:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 7), last_step=number_steps,
+        #         sa_landfill_costs=(True, 1000),  # 0.0077 $/W → $/ton
+        #         file_name={'Landfill data': "Landfills_data_SA.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances_SA.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         # transportation_cost=1.25,
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 9:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 8), last_step=number_steps,
+        #         sa_landfill_costs=(True, 1740),  # 0.0134 $/W -> $/ton,
+        #         file_name={'Landfill data': "Landfills_data_SA.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances_SA.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         # transportation_cost=1.25,
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 10:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 9), last_step=number_steps,
+        #         sa_landfill_costs=(True, 0.0000),
+        #         file_name={'Landfill data': "Landfills_data.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         original_recycling_cost=[1740-1E-6, 1740+1E-6, 1740],  # 0.0134 $/W -> $/ton,
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         # original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         # transportation_cost=1E-6)
+        #         # transportation_cost=0.25)
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 11:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 10), last_step=number_steps,
+        #         sa_landfill_costs=(True, 1000),  # 0.0077 $/W -> $/ton,
+        #         # sa_landfill_costs=(True, 0.0038),
+        #         file_name={'Landfill data': "Landfills_data.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         original_recycling_cost=[1740-1E-6, 1740+1E-6, 1740],  # 0.0134 $/W -> $/ton,
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         # original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         # transportation_cost=0.5,
+        #         # transportation_cost=0.75)
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 12:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 11), last_step=number_steps,
+        #         sa_landfill_costs=(True, 1740),  # 0.0134 $/W -> $/ton,
+        #         # sa_landfill_costs=(True, 0.0077),
+        #         file_name={'Landfill data': "Landfills_data.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         original_recycling_cost=[1740-1E-6, 1740+1E-6, 1740],  # 0.0134 $/W -> $/ton,
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         # original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         # transportation_cost=1,
+        #         # transportation_cost=1.25)
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 13:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 12), last_step=number_steps,
+        #         sa_landfill_costs=(True, 0.0000),
+        #         file_name={'Landfill data': "Landfills_data.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         original_recycling_cost=[1000-1E-6, 1000+1E-6, 1000],  # 0.0077 $/W -> $/ton,
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         # original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         # transportation_cost=1.25,
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 14:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 13), last_step=number_steps,
+        #         sa_landfill_costs=(True, 1000),  # 0.0077 $/W -> $/ton,
+        #         file_name={'Landfill data': "Landfills_data.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         original_recycling_cost=[1000-1E-6, 1000+1E-6, 1000],  # 0.0077 $/W -> $/ton,
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         # original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         # transportation_cost=1.25,
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 15:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 14), last_step=number_steps,
+        #         sa_landfill_costs=(True, 1740),  # 0.0134 $/W -> $/ton,
+        #         file_name={'Landfill data': "Landfills_data.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         original_recycling_cost=[1000-1E-6, 1000+1E-6, 1000],  # 0.0077 $/W -> $/ton,
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         # original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         # transportation_cost=1.25,
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 16:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 15), last_step=number_steps,
+        #         sa_landfill_costs=(True, 0.0000),
+        #         file_name={'Landfill data': "Landfills_data.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         # transportation_cost=1.25,
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 17:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 16), last_step=number_steps,
+        #         sa_landfill_costs=(True, 1000),  # 0.0077 $/W -> $/ton,
+        #         file_name={'Landfill data': "Landfills_data.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         # transportation_cost=1.25,
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 18:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 17), last_step=number_steps,
+        #         sa_landfill_costs=(True, 1740),  # 0.0134 $/W -> $/ton,
+        #         file_name={'Landfill data': "Landfills_data.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         # transportation_cost=1.25,
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 19:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 18), last_step=number_steps,
+        #         file_name={'Landfill data': "Landfills_data.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         transportation_cost=1.5,
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 20:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 19), last_step=number_steps,
+        #         file_name={'Landfill data': "Landfills_data.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         transportation_cost=1,
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 21:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 20), last_step=number_steps,
+        #         file_name={'Landfill data': "Landfills_data.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         transportation_cost=0.5,
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # elif j < 22:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 21), last_step=number_steps,
+        #         file_name={'Landfill data': "Landfills_data.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances.csv"},
+        #         init_eol_rate={"repair": 1E-6, "sell": 1E-6,
+        #                         "recycle": 1E-6, "landfill": 1,
+        #                         "hoard": 1E-6},
+        #         recycling_learning_shape_factor=-0.0,
+        #         # original_recycling_cost=[0.128-1E-6, 0.128+1E-6, 0.128],
+        #         # original_recycling_cost=[0.064-1E-6, 0.064+1E-6, 0.064],
+        #         original_recycling_cost=[1E-12, 3E-12, 2E-12],
+        #         transportation_cost=1E-12,
+        #         w_sn_eol=0,
+        #         w_pbc_eol=1,
+        #         w_a_eol=0,
+        #         timestep=timestep,)
+        # DEPRECATED - old unreachable code (moved above to proper sequence):
+        # elif j < 33:
+        #     model = ABM_CE_PV(
+        #         seed=(j - 22), last_step=number_steps,
+        #         file_name={'Landfill data': "Landfills_data.csv",
+        #                     'PCA-landfill distances':
+        #                         "pca_landfills_distances.csv"},
+        #         recycling_learning_shape_factor=-0.0,
+        #         original_recycling_cost=[8312-1E-6, 8312+1E-6, 8312],
+        #         transportation_cost=1.5,
+        #         w_sn_eol=0, w_pbc_eol=1, w_a_eol=0,
+        #         timestep=timestep,)
         for i in range(number_steps):
             model.step()
         # Get results in a pandas DataFrame
@@ -637,17 +977,17 @@ def run_batch(number_run, number_steps, **kwargs):
         elif j < 240:
             model = ABM_CE_PV(seed=(j - 150),
                               recycling_learning_shape_factor=-0.6)
-        elif j < 210:
-            model = ABM_CE_PV(seed=(j - 180),
-                              recycling_learning_shape_factor=-1E-6)
-        elif j < 240:
-            model = ABM_CE_PV(seed=(j - 210),
-                              dynamic_lifetime_model={
-                                  "Dynamic lifetime": True,
-                                  "d_lifetime_intercept": 15.9,
-                                  "d_lifetime_reg_coeff": 0.87,
-                                  "Seed": False, "Year": 5,
-                                  "avg_lifetime": 50})
+        # elif j < 210:  # DEAD CODE: unreachable - comes after elif j < 240 (line 638)
+        #     model = ABM_CE_PV(seed=(j - 180),
+        #                       recycling_learning_shape_factor=-1E-6)
+        # elif j < 240:  # DEAD CODE: duplicate unreachable - identical condition to line 638
+        #     model = ABM_CE_PV(seed=(j - 210),
+        #                       dynamic_lifetime_model={
+        #                           "Dynamic lifetime": True,
+        #                           "d_lifetime_intercept": 15.9,
+        #                           "d_lifetime_reg_coeff": 0.87,
+        #                           "Seed": False, "Year": 5,
+        #                           "avg_lifetime": 50})
         elif j < 270:
             model = ABM_CE_PV(seed=(j - 240),
                               all_EoL_pathways={"repair": True, "sell": True,

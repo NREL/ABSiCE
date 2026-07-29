@@ -8,7 +8,6 @@ Agent - Regulator
 """
 
 from mesa import Agent, Model
-import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 from utils import GeneratorSize
@@ -112,8 +111,8 @@ class Regulators(Agent):
                 # If the recycler is hazardous waste certified, transfer-based exclusion applies
                 return True
         return False  # No transport-based exclusion applies by default
-    
-    def _is_chemical_based_exclusion(self):
+
+    def _is_chemical_based_exclusion(self): 
         """
         Check if the product is exempt from regulations based on chemical-based exclusions.
         """

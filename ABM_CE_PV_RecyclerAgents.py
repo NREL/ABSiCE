@@ -73,18 +73,6 @@ class Recyclers(Agent):
         self.verified = False
         self.set_recycler_type()
 
-    # def update_transport_recycling_costs(self):
-    #     """
-    #     Update transportation costs according to the (evolving) mass of waste.
-    #     Here, an average distance between all origins and targets is assumed.
-    #     """
-    #     self.recycling_cost = \
-    #         self.recycling_cost + \
-    #         (self.model.dynamic_product_average_wght -
-    #          self.model.product_average_wght) * \
-    #         self.model.transportation_cost / 1E3 * \
-    #         self.model.mn_mx_av_distance_to_recycler[2]
-
     def set_recycler_type(self):
         # Check if the recycler is a hazardous waste recycler
         if self.model.hazardous_waste_regulation_enabled:
@@ -98,7 +86,7 @@ class Recyclers(Agent):
                 self.universal_waste = True
                 self.hazardous = False  # If the recycler is a universal waste recycler, it cannot be a hazardous waste recycler
         
-    def get_recycling_cost(self, facility_id: int = None) -> float:
+    def get_recycling_cost(self, facility_id: int = None) -> float:  # facility_id UNUSED: parameter defined but never used in function body
         """
         Get the recycling cost of the recycler.
         Either from the recycling costs dataframe or the original recycling cost.
@@ -226,6 +214,3 @@ class Recyclers(Agent):
             self.original_recycling_volume, self.recycling_volume,
             self.get_recycling_cost(),
             self.recycling_learning_shape_factor)
-        # ! we do not use this function anymore, distance now use the
-        # ! pca-recycler data frame
-        # self.update_transport_recycling_costs()

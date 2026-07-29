@@ -161,7 +161,7 @@ class Producers(Agent):
         # ! use the material value from PV_ICE corresponding with the material
         # ! type of the producer (self.material_produced). Replace recl_vol
         # ! with this new value.
-
+        
         # we probably gonna need a dictionary created in the model file,
         # for instance:
         # yearly_material_waste = {'silicon': x, 'glass':y, ...}

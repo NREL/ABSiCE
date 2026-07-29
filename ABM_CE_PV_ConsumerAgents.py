@@ -91,7 +91,6 @@ class Consumers(Agent):
         self.unique_id = unique_id
         self.breed = "residential"
         self.consumers_distribution = consumers_distribution
-        self.trust_levels = []
         self.number_product_EoL = 0
         self.number_used_product_EoL = 0
         self.tot_prod_EoL = 0
@@ -121,8 +120,6 @@ class Consumers(Agent):
         self.max_storage_universal_waste_days = 365  # 1 year for universal waste
         self.max_storage_hazardous_kg = None  # Will be set later based on generator size
         self.number_product_new = 0
-        self.number_product_used = 0
-        self.number_product_certified = 0
         self.EoL_pathway = self.initial_choice(self.model.init_eol_rate)
         self.used_EoL_pathway = self.EoL_pathway
         self.purchase_choice = self.initial_choice(
@@ -778,10 +775,8 @@ class Consumers(Agent):
                         self.model.transportation_cost
         if self.purchase_choice == "new":
             self.number_product_new += self.number_product[-1]
-        elif self.EoL_pathway == "used":
+        elif self.purchase_choice == "used":
             self.number_product_used += self.number_product[-1]
-        else:
-            self.number_product_certified += self.number_product[-1]
 
     def update_product_eol(self, product_type):
         """
@@ -929,10 +924,6 @@ class Consumers(Agent):
                                                          used_eol_vol)
             if self.hazardous:
                 self.number_product_hoarded_hazardous += managed_waste
-        if self.unique_id == 0:
-            test = 0
-            for value in self.model.pca_outputs[self.pca].values():
-                test += value
 
     def update_yearly_recycled_waste(self, installer):
         """
