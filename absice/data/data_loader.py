@@ -3,6 +3,7 @@
 
 from pathlib import Path
 import pandas as pd
+from enum import Enum
 import yaml
 from pydantic import BaseModel, ConfigDict
 from absice.schemas.data_paths_config import DataPathsConfig
@@ -38,12 +39,22 @@ class DataLoader:
     def __init__(self, paths: DataPathsConfig) -> None:
         self._paths = paths
 
-    def load_all(self, resolution: str, model_states: list[str] | None = None) -> LoadedData:
+    def load_all(
+        self,
+        resolution: str | Enum,
+        model_states: list[str] | None = None,
+    ) -> LoadedData:
         """Load every dataset and return one LoadedData object."""
-        resolution = resolution.lower()
+        if isinstance(resolution, Enum):
+            resolution = resolution.value
+
+        resolution = str(resolution).strip().lower()
 
         if resolution not in {"site", "pca"}:
-            raise ValueError("resolution must be either 'site' or 'pca'")
+            raise ValueError(
+                "resolution must be either 'site' or 'pca'; "
+                f"received {resolution!r}"
+            )
 
         return LoadedData(
             reeds_raw=self._load_reeds(),

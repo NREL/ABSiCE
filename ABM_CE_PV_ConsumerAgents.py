@@ -149,7 +149,6 @@ class Consumers(Agent):
             self.landfill_cost = self.model.sa_landfill_costs[1]  # $/ton
         else:
             self.landfill_cost = self.landfill_cost  # already $/ton from get_initial_landfill_cost
-        # self.init_landfill_cost = self.landfill_cost
         self.set_contribution_factors()
 
         _pca_merged_dir = os.path.join(
@@ -160,7 +159,12 @@ class Consumers(Agent):
         # Effective_Capacity_[W] computed below; waste EOL values come from
         # self.pv_ice_waste_df (consolidated metric-ton file) instead.
         self.data_out_pca = pd.read_csv(
-            "dataOut_95-by-35.Adv_" + self.pca + "_.csv")
+            os.path.join(
+                _pca_merged_dir,
+                f"dataOut_95-by-35.Adv_{self.pca}_.csv",
+            )
+        )
+
         self.data_out_pca['Yearly_Sum_Power_atEOL'] /= self.agents_per_pca
         self.data_out_pca['Yearly_Sum_Area_atEOL'] /= self.agents_per_pca
 
@@ -231,23 +235,9 @@ class Consumers(Agent):
         # todo: see if this can be stored in the model.
         self.initialize_regulator_id()
             
-        # self.landfill_cost = random.choice(landfill_cost)
-        # self.landfill_cost = np.random.triangular(
-        #   landfill_cost[0], landfill_cost[2], landfill_cost[1])
-
-        # HERE
         self.hoarding_cost = np.random.triangular(
             hoarding_cost[0], hoarding_cost[2], hoarding_cost[1]) * \
             self.max_storage
-
-        # self.hoarding_cost = \
-        #    float(truncnorm((0 - hoarding_cost[0]) /
-        #                    hoarding_cost[1],
-        #                    (0.02 - hoarding_cost[0]) /
-        #                    hoarding_cost[1],
-        #                    hoarding_cost[0],
-        #                    hoarding_cost[1]).rvs(1)) * self.max_storage
-        # HERE
 
         self.attitude_level = \
             self.attitude_level_distribution((0 - att_distrib_param_eol[0]) /
@@ -320,11 +310,6 @@ class Consumers(Agent):
         Update transportation costs according to the (evolving) mass of waste.
         # ! remove weight so NOT according to the (evolving) mass of waste.
         """
-        #if self.pca == 'p31':
-            #print(self.unique_id, self.pca_recyc_transp_dist, 
-            #      self.model.transportation_cost, 
-            #      self.model.dynamic_product_average_wght)
-        # $/ton: dist [km] * transportation_cost [$/ton/km]
         if self.universal_waste:
             self.recyc_transp_cost = self.universal_waste_recyc_transp_dist * \
                 self.model.get_transportation_cost()
@@ -340,12 +325,6 @@ class Consumers(Agent):
         self.hazardous_landfill_transp_cost = \
             self.hazardous_landfill_transp_dist * \
             self.model.get_transportation_cost(True)
-        # self.landfill_cost = \
-        #    self.init_landfill_cost + \
-        #    (self.model.dynamic_product_average_wght -
-        #     self.model.product_average_wght) * \
-        #    self.model.transportation_cost / 1E3 * \
-        #    self.model.mean_distance_within_state
 
     def attitude_level_distribution(self, a, b, loc, scale):
         """
@@ -531,9 +510,6 @@ class Consumers(Agent):
         # ! Yearly_Sum_Power_atEOL is the total waste generated in a year
         # ! expressed in W
 
-        # ! Old code
-        # self.number_product_EoL = sum(self.waste)
-        # self.number_used_product_EoL = sum(self.used_waste)
         if type(self.used_products[-1]) != float and \
                 type(self.used_products[-1]) != int:
             self.used_products[-1] = 0
@@ -649,10 +625,6 @@ class Consumers(Agent):
                         or list(self.model.all_EoL_pathways.keys())[i] == \
                         "recycle":
                     att_levels[i] = att_level
-                    # HERE modification for encouraging recycling
-                    # if list(self.model.all_EoL_pathways.keys())[i] ==
-                    # "recycle":
-                    # att_levels[i] = att_level * 1.0
                 else:
                     att_levels[i] = 1 - att_level
             elif decision == "purchase_choice":

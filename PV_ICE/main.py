@@ -53,8 +53,13 @@ def _readPVICEFile(file):
     meta = dict(zip(head, secondline.rstrip('\n').split(",")))
 
     data = pd.read_csv(csvdata, names=head)
-    data.loc[:, data.columns != 'year'] = data.loc[:, data.columns !=
-                                                   'year'].astype(float)
+    numeric_columns = data.columns[data.columns != "year"]
+
+    data[numeric_columns] = (
+        data[numeric_columns]
+        .apply(pd.to_numeric, errors="coerce")
+        .astype(float)
+    )
 
     return data, meta
 
