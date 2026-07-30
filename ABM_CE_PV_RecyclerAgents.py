@@ -86,7 +86,7 @@ class Recyclers(Agent):
                 self.universal_waste = True
                 self.hazardous = False  # If the recycler is a universal waste recycler, it cannot be a hazardous waste recycler
         
-    def get_recycling_cost(self, facility_id: int = None) -> float:
+    def get_recycling_cost(self, facility_id: int = None) -> float:  # facility_id UNUSED: parameter defined but never used in function body
         """
         Get the recycling cost of the recycler.
         Either from the recycling costs dataframe or the original recycling cost.
