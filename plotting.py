@@ -7,6 +7,7 @@ import ast
 import os
 import argparse
 import re
+from scipy import stats
 import geopandas as gpd
 import pyproj
 pyproj.network.set_network_enabled(False)
@@ -446,6 +447,7 @@ def plot_recycling_rate_comparison(
         use_sum_method: bool = True,
         y_axis_min: float | None = 0.0,
         y_axis_max: float | None = 0.4,
+        y_axis_tick_interval: float | None = None,
 ) -> None:
     """
     Plot only the recycling-rate comparison by year-quarter.
@@ -457,6 +459,8 @@ def plot_recycling_rate_comparison(
     use_sum_method (bool): If True, use summed-mass rates by year/quarter.
     y_axis_min (float | None): Optional lower y-axis limit.
     y_axis_max (float | None): Optional upper y-axis limit.
+    y_axis_tick_interval (float | None): Optional y-axis tick spacing (e.g. 0.1
+        for 10 %% intervals). If None, matplotlib chooses ticks automatically.
     Returns:
     None
     """
@@ -498,6 +502,14 @@ def plot_recycling_rate_comparison(
             bottom=y_axis_min if y_axis_min is not None else None,
             top=y_axis_max if y_axis_max is not None else None,
         )
+
+    if y_axis_tick_interval is not None:
+        lo, hi = ax.get_ylim()
+        ax.set_yticks(np.arange(
+            np.floor(lo / y_axis_tick_interval) * y_axis_tick_interval,
+            hi + y_axis_tick_interval,
+            y_axis_tick_interval,
+        ))
 
     ax.set_title('Recycling Rate Comparison', fontsize=12, fontweight='bold')
     ax.set_xlabel('Year-Quarter', fontsize=10)
@@ -987,6 +999,43 @@ def plot_recycling_rate_sensitivity(
     print(f"Plot saved to {plot_path}")
 
 
+def _compute_replicate_rates(
+        scenario_dir: str,
+        waste_columns: list[str],
+        year_range: tuple[int, int] | None = None,
+) -> list[float]:
+    """
+    Compute the overall recycling rate for each stochastic replicate run.
+
+    Scans scenario_dir for Results_agents_consumers_run_N.csv files,
+    reads only the waste columns plus Year, applies an optional year filter,
+    and returns one recycling rate (Waste Recycle / total waste) per replicate.
+
+    Parameters:
+    scenario_dir (str): Path to the scenario folder containing replicate CSVs.
+    waste_columns (list[str]): The five waste mass column names.
+    year_range (tuple[int, int] | None): Optional inclusive (start, end) year filter.
+    Returns:
+    list[float]: Per-replicate recycling rates (n <= 100).
+    """
+    _REPLICATE_RE = re.compile(r"Results_agents_consumers_run_\d+\.csv$")
+    rates: list[float] = []
+    for fname in os.listdir(scenario_dir):
+        if not _REPLICATE_RE.match(fname):
+            continue
+        fpath: str = os.path.join(scenario_dir, fname)
+        try:
+            df: pd.DataFrame = pd.read_csv(fpath, usecols=waste_columns + ["Year"])
+            if year_range is not None:
+                df = df[(df["Year"] >= year_range[0]) & (df["Year"] <= year_range[1])]
+            total_waste: float = float(df[waste_columns].sum().sum())
+            if total_waste > 0:
+                rates.append(float(df["Waste Recycle (Kg)"].sum()) / total_waste)
+        except Exception as exc:
+            print(f"  Warning: could not read {fname}: {exc}")
+    return rates
+
+
 def plot_recycling_rate_sensitivity_heatmap(
         iteration_dir: str = "results/RTN_Iteration_3",
         output_dir: str = "",
@@ -994,6 +1043,9 @@ def plot_recycling_rate_sensitivity_heatmap(
     baseline_cost_per_kg: float = 0.4,
         kg_per_w: float = 0.0077,
         w_per_module: float = 270.0,
+        show_differential: bool = False,
+        significance_level: float = 0.05,
+    show_significance_tag: bool = True,
 ) -> None:
     """
     Plot a heatmap of simulated recycling rate as a function of recycling cost
@@ -1015,6 +1067,11 @@ def plot_recycling_rate_sensitivity_heatmap(
     baseline_cost_per_kg (float): Baseline recycling cost in $/kg (default 0.4).
     kg_per_w (float): Average module mass in kg/W (default 0.0077).
     w_per_module (float): Average module wattage in W (default 270).
+    show_differential (bool): If True, annotate True Landfills cells with
+        differential vs. All Landfills.
+    significance_level (float): p-value threshold used for significance stars.
+    show_significance_tag (bool): If True, append significance stars to the
+        differential when p < significance_level; if False, omit stars.
     Returns:
     None
     """
@@ -1080,12 +1137,17 @@ def plot_recycling_rate_sensitivity_heatmap(
                 recycling_rate: float = float(rates_df.iloc[0]["Waste Recycle Rate"])
                 cost_per_module: int = round(ratio * baseline_cost_per_kg * kg_per_w * w_per_module)
 
-                records.append({
+                record: dict = {
                     "Landfill Set": label,
                     "Initial Rate (%)": initial_rate_pct,
                     "Cost per Module ($)": cost_per_module,
                     "Recycling Rate": recycling_rate,
-                })
+                }
+                if show_differential:
+                    record["Replicate Rates"] = _compute_replicate_rates(
+                        scenario_entry.path, waste_columns, year_range
+                    )
+                records.append(record)
                 print(
                     f"  {label} | init={initial_rate_pct}% "
                     f"| cost/module=${cost_per_module} "
@@ -1098,10 +1160,22 @@ def plot_recycling_rate_sensitivity_heatmap(
 
     df_all: pd.DataFrame = pd.DataFrame(records)
 
-    # Save raw data
+    # Save raw data (drop list column if present — not CSV-serialisable)
     csv_path: str = os.path.join(output_dir, "recycling_rate_sensitivity_heatmap.csv")
-    df_all.to_csv(csv_path, index=False)
+    df_all.drop(columns=["Replicate Rates"], errors="ignore").to_csv(csv_path, index=False)
     print(f"CSV saved to {csv_path}")
+
+    # Build per-cell lookup dicts for differential / t-test (only when needed)
+    replicate_rates_map: dict = {}
+    overall_rate_map: dict = {}
+    if show_differential:
+        for _, row in df_all.iterrows():
+            key = (row["Landfill Set"], row["Initial Rate (%)"], row["Cost per Module ($)"])
+            replicate_rates_map[key] = row["Replicate Rates"]
+            overall_rate_map[key] = row["Recycling Rate"]
+
+    # Star symbol is determined by the chosen threshold
+    _star_symbol: str = {0.001: "***", 0.025: "**"}.get(significance_level, "*")
 
     fig, axes = plt.subplots(1, 2, figsize=(18, 7))
 
@@ -1140,13 +1214,48 @@ def plot_recycling_rate_sensitivity_heatmap(
             for col_idx in range(pivot.shape[1]):
                 val: float = pivot.values[row_idx, col_idx]
                 if not np.isnan(val):
-                    ax.text(
-                        col_idx, row_idx,
-                        f"{val:.1%}",
-                        ha="center", va="center",
-                        fontsize=9,
-                        color="black" if 0.2 < val < 0.8 else "white",
-                    )
+                    cell_color: str = "black" if 0.2 < val < 0.8 else "white"
+                    if show_differential and label == "True Landfills":
+                        init_rate_val = pivot.index[row_idx]
+                        cost_val = pivot.columns[col_idx]
+                        all_rate: float = overall_rate_map.get(
+                            ("All Landfills", init_rate_val, cost_val), float("nan")
+                        )
+                        diff: float = val - all_rate
+                        stars: str = ""
+                        true_reps: list = replicate_rates_map.get(
+                            ("True Landfills", init_rate_val, cost_val), []
+                        )
+                        all_reps: list = replicate_rates_map.get(
+                            ("All Landfills", init_rate_val, cost_val), []
+                        )
+                        if show_significance_tag and len(true_reps) >= 2 and len(all_reps) >= 2:
+                            _, p_val = stats.ttest_ind(
+                                true_reps, all_reps, equal_var=False
+                            )
+                            if p_val < significance_level:
+                                stars = _star_symbol
+                        cell_text: str = (
+                            f"{val:.1%}\n({diff:+.1%}{stars})"
+                            if not np.isnan(diff)
+                            else f"{val:.1%}"
+                        )
+                        ax.text(
+                            col_idx, row_idx,
+                            cell_text,
+                            ha="center", va="center",
+                            fontsize=7,
+                            linespacing=1.2,
+                            color=cell_color,
+                        )
+                    else:
+                        ax.text(
+                            col_idx, row_idx,
+                            f"{val:.1%}",
+                            ha="center", va="center",
+                            fontsize=9,
+                            color=cell_color,
+                        )
 
     plt.suptitle(
         "Recycling Rate Sensitivity: Cost vs. Initial Recycling Rate",
@@ -1248,6 +1357,41 @@ if __name__ == "__main__":
         help="Optional upper y-axis limit for recycling-rate-only comparison plots, for example 0.4 or 0.5."
     )
 
+    parser.add_argument(
+        "--y_axis_tick_interval",
+        type=float,
+        default=None,
+        help="Optional y-axis tick interval for recycling-rate-only comparison plots (e.g. 0.1 for 10%% intervals)."
+    )
+
+    parser.add_argument(
+        "--show_differential",
+        action="store_true",
+        help=(
+            "Heatmap only: annotate True Landfills cells with the differential vs. "
+            "All Landfills."
+        ),
+    )
+
+    parser.add_argument(
+        "--significance_level",
+        type=float,
+        default=0.05,
+        help=(
+            "Heatmap only: p-value threshold for the significance star shown when "
+            "--show_differential is active. Common choices: 0.05, 0.025, 0.001 (default: 0.05)."
+        ),
+    )
+
+    parser.add_argument(
+        "--hide_significance_tag",
+        action="store_true",
+        help=(
+            "Heatmap only: when --show_differential is active, omit significance "
+            "stars and show only the differential in parentheses."
+        ),
+    )
+
     args = parser.parse_args()
 
     if args.run_option == "aggregate_consumer_results":
@@ -1271,6 +1415,7 @@ if __name__ == "__main__":
             use_sum_method=not args.use_mean_method,
             y_axis_min=args.y_axis_min,
             y_axis_max=args.y_axis_max,
+            y_axis_tick_interval=args.y_axis_tick_interval,
         )
     elif args.run_option == "plot_statewise_waste_management_rates":
         plot_statewise_waste_management_rates(results_dir=args.results_dir)
@@ -1287,6 +1432,9 @@ if __name__ == "__main__":
         plot_recycling_rate_sensitivity_heatmap(
             iteration_dir=args.iteration_dir,
             baseline_cost_per_kg=args.baseline_cost_per_kg,
+            show_differential=args.show_differential,
+            significance_level=args.significance_level,
+            show_significance_tag=not args.hide_significance_tag,
         )
     else:
         # Plot the waste data
