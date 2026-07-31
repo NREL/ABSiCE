@@ -1,6 +1,6 @@
 run:
   seed: null
-  last_step: 31
+  last_step: 1
   timestep: annual
 calibration:
   calibration_n_sensitivity: 1.0
@@ -9,7 +9,7 @@ calibration:
   calibration_n_sensitivity_4: 1.0
   calibration_n_sensitivity_5: 1.0
 network:
-  num_consumers: 1000
+  num_consumers: 20
   consumers_node_degree: 10
   consumers_network_type: small-world
   rewiring_prob: 0.1

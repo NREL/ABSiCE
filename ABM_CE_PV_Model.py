@@ -782,27 +782,110 @@ class ABM_CE_PV(Model):
             self.agent_pca_map = self.create_agent_pca_map(self.num_consumers)
         elif self.consumer_agent_resolution is ConsumerAgentResolution.SITE:
             self.agent_site_map = self.create_agent_site_map()
-        recycler_data_df = self.recycling_costs_df if self.rtn else self.recycler_distance_df
-        # Count total recyclers (regular + universal waste)
-        num_regular_recyclers = len(recycler_data_df['Recycler Name'].unique())
-        num_universal_waste_recyclers = len(self.universal_waste_recycler_distance_df[
-            'Recycler Name'].unique())
-        self.num_recyclers = num_regular_recyclers + num_universal_waste_recyclers
-        # Combine recycler names from both sources
-        regular_recycler_names = recycler_data_df['Recycler Name'].unique().tolist()
-        universal_waste_recycler_names = self.universal_waste_recycler_distance_df[
-            'Recycler Name'].to_list()
-        self.recycler_names = regular_recycler_names + universal_waste_recycler_names
-        # Map each recycler name to its agent node ID. Recyclers.__init__ calls
-        # self.model.recycler_names.pop(), so the first recycler node
-        # (num_consumers + 0) gets the LAST name in recycler_names. Reversing
-        # the list before enumeration produces the correct mapping.
+        recycler_data_df = (
+            self.recycling_costs_df
+            if self.rtn
+            else self.recycler_distance_df
+        )
+
+        regular_recycler_names = (
+            recycler_data_df["Recycler Name"]
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
+        )
+
+        universal_waste_recycler_names = (
+            self.universal_waste_recycler_distance_df[
+                "Recycler Name"
+            ]
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
+        )
+
+        # Remove names that appear in both datasets while preserving order.
+        self.recycler_names = list(
+            dict.fromkeys(
+                regular_recycler_names
+                + universal_waste_recycler_names
+            )
+        )
+
+        # The agent count must exactly match the number of names.
+        self.num_recyclers = len(self.recycler_names)
+
+        # Keep a separate mutable list for Recyclers.__init__.
+        self.available_recycler_names = (
+            self.recycler_names.copy()
+        )
+
+        # Recyclers.__init__ uses pop(), so names are assigned from the end.
+        # self.recycler_name_to_id: dict[str, int] = {
+        #     name: self.num_consumers + index
+        #     for index, name in enumerate(
+        #         reversed(self.recycler_names)
+        #     )
+        # }
         self.recycler_name_to_id: dict[str, int] = {
-            name: self.num_consumers + i
-            for i, name in enumerate(reversed(self.recycler_names))
+            name: self.num_consumers + index
+            for index, name in enumerate(
+                reversed(self.recycler_names)
+            )
         }
+
+        first_recycler_id = self.num_consumers
+        last_recycler_id = (
+            self.num_consumers
+            + self.num_recyclers
+            - 1
+        )
+
+        invalid_recycler_ids = {
+            name: recycler_id
+            for name, recycler_id
+            in self.recycler_name_to_id.items()
+            if not (
+                first_recycler_id
+                <= recycler_id
+                <= last_recycler_id
+            )
+        }
+
+        if invalid_recycler_ids:
+            raise ValueError(
+                "Recycler names were assigned IDs outside "
+                f"the recycler range: {invalid_recycler_ids}"
+            )
+
         self.num_producers = num_producers
-        self.num_prod_n_recyc = self.num_recyclers + num_producers
+        self.num_prod_n_recyc = (
+            self.num_recyclers
+            + self.num_producers
+        )
+        # recycler_data_df = self.recycling_costs_df if self.rtn else self.recycler_distance_df
+        # # Count total recyclers (regular + universal waste)
+        # num_regular_recyclers = len(recycler_data_df['Recycler Name'].unique())
+        # num_universal_waste_recyclers = len(self.universal_waste_recycler_distance_df[
+        #     'Recycler Name'].unique())
+        # self.num_recyclers = num_regular_recyclers + num_universal_waste_recyclers
+        # # Combine recycler names from both sources
+        # regular_recycler_names = recycler_data_df['Recycler Name'].unique().tolist()
+        # universal_waste_recycler_names = self.universal_waste_recycler_distance_df[
+        #     'Recycler Name'].to_list()
+        # self.recycler_names = regular_recycler_names + universal_waste_recycler_names
+        # # Map each recycler name to its agent node ID. Recyclers.__init__ calls
+        # # self.model.recycler_names.pop(), so the first recycler node
+        # # (num_consumers + 0) gets the LAST name in recycler_names. Reversing
+        # # the list before enumeration produces the correct mapping.
+        # self.recycler_name_to_id: dict[str, int] = {
+        #     name: self.num_consumers + i
+        #     for i, name in enumerate(reversed(self.recycler_names))
+        # }
+        # self.num_producers = num_producers
+        # self.num_prod_n_recyc = self.num_recyclers + num_producers
         self.prod_n_recyc_node_degree = prod_n_recyc_node_degree
         self.prod_n_recyc_network_type = prod_n_recyc_network_type
         self.num_refurbishers = num_refurbishers
@@ -909,6 +992,37 @@ class ABM_CE_PV(Model):
             self.pvice_waste_eol_df, self.timestep, filtered_columns=['Yearly_Waste_EOL_Ton'])
         self.avg_weight_factor_stored_pv = 0
 
+        if "date" not in self.pvice_waste_eol_df.columns:
+            if self.timestep == TIMESTEP.ANNUAL:
+                self.pvice_waste_eol_df["date"] = pd.to_datetime(
+                    self.pvice_waste_eol_df["year"].astype(int).astype(str),
+                    format="%Y",
+                )
+
+            elif self.timestep == TIMESTEP.QUARTERLY:
+                self.pvice_waste_eol_df["date"] = pd.to_datetime(
+                    {
+                        "year": self.pvice_waste_eol_df["year"].astype(int),
+                        "month": (
+                            self.pvice_waste_eol_df.groupby("year").cumcount() * 3
+                            + 1
+                        ),
+                        "day": 1,
+                    }
+                )
+
+            elif self.timestep == TIMESTEP.MONTHLY:
+                self.pvice_waste_eol_df["date"] = pd.to_datetime(
+                    {
+                        "year": self.pvice_waste_eol_df["year"].astype(int),
+                        "month": (
+                            self.pvice_waste_eol_df.groupby("year").cumcount()
+                            + 1
+                        ),
+                        "day": 1,
+                    }
+                )
+                
         self.iteration = 0
         self.running = True
         self.color_map = []
