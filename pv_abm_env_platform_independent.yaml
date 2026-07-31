@@ -3,6 +3,7 @@ channels:
   - defaults
   - conda-forge
 dependencies:
+  - click=8.1.8
   - mesa=3.2.0
   - salib=1.5.1
   - networkx=3.4.2
@@ -10,3 +11,4 @@ dependencies:
   - geopy=2.4.1
   - openpyxl=3.1.5
   - pydantic>=2.0
+  - pytest>=8.0
