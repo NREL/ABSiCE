@@ -62,7 +62,6 @@ behaviors driven by social influence, peer pressure, policy, infrastructure avai
 **/ABSiCE/**
 - **ABM_CE_PV_Model.py**
 
-
 - **ABM_CE_PV_BatchRun.py**
 
 - **ABM_CE_PV_MultipleRun.py**
@@ -151,6 +150,16 @@ python ABM_CE_PV_MultipleRun.py
 When you're done
 ```bash
 conda deactivate
+```
+
+## Running the simulation
+
+See [docs/quickstart.md](docs/quickstart.md) for full setup instructions.
+
+**Baseline run (one command)**:
+```bash
+conda activate pv_abm
+python run.py run
 ```
 
 ## License

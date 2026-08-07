@@ -1,4 +1,4 @@
-# absice/runner.py
+"""Run single and parallel ABSiCE simulations."""
 
 import os
 import shutil
@@ -48,6 +48,24 @@ def run_single(
     Path
         Path to the CSV file created by the simulation.
     """
+    project_root = project_root.resolve()
+
+    config_path = _resolve_runtime_path(
+        path=config_path,
+        project_root=project_root,
+    )
+
+    if paths_yaml is not None:
+        paths_yaml = _resolve_runtime_path(
+            path=paths_yaml,
+            project_root=project_root,
+        )
+
+    output_dir = _resolve_runtime_path(
+        path=output_dir,
+        project_root=project_root,
+    )
+
     config = SimulationConfig.from_yaml(config_path)
 
     paths = _resolve_paths(
@@ -60,7 +78,11 @@ def run_single(
         model_states=config.consumer.model_states,
     )
 
-    run_id = config.run.seed if config.run.seed is not None else 0
+    run_id = (
+        config.run.seed
+        if config.run.seed is not None
+        else 0
+    )
 
     output_path = _make_output_path(
         output_dir=output_dir,
@@ -134,6 +156,24 @@ def run_batch(
 
     if workers is not None and workers < 1:
         raise ValueError("workers must be at least 1.")
+
+    project_root = project_root.resolve()
+
+    config_path = _resolve_runtime_path(
+        path=config_path,
+        project_root=project_root,
+    )
+
+    if paths_yaml is not None:
+        paths_yaml = _resolve_runtime_path(
+            path=paths_yaml,
+            project_root=project_root,
+        )
+
+    output_dir = _resolve_runtime_path(
+        path=output_dir,
+        project_root=project_root,
+    )
 
     scenario_dir = output_dir / label
     scenario_dir.mkdir(
@@ -255,62 +295,105 @@ def _worker(
     """
     Execute one batch replicate in a worker process.
 
-    This function must remain at module level so that it can be pickled
-    and executed by ``ProcessPoolExecutor``.
+    The working directory is reset before and after every run because
+    legacy model and PV_ICE code may change it. Worker processes are reused,
+    so leaving the directory changed can break later replicates.
 
     Parameters
     ----------
     run_id
         Replicate number used as the simulation seed and output filename.
     config_path
-        Path to the simulation configuration YAML file.
+        Absolute path to the simulation configuration YAML file.
     paths_yaml
-        Optional path to a data-paths YAML file.
+        Optional absolute path to a data-paths YAML file.
     output_dir
-        Base results directory.
+        Absolute base results directory.
     label
         Scenario-specific output subdirectory.
     project_root
-        Root directory of the ABSiCE repository.
+        Absolute root directory of the ABSiCE repository.
 
     Returns
     -------
     Path
         Path to the CSV file created by this worker.
     """
-    config = SimulationConfig.from_yaml(config_path)
+    project_root = project_root.resolve()
 
-    run_config = config.run.model_copy(
-        update={"seed": run_id},
-    )
+    # Each reused worker must begin from the repository root.
+    os.chdir(project_root)
 
-    config = config.model_copy(
-        update={"run": run_config},
-    )
+    try:
+        config = SimulationConfig.from_yaml(config_path)
 
-    paths = _resolve_paths(
-        paths_yaml=paths_yaml,
-        project_root=project_root,
-    )
+        run_config = config.run.model_copy(
+            update={"seed": run_id},
+        )
 
-    data = DataLoader(paths).load_all(
-        resolution=config.consumer.resolution,
-        model_states=config.consumer.model_states,
-    )
+        config = config.model_copy(
+            update={"run": run_config},
+        )
 
-    output_path = _make_output_path(
-        output_dir=output_dir,
-        label=label,
-        run_id=run_id,
-    )
+        paths = _resolve_paths(
+            paths_yaml=paths_yaml,
+            project_root=project_root,
+        )
 
-    _execute_and_save(
-        config=config,
-        data=data,
-        output_path=output_path,
-    )
+        data = DataLoader(paths).load_all(
+            resolution=config.consumer.resolution,
+            model_states=config.consumer.model_states,
+        )
 
-    return output_path
+        output_path = _make_output_path(
+            output_dir=output_dir,
+            label=label,
+            run_id=run_id,
+        )
+
+        _execute_and_save(
+            config=config,
+            data=data,
+            output_path=output_path,
+        )
+
+        return output_path
+
+    finally:
+        # PV_ICE or legacy model code may change the process directory.
+        # Reset it so the next task assigned to this worker starts correctly.
+        os.chdir(project_root)
+
+
+def _resolve_runtime_path(
+    path: Path,
+    project_root: Path,
+) -> Path:
+    """
+    Convert a command-line path into an absolute path.
+
+    Relative paths are resolved from the repository root instead of the
+    current working directory. This prevents model code that changes the
+    working directory from breaking later file operations.
+
+    Parameters
+    ----------
+    path
+        Relative or absolute path.
+    project_root
+        Absolute repository root.
+
+    Returns
+    -------
+    Path
+        Absolute, resolved path.
+    """
+    path = Path(path)
+
+    if not path.is_absolute():
+        path = project_root / path
+
+    return path.resolve()
 
 
 def _resolve_paths(
@@ -400,6 +483,11 @@ def _execute_and_save(
 
     results: pd.DataFrame = (
         model.datacollector.get_model_vars_dataframe()
+    )
+
+    output_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
     )
 
     results.to_csv(output_path)
