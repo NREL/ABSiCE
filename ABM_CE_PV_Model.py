@@ -97,7 +97,6 @@ import random
 import PV_ICE
 import os
 import csv
-import pandas as pd
 import yaml
 from geopy.geocoders import Nominatim
 import time
@@ -160,17 +159,17 @@ class ABM_CE_PV(Model):
         total_number_product = config.product.total_number_product
         product_growth = config.product.product_growth
         growth_threshold = config.product.growth_threshold
-        failure_rate_alpha = config.product.failure_rate_alpha
+        failure_rate_alpha = config.product.failure_rate_alpha.copy()
         product_lifetime = config.product.product_lifetime
         product_average_wght = config.product.product_average_wght
         mass_to_function_reg_coeff = config.product.mass_to_function_reg_coeff
-        max_storage = config.product.max_storage
+        max_storage = config.product.max_storage.copy()
 
         # End-of-life configuration
-        init_eol_rate = config.eol.init_eol_rate
-        init_purchase_choice = config.eol.init_purchase_choice
-        all_EoL_pathways = config.eol.all_eol_pathways
-        purchase_choices = config.eol.purchase_choices
+        init_eol_rate = config.eol.init_eol_rate.copy()
+        init_purchase_choice = config.eol.init_purchase_choice.copy()
+        all_EoL_pathways = config.eol.all_eol_pathways.copy()
+        purchase_choices = config.eol.purchase_choices.copy()
 
         # Theory of Planned Behavior configuration
         theory_of_planned_behavior = config.tpb.theory_of_planned_behavior
@@ -186,12 +185,12 @@ class ABM_CE_PV(Model):
 
         # Cost configuration
         hoarding_cost = config.cost.hoarding_cost
-        landfill_cost = config.cost.landfill_cost
-        hazardous_waste_management_cost = config.cost.hazardous_waste_management_cost
-        original_recycling_cost = config.cost.original_recycling_cost
+        landfill_cost = config.cost.landfill_cost.copy()
+        hazardous_waste_management_cost = config.cost.hazardous_waste_management_cost.copy()
+        original_recycling_cost = config.cost.original_recycling_cost.copy()
         recycling_learning_shape_factor = config.cost.recycling_learning_shape_factor
         repairability = config.cost.repairability
-        original_repairing_cost = config.cost.original_repairing_cost
+        original_repairing_cost = config.cost.original_repairing_cost.copy()
         repairing_learning_shape_factor = config.cost.repairing_learning_shape_factor
         scndhand_mkt_pric_rate = config.cost.scndhand_mkt_pric_rate
         fsthand_mkt_pric = config.cost.fsthand_mkt_pric
@@ -204,15 +203,15 @@ class ABM_CE_PV(Model):
         sa_landfill_costs = config.cost.sa_landfill_costs
 
         # Material configuration
-        product_mass_fractions = config.material.product_mass_fractions
-        established_scd_mkt = config.material.established_scd_mkt
-        scd_mat_prices = config.material.scd_mat_prices
-        virgin_mat_prices = config.material.virgin_mat_prices
-        material_waste_ratio = config.material.material_waste_ratio
-        recovery_fractions = config.material.recovery_fractions
+        product_mass_fractions = config.material.product_mass_fractions.copy()
+        established_scd_mkt = config.material.established_scd_mkt.copy()
+        scd_mat_prices = config.material.scd_mat_prices.copy()
+        virgin_mat_prices = config.material.virgin_mat_prices.copy()
+        material_waste_ratio = config.material.material_waste_ratio.copy()
+        recovery_fractions = config.material.recovery_fractions.copy()
 
         # Scenario configuration
-        recycling_states = config.scenario.recycling_states
+        recycling_states = config.scenario.recycling_states.copy()
         epr_business_model = config.scenario.epr_business_model
         recycling_process = config.scenario.recycling_process.model_dump()
         dynamic_lifetime_model = config.scenario.dynamic_lifetime_model.model_dump(by_alias=True)
@@ -237,7 +236,6 @@ class ABM_CE_PV(Model):
         landfill_data_params = config.legacy_data.landfill_data_params.model_dump()
         file_name = config.legacy_data.file_name.model_dump(by_alias=True)
 
-        super().__init__(seed=seed)
         self.seed = seed
         self.timestep = timestep
         self.rtn = rtn
@@ -250,20 +248,11 @@ class ABM_CE_PV(Model):
 
         if not os.path.exists(testfolder):
             os.makedirs(testfolder)
-        # print ("Your simulation will be stored in %s" % testfolder)
-
 
         SupportingMaterialFolder = str(Path().resolve()/ 'PV_ICE' / 'baselines' / 'SupportingMaterial')
         BaselinesFolder = str(Path().resolve()/ 'PV_ICE' / 'baselines')
 
-        reedsFile = os.path.join(SupportingMaterialFolder, 'December Core Scenarios ReEDS Outputs Solar Futures v3a.xlsx')
-        # print ("Input file is stored in %s" % reedsFile)
-
-        # rawdf = pd.read_excel(reedsFile,
-        #                 sheet_name="new installs PV")
         rawdf = data.reeds_raw.copy()
-        rawdf.drop(columns=['Tech'], inplace=True)
-        rawdf.set_index(['Scenario','Year','PCA', 'State'], inplace=True)
 
         scenarios = list(rawdf.index.get_level_values('Scenario').unique())
         PCAs = list(rawdf.index.get_level_values('PCA').unique())
@@ -277,31 +266,23 @@ class ABM_CE_PV(Model):
         # this is needed to map sites to PCAs and get the utility-scale PV contribution factors
         # If using PCA-level consumer agents, need to load the pca_longlat file instead
         if self.consumer_agent_resolution == ConsumerAgentResolution.SITE:
-            # self.uspvdb = pd.read_excel(os.path.join(
-            #     os.path.dirname(__file__), 'USPVDB', 'uspvdb_v3_0_20250430_with_pca.xlsx'))
-            self.uspvdb = self.uspvdb[self.uspvdb['PCA'] != PCA_MISSING_VALUE]
+            if data.uspvdb is None:
+                raise ValueError(
+                    "USPVDB data is required for site-level resolution."
+                )
+            if data.reeds_data is None:
+                raise ValueError(
+                    "ReEDS data is required for site-level resolution."
+                )
 
-            if self.model_states is not None:
-                self.uspvdb = self.uspvdb[self.uspvdb['p_state'].isin(self.model_states)]
+            self.uspvdb = data.uspvdb.copy()
+            self.reeds_data = data.reeds_data.copy()
+            self.uspvdb = self.uspvdb[
+                self.uspvdb["PCA"] != PCA_MISSING_VALUE
+            ].copy()
 
-            # self.reeds_data = pd.read_excel(os.path.join(os.path.dirname(__file__),
-            #                                         'ReEDS', 'StdScen24_annual_balancingAreas_Mid_Case_CO2e_95by2035.xlsx'))
-            self.reeds_data = data.reeds_data.copy() if data.reeds_data is not None else None
-
-            if self.model_states is not None:
-                self.reeds_data = self.reeds_data[self.reeds_data['state'].isin(self.model_states)]
-            # Pre-calculate utility-scale PV contribution factor for each PCA
-            self.reeds_data['utility_scale_pv_contribution_factor'] = \
-            self.reeds_data['upv_MW'] / (self.reeds_data['upv_MW'] +
-                                    self.reeds_data['distpv_MW'])
-
-        GISfile = os.path.join(SupportingMaterialFolder, 'gis_centroid_n.csv')
-        # GIS = pd.read_csv(GISfile)
-        # GIS = GIS.set_index('id')
         GIS = data.gis_centroids.copy()
-        GIS.head()
-        GIS.loc['p1'].long
-
+    
         # # 1. Create ReEDS Scenarios BASELINE Files
 
         # import PV_ICE
@@ -407,25 +388,13 @@ class ABM_CE_PV(Model):
             df_recycler_out.to_csv("../../../TEMP/recycler_data.csv",
                                    index=False)
 
-        # else:
-        #    print("\nthis is path, ", os.getcwd())
-        #    df = pd.read_csv('../../../TEMP/recycler_data.csv')
 
         pca_longlat = pd.DataFrame(columns=["PCA", "Long", "Lat"])
 
         #     #### Create the 3 Scenarios and assign Baselines
 
-        if self.rtn:
-            # If using the RTN model results from Texas A&M University
-            # load the recycler data from the RTN model
-            self.recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "RTN", "recycler_data.csv"))
-        else:
-            self.recycler_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "TEMP", 
-                                                    "recycler_data.csv"))
-
-        # Load Universal Waste Recyclers data
-        self.universal_waste_recyclers_data = pd.read_csv(os.path.join(os.path.dirname(__file__), "TEMP", 
-                                                    self.file_names['Universal Waste Recyclers data']))
+        self.recycler_data = data.recycler_data.copy()
+        self.universal_waste_recyclers_data = data.uw_recycler_data.copy()
 
         if pca_scenario:
             i = 0
@@ -478,7 +447,17 @@ class ABM_CE_PV(Model):
 
         # Load PCA data if needed for distance calculations and for consumer agent reporting
         if self.consumer_agent_resolution == ConsumerAgentResolution.PCA:
-            self.pca_data = pd.read_csv("../../../TEMP/pca_longlat.csv")  # Replace with your PCA data file
+            self.pca_data = GIS.reset_index().copy()
+            index_column = self.pca_data.columns[0]
+            self.pca_data = self.pca_data[
+                [index_column, "long", "lat"]
+            ].rename(
+                columns={
+                    index_column: "PCA",
+                    "long": "Long",
+                    "lat": "Lat",
+                }
+            )
 
         if pv_ice:
 
@@ -729,100 +708,70 @@ class ABM_CE_PV(Model):
                     os.path.join(
                         os.path.dirname(__file__), "TEMP", 'universal_waste_site_recycler_distances.csv'))
 
-        self.correct_mat_factor = pd.read_csv(
-            '../../../TEMP/correct_mat_factor.csv')    
-        self.hazardous_landfill_cost_df = pd.read_csv(
-            '../../../TEMP/' + self.file_names['Hazardous landfill data'])
-        # Load Universal Waste Landfills data
-        self.universal_waste_landfills_data = pd.read_csv(
-            '../../../TEMP/' + self.file_names['Universal Waste Landfills data'])
-        # Use the same data for cost dataframe
-        self.universal_waste_landfill_cost_df = self.universal_waste_landfills_data.copy()
+        self.correct_mat_factor = data.correct_mat_factor.copy()
+        self.hazardous_landfill_cost_df = (
+            data.hazardous_landfill_cost_df.copy()
+        )
+        self.universal_waste_landfills_data = data.uw_landfill_data.copy()
+        self.universal_waste_landfill_cost_df = (
+            self.universal_waste_landfills_data.copy()
+        )
 
         self.correct_mat_factor = transform_timeseries_timestep(
-            self.correct_mat_factor, self.timestep, scale=False)
-        
-        self.data = pd.read_excel(reedsFile)  # this is the pca file
+            self.correct_mat_factor, self.timestep, scale=False
+        )
 
-        # Filter to only include specified model states
+        # ReEDS table used by existing model methods and agents.
+        self.data = rawdf.reset_index().copy()
         if self.model_states is not None:
-            print("Model will run for the following states:", self.model_states)
-            self.data = self.data[self.data['State'].isin(self.model_states)]
+            print(
+                "Model will run for the following states:",
+                self.model_states,
+            )
+            self.data = self.data[
+                self.data["State"].isin(self.model_states)
+            ].copy()
+
+        # Distance matrices are preloaded by DataLoader.
+        self.recycler_distance_df = data.recycler_distance_df.copy()
+        self.landfill_distance_df = data.landfill_distance_df.copy()
+        self.hazardous_landfill_distance_df = (
+            data.hazardous_landfill_distance_df.copy()
+        )
+        self.universal_waste_landfill_distance_df = (
+            data.uw_landfill_distance_df.copy()
+        )
+        self.universal_waste_recycler_distance_df = (
+            data.uw_recycler_distance_df.copy()
+        )
 
         if self.rtn:
-            # If using the RTN model results from Texas A&M University
-            # load the recycling and landfill data from the RTN model
-            # Recycler distance is not required since
-            # the site to recycler distances are already calculated
-            # in the RTN model and costs are calculated based on those distances
-            # But we still load it from the RTN directory to only initialize those recycler agents
-            # that are relevant for the RTN model and not the full list of recyclers.
-            self.recycler_distance_df = self.recycler_distance_df = pd.read_csv(
-                '../../../TEMP/site_recycler_distances.csv')
+            # RTN cost data has not yet been added to LoadedData.
             self.recycling_costs_df = pd.read_csv(
-                os.path.join(os.path.dirname(__file__), "RTN", self.file_names['Recycling data']))
-            self.recycling_costs_df = add_date_from_temporal_columns(self.recycling_costs_df, self.timestep)
-            # Lanfill distances are also not required for the RTN model
-            self.landfill_distance_df = self.landfill_distance_df = pd.read_csv(
-                        '../../../TEMP/site_landfill_distances.csv')
-            self.landfill_cost_df = pd.read_csv(
-                os.path.join(os.path.dirname(__file__), "RTN",
-                             self.file_names['Landfill data']))
-            self.landfill_cost_df = add_date_from_temporal_columns(self.landfill_cost_df, self.timestep)
-            self.hazardous_landfill_distance_df = pd.read_csv(
-            '../../../TEMP/hazardous_site_landfill_distances.csv')
-        else:
-            if consumer_agent_resolution == ConsumerAgentResolution.PCA:
-
-                self.recycler_distance_df = pd.read_csv(
-                '../../../TEMP/pca_recycler_distances.csv')
-                if self.solar_cycle:
-                    # If using the solar cycle landfill cost data
-                    self.landfill_distance_df = pd.read_csv(os.path.join(
-                        os.path.dirname(__file__), "SolarCycle",
-                        self.file_names['PCA-landfill distances']))
-                else:
-                    self.landfill_distance_df = pd.read_csv(
-                        '../../../TEMP/' + self.file_names['PCA-landfill distances'])
-                self.hazardous_landfill_distance_df = pd.read_csv(
-            '../../../TEMP/' + self.file_names['Hazardous PCA-landfill distances'])
-                # Load Universal Waste distance files
-                self.universal_waste_landfill_distance_df = pd.read_csv(
-            '../../../TEMP/universal_waste_pca_landfill_distances.csv')
-                self.universal_waste_recycler_distance_df = pd.read_csv(
-            '../../../TEMP/universal_waste_pca_recycler_distances.csv')
-                
-            elif consumer_agent_resolution == ConsumerAgentResolution.SITE:
-
-                self.recycler_distance_df = pd.read_csv(
-                '../../../TEMP/site_recycler_distances.csv')
-                if self.solar_cycle:
-                    # If using the solar cycle landfill cost data
-                    self.landfill_distance_df = pd.read_csv(os.path.join(
-                        os.path.dirname(__file__), "SolarCycle",
-                        "site_landfill_distances.csv"))
-                else:
-                    self.landfill_distance_df = pd.read_csv(
-                        '../../../TEMP/site_landfill_distances.csv')
-                self.hazardous_landfill_distance_df = pd.read_csv(
-            '../../../TEMP/hazardous_site_landfill_distances.csv')
-                # Load Universal Waste distance files
-                self.universal_waste_landfill_distance_df = pd.read_csv(
-            '../../../TEMP/universal_waste_site_landfill_distances.csv')
-                self.universal_waste_recycler_distance_df = pd.read_csv(
-            '../../../TEMP/universal_waste_site_recycler_distances.csv')
-                
-            self.recycling_costs_df = pd.DataFrame()
-            
-            if self.solar_cycle:
-                # If using the solar cycle landfill cost data
-                self.landfill_cost_df = pd.read_csv(os.path.join(
+                os.path.join(
                     os.path.dirname(__file__),
-                    "SolarCycle", "wbj_solar_cycle_combined.csv"),
-                    index_col=0)
-            else:
-                self.landfill_cost_df = pd.read_csv(
-                '../../../TEMP/' + self.file_names['Landfill data'])
+                    "RTN",
+                    self.file_names["Recycling data"],
+                )
+            )
+            self.recycling_costs_df = add_date_from_temporal_columns(
+                self.recycling_costs_df, self.timestep
+            )
+        else:
+            self.recycling_costs_df = pd.DataFrame()
+
+        if self.solar_cycle:
+            # Solar Cycle data remains a temporary legacy input.
+            self.landfill_cost_df = pd.read_csv(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "SolarCycle",
+                    "wbj_solar_cycle_combined.csv",
+                ),
+                index_col=0,
+            )
+        else:
+            self.landfill_cost_df = data.landfill_cost_df.copy()
 
         self.pv_ice_yearly_waste = 0
 
@@ -833,27 +782,110 @@ class ABM_CE_PV(Model):
             self.agent_pca_map = self.create_agent_pca_map(self.num_consumers)
         elif self.consumer_agent_resolution is ConsumerAgentResolution.SITE:
             self.agent_site_map = self.create_agent_site_map()
-        recycler_data_df = self.recycling_costs_df if self.rtn else self.recycler_distance_df
-        # Count total recyclers (regular + universal waste)
-        num_regular_recyclers = len(recycler_data_df['Recycler Name'].unique())
-        num_universal_waste_recyclers = len(self.universal_waste_recycler_distance_df[
-            'Recycler Name'].unique())
-        self.num_recyclers = num_regular_recyclers + num_universal_waste_recyclers
-        # Combine recycler names from both sources
-        regular_recycler_names = recycler_data_df['Recycler Name'].unique().tolist()
-        universal_waste_recycler_names = self.universal_waste_recycler_distance_df[
-            'Recycler Name'].to_list()
-        self.recycler_names = regular_recycler_names + universal_waste_recycler_names
-        # Map each recycler name to its agent node ID. Recyclers.__init__ calls
-        # self.model.recycler_names.pop(), so the first recycler node
-        # (num_consumers + 0) gets the LAST name in recycler_names. Reversing
-        # the list before enumeration produces the correct mapping.
+        recycler_data_df = (
+            self.recycling_costs_df
+            if self.rtn
+            else self.recycler_distance_df
+        )
+
+        regular_recycler_names = (
+            recycler_data_df["Recycler Name"]
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
+        )
+
+        universal_waste_recycler_names = (
+            self.universal_waste_recycler_distance_df[
+                "Recycler Name"
+            ]
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
+        )
+
+        # Remove names that appear in both datasets while preserving order.
+        self.recycler_names = list(
+            dict.fromkeys(
+                regular_recycler_names
+                + universal_waste_recycler_names
+            )
+        )
+
+        # The agent count must exactly match the number of names.
+        self.num_recyclers = len(self.recycler_names)
+
+        # Keep a separate mutable list for Recyclers.__init__.
+        self.available_recycler_names = (
+            self.recycler_names.copy()
+        )
+
+        # Recyclers.__init__ uses pop(), so names are assigned from the end.
+        # self.recycler_name_to_id: dict[str, int] = {
+        #     name: self.num_consumers + index
+        #     for index, name in enumerate(
+        #         reversed(self.recycler_names)
+        #     )
+        # }
         self.recycler_name_to_id: dict[str, int] = {
-            name: self.num_consumers + i
-            for i, name in enumerate(reversed(self.recycler_names))
+            name: self.num_consumers + index
+            for index, name in enumerate(
+                reversed(self.recycler_names)
+            )
         }
+
+        first_recycler_id = self.num_consumers
+        last_recycler_id = (
+            self.num_consumers
+            + self.num_recyclers
+            - 1
+        )
+
+        invalid_recycler_ids = {
+            name: recycler_id
+            for name, recycler_id
+            in self.recycler_name_to_id.items()
+            if not (
+                first_recycler_id
+                <= recycler_id
+                <= last_recycler_id
+            )
+        }
+
+        if invalid_recycler_ids:
+            raise ValueError(
+                "Recycler names were assigned IDs outside "
+                f"the recycler range: {invalid_recycler_ids}"
+            )
+
         self.num_producers = num_producers
-        self.num_prod_n_recyc = self.num_recyclers + num_producers
+        self.num_prod_n_recyc = (
+            self.num_recyclers
+            + self.num_producers
+        )
+        # recycler_data_df = self.recycling_costs_df if self.rtn else self.recycler_distance_df
+        # # Count total recyclers (regular + universal waste)
+        # num_regular_recyclers = len(recycler_data_df['Recycler Name'].unique())
+        # num_universal_waste_recyclers = len(self.universal_waste_recycler_distance_df[
+        #     'Recycler Name'].unique())
+        # self.num_recyclers = num_regular_recyclers + num_universal_waste_recyclers
+        # # Combine recycler names from both sources
+        # regular_recycler_names = recycler_data_df['Recycler Name'].unique().tolist()
+        # universal_waste_recycler_names = self.universal_waste_recycler_distance_df[
+        #     'Recycler Name'].to_list()
+        # self.recycler_names = regular_recycler_names + universal_waste_recycler_names
+        # # Map each recycler name to its agent node ID. Recyclers.__init__ calls
+        # # self.model.recycler_names.pop(), so the first recycler node
+        # # (num_consumers + 0) gets the LAST name in recycler_names. Reversing
+        # # the list before enumeration produces the correct mapping.
+        # self.recycler_name_to_id: dict[str, int] = {
+        #     name: self.num_consumers + i
+        #     for i, name in enumerate(reversed(self.recycler_names))
+        # }
+        # self.num_producers = num_producers
+        # self.num_prod_n_recyc = self.num_recyclers + num_producers
         self.prod_n_recyc_node_degree = prod_n_recyc_node_degree
         self.prod_n_recyc_network_type = prod_n_recyc_network_type
         self.num_refurbishers = num_refurbishers
@@ -892,7 +924,11 @@ class ABM_CE_PV(Model):
             all_pca_df_in = pd.concat([all_pca_df_in, subset_df_init_cap])
             # NOTE: old PV ICE results — used for product_average_wght baseline
             subset_df_init_cap_out = pd.read_csv(
-                "dataOut_95-by-35.Adv_" + pca + "_.csv")
+                os.path.join(
+                    _pca_merged_dir,
+                    f"dataOut_95-by-35.Adv_{pca}_.csv",
+                )
+            )
             subset_df_init_cap_out['pca'] = pca
             all_pca_df_out = pd.concat([all_pca_df_out,
                                         subset_df_init_cap_out])
@@ -926,11 +962,13 @@ class ABM_CE_PV(Model):
                 material_name = '_'.join(material_name)
                 if material_name in valid_materials:
                     file_path = os.path.join(baseline_folder, filename)
-                    data = pd.read_csv(file_path, skiprows=[1])
+                    material_df = pd.read_csv(file_path, skiprows=[1])
                     # Add the material mass per m^2 column to the existing DataFrame
-                    df_mat_factor["year"] = data["year"]  
+                    df_mat_factor["year"] = material_df["year"]
                     try:
-                        df_mat_factor[material_name] = data["mat_massperm2"].astype(float) / 1000
+                        df_mat_factor[material_name] = (
+                            material_df["mat_massperm2"].astype(float) / 1000
+                        )
                     except ValueError:
                         # Handle non-numeric values in the column (e.g., strings)
                         print(f"Skipping non-numeric values in {material_name} column")
@@ -949,14 +987,42 @@ class ABM_CE_PV(Model):
         # Load consolidated waste EOL data (metric tons) once at model level.
         # Agents slice this by PCA in their __init__ instead of reading
         # individual per-PCA dataOut files for waste values.
-        _waste_eol_path = os.path.join(
-            os.path.dirname(__file__), "PV_ICE", "TEMP", "PCA_merged",
-            "PVICE_PCA_WasteEOL_by_Year_and_PCA.csv")
-        self.pvice_waste_eol_df = pd.read_csv(_waste_eol_path)
+        self.pvice_waste_eol_df = data.pvice_waste_eol_df.copy()
         self.pvice_waste_eol_df = transform_pca_timeseries_timestep(
             self.pvice_waste_eol_df, self.timestep, filtered_columns=['Yearly_Waste_EOL_Ton'])
         self.avg_weight_factor_stored_pv = 0
 
+        if "date" not in self.pvice_waste_eol_df.columns:
+            if self.timestep == TIMESTEP.ANNUAL:
+                self.pvice_waste_eol_df["date"] = pd.to_datetime(
+                    self.pvice_waste_eol_df["year"].astype(int).astype(str),
+                    format="%Y",
+                )
+
+            elif self.timestep == TIMESTEP.QUARTERLY:
+                self.pvice_waste_eol_df["date"] = pd.to_datetime(
+                    {
+                        "year": self.pvice_waste_eol_df["year"].astype(int),
+                        "month": (
+                            self.pvice_waste_eol_df.groupby("year").cumcount() * 3
+                            + 1
+                        ),
+                        "day": 1,
+                    }
+                )
+
+            elif self.timestep == TIMESTEP.MONTHLY:
+                self.pvice_waste_eol_df["date"] = pd.to_datetime(
+                    {
+                        "year": self.pvice_waste_eol_df["year"].astype(int),
+                        "month": (
+                            self.pvice_waste_eol_df.groupby("year").cumcount()
+                            + 1
+                        ),
+                        "day": 1,
+                    }
+                )
+                
         self.iteration = 0
         self.running = True
         self.color_map = []
@@ -1049,11 +1115,9 @@ class ABM_CE_PV(Model):
         self.seeding = seeding
         self.seeding_recyc = seeding_recyc
         self.tclp_params = tclp_params
-        self.tclp_market_share_df = pd.read_csv(
-            os.path.join(os.path.dirname(__file__), "policy_regulation",
-                         "tclp_market_share_interpolated.csv"))
+        self.tclp_market_share_df = data.tclp_market_share_df.copy()
 
-        self.all_gba = pd.read_excel(reedsFile)  #importing all grid balancing areas in an excel file
+        self.all_gba = rawdf.reset_index().copy()
 
         self.cost_seeding = 0
         self.product_lifetime = product_lifetime
@@ -1081,7 +1145,7 @@ class ABM_CE_PV(Model):
         self.num_regulators = len(unique_states)
         self.regulator_state_map = self.create_regulator_state_map(unique_states)
         # Load the policy schedule YAML once and distribute per-state entries to agents
-        self.policy_schedule_by_state = self._load_policy_schedule_by_state()
+        self.policy_schedule_by_state = dict(data.policy_schedule_by_state)
         # Create a map of agents to their unique IDs
         # This is used to access agents by their unique ID
         self.agent_map = {}
@@ -1122,16 +1186,19 @@ class ABM_CE_PV(Model):
                            'New Hampshire', 'New Jersey', 'Connecticut',
                            'Delaware', 'Rhode Island']
 
-        self.states = pd.read_csv("../../../StatesAdjacencyMatrix.csv").to_numpy()
+        states_adjacency_df = data.states_adjacency_matrix.copy()
+        self.states = states_adjacency_df.to_numpy()
         # Compute distances
         self.mean_distance_within_state = np.nanmean(
-            np.where(self.states != 0, self.states, np.nan)) / 2
+            np.where(self.states != 0, self.states, np.nan)
+        ) / 2
         self.states_graph = nx.from_numpy_array(self.states)
-        nodes_states_dic = \
-            dict(zip(list(self.states_graph.nodes),
-                     list(pd.read_csv("../../../StatesAdjacencyMatrix.csv"))))
-        self.states_graph = nx.relabel_nodes(self.states_graph,
-                                             nodes_states_dic)
+        nodes_states_dic = dict(
+            zip(self.states_graph.nodes, states_adjacency_df.columns)
+        )
+        self.states_graph = nx.relabel_nodes(
+            self.states_graph, nodes_states_dic
+        )
         self.recycling_states = recycling_states
         distances_to_recyclers = []
         distances_to_recyclers = self.shortest_paths(

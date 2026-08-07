@@ -18,7 +18,7 @@ from math import e
 from utils import TIMESTEP, transform_timeseries_timestep, GeneratorSize, ConsumerAgentResolution, get_number_of_days_in_timestep, MISSING_VALUE_COST
 import os
 from ABM_CE_PV_RecyclerAgents import Recyclers
-
+from ABM_CE_PV_RefurbisherAgents import Refurbishers
 
 
 class Consumers(Agent):
@@ -94,6 +94,7 @@ class Consumers(Agent):
         self.number_product_EoL = 0
         self.number_used_product_EoL = 0
         self.tot_prod_EoL = 0
+        #self.tot_prod_EoL_m2 = 0
         self.tot_prod_EoL_m2 = 0
         self.number_product_repaired = 0
         self.number_product_sold = 0
@@ -148,7 +149,6 @@ class Consumers(Agent):
             self.landfill_cost = self.model.sa_landfill_costs[1]  # $/ton
         else:
             self.landfill_cost = self.landfill_cost  # already $/ton from get_initial_landfill_cost
-        # self.init_landfill_cost = self.landfill_cost
         self.set_contribution_factors()
 
         _pca_merged_dir = os.path.join(
@@ -159,7 +159,12 @@ class Consumers(Agent):
         # Effective_Capacity_[W] computed below; waste EOL values come from
         # self.pv_ice_waste_df (consolidated metric-ton file) instead.
         self.data_out_pca = pd.read_csv(
-            "dataOut_95-by-35.Adv_" + self.pca + "_.csv")
+            os.path.join(
+                _pca_merged_dir,
+                f"dataOut_95-by-35.Adv_{self.pca}_.csv",
+            )
+        )
+
         self.data_out_pca['Yearly_Sum_Power_atEOL'] /= self.agents_per_pca
         self.data_out_pca['Yearly_Sum_Area_atEOL'] /= self.agents_per_pca
 
@@ -230,23 +235,9 @@ class Consumers(Agent):
         # todo: see if this can be stored in the model.
         self.initialize_regulator_id()
             
-        # self.landfill_cost = random.choice(landfill_cost)
-        # self.landfill_cost = np.random.triangular(
-        #   landfill_cost[0], landfill_cost[2], landfill_cost[1])
-
-        # HERE
         self.hoarding_cost = np.random.triangular(
             hoarding_cost[0], hoarding_cost[2], hoarding_cost[1]) * \
             self.max_storage
-
-        # self.hoarding_cost = \
-        #    float(truncnorm((0 - hoarding_cost[0]) /
-        #                    hoarding_cost[1],
-        #                    (0.02 - hoarding_cost[0]) /
-        #                    hoarding_cost[1],
-        #                    hoarding_cost[0],
-        #                    hoarding_cost[1]).rvs(1)) * self.max_storage
-        # HERE
 
         self.attitude_level = \
             self.attitude_level_distribution((0 - att_distrib_param_eol[0]) /
@@ -319,11 +310,6 @@ class Consumers(Agent):
         Update transportation costs according to the (evolving) mass of waste.
         # ! remove weight so NOT according to the (evolving) mass of waste.
         """
-        #if self.pca == 'p31':
-            #print(self.unique_id, self.pca_recyc_transp_dist, 
-            #      self.model.transportation_cost, 
-            #      self.model.dynamic_product_average_wght)
-        # $/ton: dist [km] * transportation_cost [$/ton/km]
         if self.universal_waste:
             self.recyc_transp_cost = self.universal_waste_recyc_transp_dist * \
                 self.model.get_transportation_cost()
@@ -339,12 +325,6 @@ class Consumers(Agent):
         self.hazardous_landfill_transp_cost = \
             self.hazardous_landfill_transp_dist * \
             self.model.get_transportation_cost(True)
-        # self.landfill_cost = \
-        #    self.init_landfill_cost + \
-        #    (self.model.dynamic_product_average_wght -
-        #     self.model.product_average_wght) * \
-        #    self.model.transportation_cost / 1E3 * \
-        #    self.model.mean_distance_within_state
 
     def attitude_level_distribution(self, a, b, loc, scale):
         """
@@ -530,9 +510,6 @@ class Consumers(Agent):
         # ! Yearly_Sum_Power_atEOL is the total waste generated in a year
         # ! expressed in W
 
-        # ! Old code
-        # self.number_product_EoL = sum(self.waste)
-        # self.number_used_product_EoL = sum(self.used_waste)
         if type(self.used_products[-1]) != float and \
                 type(self.used_products[-1]) != int:
             self.used_products[-1] = 0
@@ -648,10 +625,6 @@ class Consumers(Agent):
                         or list(self.model.all_EoL_pathways.keys())[i] == \
                         "recycle":
                     att_levels[i] = att_level
-                    # HERE modification for encouraging recycling
-                    # if list(self.model.all_EoL_pathways.keys())[i] ==
-                    # "recycle":
-                    # att_levels[i] = att_level * 1.0
                 else:
                     att_levels[i] = 1 - att_level
             elif decision == "purchase_choice":
@@ -765,9 +738,17 @@ class Consumers(Agent):
                     second_hand_p = 0
                     repair_c = 0
                     for agent in self.model.agents:
-                        if agent.unique_id == self.refurbisher_id:
+                        if (
+                            isinstance(agent, Refurbishers)
+                            and agent.unique_id == self.refurbisher_id
+                        ):
                             second_hand_p = agent.scd_hand_price
                             repair_c = agent.repairing_cost
+                            break
+                    # for agent in self.model.agents:
+                    #     if agent.unique_id == self.refurbisher_id:
+                    #         second_hand_p = agent.scd_hand_price
+                    #         repair_c = agent.repairing_cost
                     self.purchase_choice = "used"
                     # $/ton: dist [km] * transportation_cost [$/ton/km]
                     self.model.cost_seeding += second_hand_p + repair_c + \
@@ -1332,35 +1313,168 @@ class Consumers(Agent):
         return (self.model.current_date.year - 2020) * 12 + \
                self.model.current_date.month - 1
 
-
     def update_perceived_behavioral_control(self):
         """
-        Costs from each EoL pathway and purchase choice and related perceived
-        behavioral control are updated according to processes from other agents
-        or own initiated costs.
+        Update perceived behavioral control costs for end-of-life pathways
+        and purchase choices.
         """
-        for agent in self.model.agents:
-            if agent.unique_id == self.get_active_recycling_facility_id():
-                # Use universal waste recycling transport costs if applicable
-                recyc_transp: float = (self.universal_waste_recyc_transp_cost
-                                       if self.universal_waste else self.recyc_transp_cost)
-                # $/ton: base cost [$/ton] + transport [$/ton] + management premium [$/ton]
-                self.perceived_behavioral_control[2] = self.get_recycling_cost(agent.recycling_cost) + recyc_transp
-                # If recycling bonds are active, all recycling costs (base, transport,
-                # and waste management premiums) are covered — zero out entirely.
-                if (self.regulator_id is not None
-                        and self.model.agent_map[self.regulator_id].is_recycling_bonds_applicable()):
-                    self.perceived_behavioral_control[2] = 0.0
-            elif agent.unique_id == self.refurbisher_id:
-                self.perceived_behavioral_control[0] = self.get_repair_cost(agent.repairing_cost)
-                self.perceived_behavioral_control[1] = self.get_sell_cost(
-                    agent.scd_hand_price, agent.refurbisher_margin)
-                self.pbc_reuse[1] = agent.scd_hand_price
+        active_recycler_id = self.get_active_recycling_facility_id()
+        active_recycler = self.model.agent_map.get(active_recycler_id)
+
+        if active_recycler is None:
+            raise ValueError(
+                f"Recycling facility {active_recycler_id} is not in agent_map. "
+                f"Recycler IDs range from {self.model.num_consumers} to "
+                f"{self.model.num_consumers + self.model.num_recyclers - 1}."
+            )
+
+        if not isinstance(active_recycler, Recyclers):
+            raise TypeError(
+                f"Agent {active_recycler_id} is "
+                f"{type(active_recycler).__name__}, not a Recyclers agent."
+            )
+
+        recyc_transp: float = (
+            self.universal_waste_recyc_transp_cost
+            if self.universal_waste
+            else self.recyc_transp_cost
+        )
+
+        self.perceived_behavioral_control[2] = (
+            self.get_recycling_cost(active_recycler.recycling_cost)
+            + recyc_transp
+        )
+
+        if (
+            self.regulator_id is not None
+            and self.model.agent_map[
+                self.regulator_id
+            ].is_recycling_bonds_applicable()
+        ):
+            self.perceived_behavioral_control[2] = 0.0
+
+        refurbisher = next(
+            (
+                agent
+                for agent in self.model.agents
+                if isinstance(agent, Refurbishers)
+                and agent.unique_id == self.refurbisher_id
+            ),
+            None,
+        )
+
+        if refurbisher is None:
+            raise ValueError(
+                f"Refurbisher {self.refurbisher_id} was not found."
+            )
+
+        self.perceived_behavioral_control[0] = self.get_repair_cost(
+            refurbisher.repairing_cost
+        )
+
+        self.perceived_behavioral_control[1] = self.get_sell_cost(
+            refurbisher.scd_hand_price,
+            refurbisher.refurbisher_margin,
+        )
+
+        self.pbc_reuse[1] = refurbisher.scd_hand_price
         self.pbc_reuse[0] = self.model.fsthand_mkt_pric
+
         self.perceived_behavioral_control[3] = (
-            self.get_landfill_cost() +
-            self.get_landfill_transp_cost())  # $/ton: cost [$/ton] + transport [$/ton]
+            self.get_landfill_cost()
+            + self.get_landfill_transp_cost()
+        )
+
         self.perceived_behavioral_control[4] = self.get_hoarding_cost()
+        
+    # def update_perceived_behavioral_control(self):
+    #     """
+    #     Costs from each EoL pathway and purchase choice and related perceived
+    #     behavioral control are updated according to processes from other agents
+    #     or own initiated costs.
+    #     """
+
+    #     # for agent in self.model.agents:
+    #     #     if agent.unique_id == self.get_active_recycling_facility_id():
+    #     #         # Use universal waste recycling transport costs if applicable
+    #     #         self.perceived_behavioral_control[0] = (self.get_repair_cost(agent.repairing_cost))
+    #     #         # $/ton: base cost [$/ton] + transport [$/ton] + management premium [$/ton]
+    #     #         self.perceived_behavioral_control[1] = self.get_sell_cost(agent.sc_hand_price, agent.refurbisher_margin,)
+    #     #         # If recycling bonds are active, all recycling costs (base, transport,
+    #     #         # and waste management premiums) are covered — zero out entirely.
+    #     #         self.pbc_reuse[1] = agent.scd_hand_price
+    #     #         break 
+    #     active_recycler_id = self.get_active_recycling_facility_id()
+
+    #     active_recycler = next(
+    #         (
+    #             agent
+    #             for agent in self.model.agents
+    #             if isinstance(agent, Recyclers)
+    #             and agent.unique_id == active_recycler_id
+    #         ),
+    #         None,
+    #     )
+
+    #     if active_recycler is None:
+    #         raise ValueError(
+    #             f"Recycling facility {active_recycler_id} was not found."
+    #         )
+
+    #     recyc_transp: float = (
+    #         self.universal_waste_recyc_transp_cost
+    #         if self.universal_waste
+    #         else self.recyc_transp_cost
+    #     )
+
+    #     self.perceived_behavioral_control[2] = (
+    #         self.get_recycling_cost(active_recycler.recycling_cost)
+    #         + recyc_transp
+    #     )
+
+    #     if (
+    #         self.regulator_id is not None
+    #         and self.model.agent_map[
+    #             self.regulator_id
+    #         ].is_recycling_bonds_applicable()
+    #     ):
+    #         self.perceived_behavioral_control[2] = 0.0
+
+    #     refurbisher = next(
+    #         (
+    #             agent
+    #             for agent in self.model.agents
+    #             if isinstance(agent, Refurbishers)
+    #             and agent.unique_id == self.refurbisher_id
+    #         ),
+    #         None,
+    #     )
+
+    #     if refurbisher is None:
+    #         raise ValueError(
+    #             f"Refurbisher {self.refurbisher_id} was not found."
+    #         )
+
+    #     self.perceived_behavioral_control[0] = self.get_repair_cost(
+    #         refurbisher.repairing_cost
+    #     )
+
+    #     self.perceived_behavioral_control[1] = self.get_sell_cost(
+    #         refurbisher.scd_hand_price,
+    #         refurbisher.refurbisher_margin,
+    #     )
+
+    #     self.pbc_reuse[1] = refurbisher.scd_hand_price
+    #     self.pbc_reuse[0] = self.model.fsthand_mkt_pric
+
+    #     self.perceived_behavioral_control[3] = (
+    #         self.get_landfill_cost()
+    #         + self.get_landfill_transp_cost()
+    #     )
+
+    #     self.perceived_behavioral_control[4] = (
+    #         self.get_hoarding_cost()
+    #     )
 
     def product_mass_output_metrics(self):
         """

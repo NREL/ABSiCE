@@ -1,0 +1,31 @@
+# config/data_paths.yaml
+# All paths are relative to the project root unless they are absolute.
+
+reeds_solar_futures: PV_ICE/baselines/SupportingMaterial/December Core Scenarios ReEDS Outputs Solar Futures v3a.xlsx
+reeds_std_scen24: ReEDS/StdScen24_annual_balancingAreas_Mid_Case_CO2e_95by2035.xlsx
+gis_centroids: PV_ICE/baselines/SupportingMaterial/gis_centroid_n.csv
+baseline_module_mass: PV_ICE/baselines/baseline_modules_mass_US.csv
+baseline_module_energy: PV_ICE/baselines/baseline_modules_energy.csv
+pvice_pca_merged_dir: PV_ICE/TEMP/PCA_merged
+
+recycler_distances: TEMP/site_recycler_distances.csv
+landfill_distances: TEMP/site_landfill_distances.csv
+hazardous_landfill_distances: TEMP/hazardous_site_landfill_distances.csv
+uw_landfill_distances: TEMP/universal_waste_site_landfill_distances.csv
+uw_recycler_distances: TEMP/universal_waste_site_recycler_distances.csv
+
+recycler_data: TEMP/recycler_data.csv
+landfill_data: TEMP/Landfills_data_2023.csv
+hazardous_landfill_data: TEMP/Landfills_data_SA.csv
+uw_landfill_data: TEMP/Universal_Waste_Landfills_data.csv
+uw_recycler_data: TEMP/Universal_Waste_Recyclers_data.csv
+
+correct_mat_factor: TEMP/correct_mat_factor.csv
+states_adjacency_matrix: StatesAdjacencyMatrix.csv
+uspvdb: USPVDB/uspvdb_v3_0_20250430_with_pca.xlsx
+
+policy_by_state: policy_regulation/policy_by_state.csv
+policy_schedule: policy_regulation/policy_schedule.yaml
+tclp_market_share: policy_regulation/tclp_market_share_interpolated.csv
+generator_threshold: policy_regulation/generator_threshold.csv
+uw_generator_threshold: policy_regulation/universal_waste_generator_threshold.csv
