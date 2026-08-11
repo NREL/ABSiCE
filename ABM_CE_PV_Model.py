@@ -283,7 +283,7 @@ class ABM_CE_PV(Model):
 
         GIS = data.gis_centroids.copy()
     
-        # # 1. Create ReEDS Scenarios BASELINE Files
+        # 1. Create ReEDS Scenarios BASELINE Files
 
         # import PV_ICE
         r1 = PV_ICE.Simulation(name='Simulation1', path=testfolder)
@@ -391,7 +391,7 @@ class ABM_CE_PV(Model):
 
         pca_longlat = pd.DataFrame(columns=["PCA", "Long", "Lat"])
 
-        #     #### Create the 3 Scenarios and assign Baselines
+        # Create the 3 Scenarios and assign Baselines
 
         self.recycler_data = data.recycler_data.copy()
         self.universal_waste_recyclers_data = data.uw_recycler_data.copy()
@@ -822,13 +822,6 @@ class ABM_CE_PV(Model):
             self.recycler_names.copy()
         )
 
-        # Recyclers.__init__ uses pop(), so names are assigned from the end.
-        # self.recycler_name_to_id: dict[str, int] = {
-        #     name: self.num_consumers + index
-        #     for index, name in enumerate(
-        #         reversed(self.recycler_names)
-        #     )
-        # }
         self.recycler_name_to_id: dict[str, int] = {
             name: self.num_consumers + index
             for index, name in enumerate(
@@ -865,27 +858,6 @@ class ABM_CE_PV(Model):
             self.num_recyclers
             + self.num_producers
         )
-        # recycler_data_df = self.recycling_costs_df if self.rtn else self.recycler_distance_df
-        # # Count total recyclers (regular + universal waste)
-        # num_regular_recyclers = len(recycler_data_df['Recycler Name'].unique())
-        # num_universal_waste_recyclers = len(self.universal_waste_recycler_distance_df[
-        #     'Recycler Name'].unique())
-        # self.num_recyclers = num_regular_recyclers + num_universal_waste_recyclers
-        # # Combine recycler names from both sources
-        # regular_recycler_names = recycler_data_df['Recycler Name'].unique().tolist()
-        # universal_waste_recycler_names = self.universal_waste_recycler_distance_df[
-        #     'Recycler Name'].to_list()
-        # self.recycler_names = regular_recycler_names + universal_waste_recycler_names
-        # # Map each recycler name to its agent node ID. Recyclers.__init__ calls
-        # # self.model.recycler_names.pop(), so the first recycler node
-        # # (num_consumers + 0) gets the LAST name in recycler_names. Reversing
-        # # the list before enumeration produces the correct mapping.
-        # self.recycler_name_to_id: dict[str, int] = {
-        #     name: self.num_consumers + i
-        #     for i, name in enumerate(reversed(self.recycler_names))
-        # }
-        # self.num_producers = num_producers
-        # self.num_prod_n_recyc = self.num_recyclers + num_producers
         self.prod_n_recyc_node_degree = prod_n_recyc_node_degree
         self.prod_n_recyc_network_type = prod_n_recyc_network_type
         self.num_refurbishers = num_refurbishers
@@ -903,10 +875,6 @@ class ABM_CE_PV(Model):
             self.filter_landfills_accepting_solar_waste()
 
         # ! Initialize model with PV_ICE historical installed cap
-        # self.total_number_product = total_number_product
-        # subset_df_init_cap = self.df0[self.df0['year'] < 2020]
-
-        # self.pca = self.create_agents(num_consumers)[self.unique_id][0]
         all_pca_df_in = pd.DataFrame()
         all_pca_df_out = pd.DataFrame()
         valid_pcas = PCAs
@@ -1267,8 +1235,7 @@ class ABM_CE_PV(Model):
                 self.agent_map[node] = e
         # Draw initial graph
         nx.draw(self.G, with_labels=True)
-        # plt.show()
-
+    
         # Defines reporters and set up data collector
         ABM_CE_PV_model_reporters = {
             **self.get_temporal_data(),
@@ -1314,7 +1281,7 @@ class ABM_CE_PV(Model):
             agenttype_reporters=ABM_CE_PV_agenttype_reporters
         )
 
-    # ## New edits
+    # New edits
     def pv_ice_waste_calculation(self, clock, pv_ice_outputs):
         self.clock = clock
         mat_Total_EOL_Landfilled = pv_ice_outputs.at[self.clock, 'mat_Total_EOL_Landfilled']
@@ -1334,7 +1301,6 @@ class ABM_CE_PV(Model):
             mat_reMFG +
             mat_PG2_stored
         )
-        # print("\n\ntotal:", self.pv_ice_yearly_waste )
 
     def create_agent_pca_map(self, num_consumers):
         pca_column = self.data['PCA']
@@ -1527,44 +1493,12 @@ class ABM_CE_PV(Model):
         fu). The weights are the amount of waste for each year. The weighted
         average mass is returned each time step of the simulation.
         """
-        
-        # len_product_as_function = len(product_as_function)
-        # pvice_mat_factor_copy = self.pvice_mat_factor[
-        #     self.pvice_mat_factor['year'] <= 2020 + self.clock]
-        # conversion_factors = \
-        #     pvice_mat_factor_copy['total_massperm2'].to_list()
-        # conversion_factors = conversion_factors[-len_product_as_function:]
-        # all_data_out_pca = pd.read_csv(
-        #     "all_pca_dataOut_95-by-35.Adv.csv")
-        # all_data_out_pca = all_data_out_pca.groupby(
-        #     'year', as_index=False).mean()
-        # data_out_pca_copy = all_data_out_pca[
-        #     all_data_out_pca['year'] <= 2020 + self.clock]
-        # waste_in_w_list = \
-        #     data_out_pca_copy['Yearly_Sum_Power_atEOL'].to_list()
-        # waste_in_m2_list = \
-        #     data_out_pca_copy['Yearly_Sum_Area_atEOL'].to_list()
-        # waste_in_w_list = waste_in_w_list[-len_product_as_function:]
-        # waste_in_m2_list = waste_in_m2_list[-len_product_as_function:]
-        # waste_w_m2_list = [x / y if y != 0 else 0 for x, y in
-        #                    zip(waste_in_m2_list, waste_in_w_list)]
-        # product_percent = [x / sum(product_as_function) if
-        #                    sum(product_as_function) != 0 else 0 for x in
-        #                    product_as_function]
-        # product_as_mass_percent = [x * y * z for x, y, z in zip(
-        #     product_percent, conversion_factors, waste_w_m2_list)]
-        # self.yearly_product_wght = conversion_factors[-1]
-        # weighted_average_mass_watt = sum(product_as_mass_percent)
-        # # print(weighted_average_mass_watt)
-
-        # ! Much simpler version than commented code above:
         # ! Assuming average lifetime of 25 years so waste at t=0 (2020) is
         # ! weighting (per watt) the factor of the file first entry (iloc[0])
         # ! which is 1995 - correct_mat_factor was calculated by hand from
         # ! PV ICE outputs
         weighted_average_mass_watt = float(self.correct_mat_factor[
             'total_massperW'].iloc[self.clock])
-        # print(weighted_average_mass_watt)
 
         return weighted_average_mass_watt
 
@@ -1929,9 +1863,6 @@ class ABM_CE_PV(Model):
         self.average_price_per_function_model()
         self.agents.do("step")
         self.clock = self.clock + 1
-        # if self.clock == self.last_step:
-        #     self.datacollector.collect(self)
-
         # Calculate yearly waste using pv_ice_waste_calculation method
         # pass pv_output
         self.pv_ice_yearly_waste = 0
