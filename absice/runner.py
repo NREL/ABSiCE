@@ -462,7 +462,13 @@ def _execute_and_save(
     output_path: Path,
 ) -> None:
     """
-    Instantiate the model, run all steps, and save model-level results.
+    Instantiate the model, run all steps, and save model- and agent-level
+    results.
+
+    Two CSVs are written next to each other:
+
+    - ``output_path`` (``Results_model_run_<id>.csv``): model-level reporters.
+    - ``Results_agents_consumers_run_<id>.csv``: per-consumer agent reporters.
 
     Parameters
     ----------
@@ -471,8 +477,11 @@ def _execute_and_save(
     data
         All datasets loaded by ``DataLoader``.
     output_path
-        CSV destination for the model-level DataCollector output.
+        CSV destination for the model-level DataCollector output. The
+        consumer agent CSV is derived from this path.
     """
+    from ABM_CE_PV_ConsumerAgents import Consumers
+
     model = ABM_CE_PV(
         config=config,
         data=data,
@@ -481,13 +490,22 @@ def _execute_and_save(
     for _ in range(config.run.last_step):
         model.step()
 
-    results: pd.DataFrame = (
-        model.datacollector.get_model_vars_dataframe()
-    )
-
     output_path.parent.mkdir(
         parents=True,
         exist_ok=True,
     )
 
+    results: pd.DataFrame = (
+        model.datacollector.get_model_vars_dataframe()
+    )
     results.to_csv(output_path)
+
+    # Agent-level (consumer) results. Filename mirrors the model output so both
+    # share the same run id, e.g. Results_agents_consumers_run_0.csv.
+    consumer_results: pd.DataFrame = (
+        model.datacollector.get_agenttype_vars_dataframe(Consumers)
+    )
+    consumer_output_path = output_path.parent / output_path.name.replace(
+        "Results_model_run_", "Results_agents_consumers_run_"
+    )
+    consumer_results.to_csv(consumer_output_path)

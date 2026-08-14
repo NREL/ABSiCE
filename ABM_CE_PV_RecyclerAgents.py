@@ -67,8 +67,9 @@ class Recyclers(Agent):
         self.symbiosis = False
         self.agent_i = self.unique_id - self.model.num_consumers
         self.recycler_costs = 0
-        # self.recycler_name = self.model.recycler_names.pop()
-        self.recycler_name = (self.model.available_recycler_names.pop())
+        # Recycler node ids are assigned positionally: this recycler's name is
+        # its offset into the model's row-ordered facility list.
+        self.recycler_name = self.model.recycler_facilities[self.agent_i]
         self.hazardous = False
         self.universal_waste = False
         self.verified = False
