@@ -94,6 +94,7 @@ class Consumers(Agent):
         self.number_product_EoL = 0
         self.number_used_product_EoL = 0
         self.tot_prod_EoL = 0
+        self.tot_prod_EoL_m2 = 0  # deprecated: waste now tracked in metric tons
         self.number_product_repaired = 0
         self.number_product_sold = 0
         self.number_product_recycled = 0
@@ -151,6 +152,10 @@ class Consumers(Agent):
 
         _pca_merged_dir = os.path.join(
             os.path.dirname(__file__), "PV_ICE", "TEMP", "PCA_merged")
+        # Old PV ICE per-PCA dataOut results live in the PCA directory (only the
+        # merged datain files are staged in PCA_merged).
+        _pca_dataout_dir = os.path.join(
+            os.path.dirname(__file__), "PV_ICE", "TEMP", "PCA")
         # NOTE: old PV ICE results — kept for W→m² ratio
         # (Yearly_Sum_Area_atEOL / Yearly_Sum_Power_atEOL) used in
         # mass_per_function_model and as the conversion basis for the synthetic
@@ -158,7 +163,7 @@ class Consumers(Agent):
         # self.pv_ice_waste_df (consolidated metric-ton file) instead.
         self.data_out_pca = pd.read_csv(
             os.path.join(
-                _pca_merged_dir,
+                _pca_dataout_dir,
                 f"dataOut_95-by-35.Adv_{self.pca}_.csv",
             )
         )
@@ -1541,18 +1546,25 @@ class Consumers(Agent):
             if regulator_thresholds[self.generator_size].max_storage_kg is not None:
                 self.max_storage_hazardous_kg = regulator_thresholds[self.generator_size].max_storage_kg
 
-    def _assign_closest_recycler(self, distance_df: pd.DataFrame) -> int:
+    def _assign_closest_recycler(self, distance_df: pd.DataFrame,
+                                 base_node_id: int) -> int:
         """
         Return the node ID of the closest recycler in distance_df.
+
+        Recycler node ids are assigned positionally: the row at position p in
+        distance_df corresponds to node ``base_node_id + p``. This uses row
+        identity (not 'Recycler Name') so distinct facilities that share a name
+        are disambiguated correctly.
         Parameters:
         distance_df (pd.DataFrame): Distance DataFrame with a 'Recycler Name'
             column and consumer identifier columns.
+        base_node_id (int): Node id of this frame's first (row 0) recycler.
         Returns:
         int: Node ID of the closest recycler.
         """
         dist_col: pd.Series = distance_df[str(self.agent_identifier)]
-        closest_name: str = distance_df.loc[dist_col.idxmin(), "Recycler Name"]
-        return self.model.recycler_name_to_id[closest_name]
+        row_pos: int = distance_df.index.get_loc(dist_col.idxmin())
+        return base_node_id + row_pos
 
     def set_recycling_transport_distance_and_costs(self):
         """
@@ -1565,7 +1577,7 @@ class Consumers(Agent):
         self.recyc_transp_cost = self.recyc_transp_dist * \
             self.model.get_transportation_cost(self.hazardous)
         self.recycling_facility_id = self._assign_closest_recycler(
-            self.model.recycler_distance_df)
+            self.model.recycler_distance_df, self.model.num_consumers)
         self.hazardous_recycler_facility_id = self.recycling_facility_id
 
     def set_universal_waste_recycling_transport_distance_and_costs(self):
@@ -1578,7 +1590,8 @@ class Consumers(Agent):
         self.universal_waste_recyc_transp_cost = self.universal_waste_recyc_transp_dist * \
             self.model.get_transportation_cost()
         self.universal_waste_recycler_facility_id = self._assign_closest_recycler(
-            self.model.universal_waste_recycler_distance_df)
+            self.model.universal_waste_recycler_distance_df,
+            self.model.num_consumers + self.model.num_regular_recyclers)
 
     def get_active_recycling_facility_id(self) -> int:
         """

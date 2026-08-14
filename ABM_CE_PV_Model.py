@@ -237,6 +237,12 @@ class ABM_CE_PV(Model):
         file_name = config.legacy_data.file_name.model_dump(by_alias=True)
 
         self.seed = seed
+        # Seed every RNG the model relies on. Mesa's super().__init__(seed=...)
+        # only seeds self.random; agent logic also uses the global random module
+        # and numpy, so seed those too for reproducible per-run results.
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
         self.timestep = timestep
         self.rtn = rtn
         self.solar_cycle = solar_cycle
@@ -279,6 +285,15 @@ class ABM_CE_PV(Model):
             self.reeds_data = data.reeds_data.copy()
             self.uspvdb = self.uspvdb[
                 self.uspvdb["PCA"] != PCA_MISSING_VALUE
+            ].copy()
+            # PV ICE waste data is the authoritative waste source for this
+            # simulation. Restrict sites to PCAs that have a waste time series
+            # (e.g. drop p119, p122): sites without waste data would create
+            # agents with no waste to process and fail downstream date-based
+            # waste lookups on multi-step runs.
+            _waste_pcas = set(data.pvice_waste_eol_df["pca"].unique())
+            self.uspvdb = self.uspvdb[
+                self.uspvdb["PCA"].isin(_waste_pcas)
             ].copy()
 
         GIS = data.gis_centroids.copy()
@@ -782,76 +797,31 @@ class ABM_CE_PV(Model):
             self.agent_pca_map = self.create_agent_pca_map(self.num_consumers)
         elif self.consumer_agent_resolution is ConsumerAgentResolution.SITE:
             self.agent_site_map = self.create_agent_site_map()
-        recycler_data_df = (
-            self.recycling_costs_df
-            if self.rtn
-            else self.recycler_distance_df
+        # Recycler node ids are assigned POSITIONALLY: combined-row-index j
+        # across [regular ++ universal-waste] distance frames maps to node
+        # num_consumers + j. Recycler names are NOT unique (duplicate names are
+        # distinct physical facilities at different locations), so a name->id
+        # dict would collapse them and mis-route/lose facilities. Counts use
+        # ROW counts, not .unique().
+        regular_recycler_names = list(
+            self.recycler_distance_df["Recycler Name"].astype(str)
+        )
+        universal_waste_recycler_names = list(
+            self.universal_waste_recycler_distance_df["Recycler Name"].astype(str)
         )
 
-        regular_recycler_names = (
-            recycler_data_df["Recycler Name"]
-            .dropna()
-            .astype(str)
-            .unique()
-            .tolist()
+        # Facility name per node offset, in creation/row order (regular then UW).
+        self.recycler_facilities: list[str] = (
+            regular_recycler_names + universal_waste_recycler_names
         )
+        self.num_regular_recyclers = len(regular_recycler_names)
+        self.num_universal_waste_recyclers = len(universal_waste_recycler_names)
+        self.num_recyclers = len(self.recycler_facilities)
 
-        universal_waste_recycler_names = (
-            self.universal_waste_recycler_distance_df[
-                "Recycler Name"
-            ]
-            .dropna()
-            .astype(str)
-            .unique()
-            .tolist()
-        )
-
-        # Remove names that appear in both datasets while preserving order.
-        self.recycler_names = list(
-            dict.fromkeys(
-                regular_recycler_names
-                + universal_waste_recycler_names
-            )
-        )
-
-        # The agent count must exactly match the number of names.
-        self.num_recyclers = len(self.recycler_names)
-
-        # Keep a separate mutable list for Recyclers.__init__.
-        self.available_recycler_names = (
-            self.recycler_names.copy()
-        )
-
-        self.recycler_name_to_id: dict[str, int] = {
-            name: self.num_consumers + index
-            for index, name in enumerate(
-                reversed(self.recycler_names)
-            )
-        }
-
-        first_recycler_id = self.num_consumers
-        last_recycler_id = (
-            self.num_consumers
-            + self.num_recyclers
-            - 1
-        )
-
-        invalid_recycler_ids = {
-            name: recycler_id
-            for name, recycler_id
-            in self.recycler_name_to_id.items()
-            if not (
-                first_recycler_id
-                <= recycler_id
-                <= last_recycler_id
-            )
-        }
-
-        if invalid_recycler_ids:
-            raise ValueError(
-                "Recycler names were assigned IDs outside "
-                f"the recycler range: {invalid_recycler_ids}"
-            )
+        assert (
+            self.num_recyclers
+            == self.num_regular_recyclers + self.num_universal_waste_recyclers
+        ), "recycler facility count mismatch"
 
         self.num_producers = num_producers
         self.num_prod_n_recyc = (
@@ -883,6 +853,10 @@ class ABM_CE_PV(Model):
             valid_pcas = self.data[self.data['State'].isin(self.model_states)]['PCA'].unique().tolist()
         _pca_merged_dir = os.path.join(
             os.path.dirname(__file__), "PV_ICE", "TEMP", "PCA_merged")
+        # Old PV ICE per-PCA dataOut results live in the PCA directory (only the
+        # merged datain files are staged in PCA_merged).
+        _pca_dataout_dir = os.path.join(
+            os.path.dirname(__file__), "PV_ICE", "TEMP", "PCA")
         for pca in valid_pcas:
             # Merged datain file: Solar Futures (2010–2025) + ReEDS StdScen24
             # (2026+); used for installed capacity history (total_number_product).
@@ -893,7 +867,7 @@ class ABM_CE_PV(Model):
             # NOTE: old PV ICE results — used for product_average_wght baseline
             subset_df_init_cap_out = pd.read_csv(
                 os.path.join(
-                    _pca_merged_dir,
+                    _pca_dataout_dir,
                     f"dataOut_95-by-35.Adv_{pca}_.csv",
                 )
             )
@@ -1419,7 +1393,7 @@ class ABM_CE_PV(Model):
         """
         if network == "small-world":
             return nx.watts_strogatz_graph(nodes, node_degree, rewiring_prob,
-                                           seed=random.seed(self.seed))
+                                           seed=self.seed)
         elif network == "complete graph":
             return nx.complete_graph(nodes)
         if network == "random":
