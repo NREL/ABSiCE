@@ -16,7 +16,6 @@ from scipy.stats import truncnorm
 import operator
 from math import e
 from utils import TIMESTEP, transform_timeseries_timestep, GeneratorSize, ConsumerAgentResolution, get_number_of_days_in_timestep, MISSING_VALUE_COST
-import os
 from ABM_CE_PV_RecyclerAgents import Recyclers
 from ABM_CE_PV_RefurbisherAgents import Refurbishers
 
@@ -30,67 +29,77 @@ class Consumers(Agent):
     Attributes:
         unique_id: agent #, also relate to the node # in the network
         model (see ABM_CE_PV_Model)
+        perceived_behavioral_control (a list containing costs of each end of
+            life (EoL) pathway). Computed per-model from all_EoL_pathways, so
+            passed as a constructor arg rather than read from config.
+
+        Config-derived values (read from self.model.config, not passed as
+        constructor args):
         product_growth (a list for a piecewise function) (ratio), (default=
-            [0.166, 0.045]). From IRENA-IEA 2016
+            [0.166, 0.045]). From IRENA-IEA 2016.
+            (self.model.config.product.product_growth)
         failure_rate_alpha (a list for a triangular distribution), (default=
             [2.4928, 5.3759, 3.93495]). From IRENA-IEA 2016.
-        perceived_behavioral_control (a list containing costs of each end of
-            life (EoL) pathway)
+            (self.model.config.product.failure_rate_alpha)
         w_sn_eol (the weight of subjective norm in the agents' decisions as
             modeled with the theory of planned behavior), (default=0.33). From
-            Geiger et al. 2019.
+            Geiger et al. 2019. (self.model.config.tpb.w_sn_eol)
         w_pbc_eol (the weight of perceived behavioral control in the agents'
             decisions as modeled with the theory of planned behavior), (
             default=0.39). From Geiger et al. 2019.
+            (self.model.config.tpb.w_pbc_eol)
         w_a_eol (the weight of attitude in the agents' decisions as modeled
             with the theory of planned behavior), (default=0.34). From
-            Geiger et al. 2019.
+            Geiger et al. 2019. (self.model.config.tpb.w_a_eol)
         w_sn_reuse (same as above but for remanufactured product purchase
             decision), (default=0.497). From Singhal et al. 2019.
+            (self.model.config.tpb.w_sn_reuse)
         w_pbc_reuse (same as above but for remanufactured product purchase
             decision), (default=0.382). From Singhal et al. 2019.
+            (self.model.config.tpb.w_pbc_reuse)
         w_a_reuse (same as above but for remanufactured product purchase
             decision), (default=0.464). From Singhal et al. 2019.
+            (self.model.config.tpb.w_a_reuse)
         product_lifetime (years), (default=30). From IRENA-IEA 2016.
-        landfill_cost (a list for a triangular distribution) ($/fu), (default=
-            [0.003, 0.009, 0.006]). From EPRI 2018.
         hoarding_cost (a list for a triangular distribution) ($/fu), (default=
             [0, 0.001, 0.0005]). From www.cisco-eagle.com (accessed 12/2019).
+            (self.model.config.cost.hoarding_cost)
         used_product_substitution_rate (a list for a triangular distribution)
             (ratio), (default=[0.6, 1, 0.8]). From unpublished study Wang et
-            al.
+            al. (self.model.config.cost.used_product_substitution_rate)
         att_distrib_param_eol (a list for a bounded normal distribution), (
             default=[0.53, 0.12]). From model's calibration step (mean),
             Saphores 2012 (standard deviation).
-        att_distrib_param_eol (a list for a bounded normal distribution), (
+            (self.model.config.tpb.att_distrib_param_eol)
+        att_distrib_param_reuse (a list for a bounded normal distribution), (
             default=[0.35, 0.2]). From model's calibration step (mean),
             Abbey et al. 2016 (standard deviation).
+            (self.model.config.tpb.att_distrib_param_reuse)
         max_storage (a list for a triangular distribution) (years), (default=
             [1, 8, 4]). From Wilson et al. 2017.
+            (self.model.config.product.max_storage)
         consumers_distribution (allocation of different types of consumers),
             (default={"residential": 1, "commercial": 0., "utility": 0.}).
             (Other possible values based on EIA, 2019 and SBE council, 2019:
             residential=0.75, commercial=0.2 and utility=0.05).
+            (self.model.config.consumer.consumers_distribution)
         product_distribution (ratios of product among consumer types), (default
             ={"residential": 1, "commercial": 0., "utility": 0.}). (Other
             possible values based on Bolinger et al. 2018: residential=0.21,
             commercial=0.18 and utility=0.61).
+            (self.model.config.consumer.product_distribution)
 
     """
 
-    def __init__(self, unique_id, model, product_growth, failure_rate_alpha,
-                 perceived_behavioral_control, w_sn_eol, w_pbc_eol, w_a_eol,
-                 w_sn_reuse, w_pbc_reuse, w_a_reuse, landfill_cost,
-                 hoarding_cost, used_product_substitution_rate,
-                 att_distrib_param_eol, att_distrib_param_reuse, max_storage,
-                 consumers_distribution, product_distribution):
+    def __init__(self, unique_id, model, perceived_behavioral_control):
         """
         Creation of new consumer agent
         """
         super().__init__(model)
         self.unique_id = unique_id
         self.breed = "residential"
-        self.consumers_distribution = consumers_distribution
+        self.consumers_distribution = \
+            self.model.config.consumer.consumers_distribution
         self.number_product_EoL = 0
         self.number_used_product_EoL = 0
         self.tot_prod_EoL = 0
@@ -114,6 +123,7 @@ class Consumers(Agent):
         self.product_storage_to_other = 0
         self.product_years_storage = []
         self.product_years_storage_hazardous = []
+        max_storage = self.model.config.product.max_storage
         self.max_storage = np.random.triangular(max_storage[0], max_storage[2],
                                                 max_storage[1]) # this is in years
         self.max_storage_hazardous_days = self.max_storage * get_number_of_days_in_timestep(self.model.timestep)  # Default value in days, will be set later based on generator size
@@ -150,23 +160,16 @@ class Consumers(Agent):
             self.landfill_cost = self.landfill_cost  # already $/ton from get_initial_landfill_cost
         self.set_contribution_factors()
 
-        _pca_merged_dir = os.path.join(
-            os.path.dirname(__file__), "PV_ICE", "TEMP", "PCA_merged")
-        # Old PV ICE per-PCA dataOut results live in the PCA directory (only the
-        # merged datain files are staged in PCA_merged).
-        _pca_dataout_dir = os.path.join(
-            os.path.dirname(__file__), "PV_ICE", "TEMP", "PCA")
         # NOTE: old PV ICE results — kept for W→m² ratio
         # (Yearly_Sum_Area_atEOL / Yearly_Sum_Power_atEOL) used in
         # mass_per_function_model and as the conversion basis for the synthetic
         # Effective_Capacity_[W] computed below; waste EOL values come from
         # self.pv_ice_waste_df (consolidated metric-ton file) instead.
-        self.data_out_pca = pd.read_csv(
-            os.path.join(
-                _pca_dataout_dir,
-                f"dataOut_95-by-35.Adv_{self.pca}_.csv",
-            )
-        )
+        # Loaded once centrally by DataLoader and shared across consumers on
+        # the same PCA; .copy() is required because consumers mutate their
+        # frame in place below (agents_per_pca scaling).
+        self.data_out_pca = \
+            self.model.loaded_data.pca_dataout_by_pca[self.pca].copy()
 
         self.data_out_pca['Yearly_Sum_Power_atEOL'] /= self.agents_per_pca
         self.data_out_pca['Yearly_Sum_Area_atEOL'] /= self.agents_per_pca
@@ -174,8 +177,8 @@ class Consumers(Agent):
         # Merged datain file: Solar Futures (2010–2025) + ReEDS StdScen24 (2026+);
         # loaded before the timestep transform so _compute_synthetic_effective_capacity
         # can reuse self.data_in_pca without re-reading from disk.
-        self.data_in_pca = pd.read_csv(
-            os.path.join(_pca_merged_dir, "datain_95-by-35.Adv_" + self.pca + "_.csv"))
+        self.data_in_pca = \
+            self.model.loaded_data.pca_datain_by_pca[self.pca].copy()
         self.data_in_pca['new_Installed_Capacity_[MW]'] /= self.agents_per_pca
         self.data_in_pca['new_Installed_Capacity_[MW]'] *= 1E6
 
@@ -202,7 +205,7 @@ class Consumers(Agent):
             'new_Installed_Capacity_[MW]'].to_list()
 
         self.number_product_hard_copy = self.number_product.copy()
-        self.product_distribution = product_distribution
+        self.product_distribution = self.model.config.consumer.product_distribution
         self.new_products = self.number_product.copy()
         self.new_products_hard_copy = self.new_products.copy()
         self.new_products_mass = \
@@ -211,24 +214,27 @@ class Consumers(Agent):
         self.used_products_hard_copy = self.used_products.copy()
         self.used_products_mass = \
             self.mass_per_function_model(self.used_products_hard_copy)
-        self.product_growth_list = product_growth
+        self.product_growth_list = self.model.config.product.product_growth
+        used_product_substitution_rate = \
+            self.model.config.cost.used_product_substitution_rate
         self.used_product_substitution_rate = \
             np.random.triangular(used_product_substitution_rate[0],
                                  used_product_substitution_rate[2],
                                  used_product_substitution_rate[1])
         self.product_growth = self.product_growth_list[0]
+        failure_rate_alpha = self.model.config.product.failure_rate_alpha
         self.failure_rate_alpha = \
             np.random.triangular(failure_rate_alpha[0], failure_rate_alpha[2],
                                  failure_rate_alpha[1])
         self.perceived_behavioral_control = perceived_behavioral_control
         self.copy_perceived_behavioral_control = \
             self.perceived_behavioral_control.copy()
-        self.w_sn_eol = w_sn_eol
-        self.w_pbc_eol = w_pbc_eol
-        self.w_a_eol = w_a_eol
-        self.w_sn_reuse = w_sn_reuse
-        self.w_pbc_reuse = w_pbc_reuse
-        self.w_a_reuse = w_a_reuse
+        self.w_sn_eol = self.model.config.tpb.w_sn_eol
+        self.w_pbc_eol = self.model.config.tpb.w_pbc_eol
+        self.w_a_eol = self.model.config.tpb.w_a_eol
+        self.w_sn_reuse = self.model.config.tpb.w_sn_reuse
+        self.w_pbc_reuse = self.model.config.tpb.w_pbc_reuse
+        self.w_a_reuse = self.model.config.tpb.w_a_reuse
         if self.EoL_pathway == "landfill" or self.EoL_pathway == "hoard":
             model.color_map.append('blue')
         else:
@@ -238,10 +244,12 @@ class Consumers(Agent):
         # todo: see if this can be stored in the model.
         self.initialize_regulator_id()
             
+        hoarding_cost = self.model.config.cost.hoarding_cost
         self.hoarding_cost = np.random.triangular(
             hoarding_cost[0], hoarding_cost[2], hoarding_cost[1]) * \
             self.max_storage
 
+        att_distrib_param_eol = self.model.config.tpb.att_distrib_param_eol
         self.attitude_level = \
             self.attitude_level_distribution((0 - att_distrib_param_eol[0]) /
                                              att_distrib_param_eol[1],
@@ -250,6 +258,7 @@ class Consumers(Agent):
                                              att_distrib_param_eol[0],
                                              att_distrib_param_eol[1])
         self.attitude_levels_pathways = [0] * len(self.model.all_EoL_pathways)
+        att_distrib_param_reuse = self.model.config.tpb.att_distrib_param_reuse
         self.attitude_level_reuse = \
             self.attitude_level_distribution((0 - att_distrib_param_reuse[0]) /
                                              att_distrib_param_reuse[1],

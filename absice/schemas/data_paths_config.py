@@ -22,6 +22,7 @@ class DataPathsConfig(BaseModel):
     baseline_module_mass: Path
     baseline_module_energy: Path
     pvice_pca_merged_dir: Path
+    pvice_pca_dataout_dir: Path
 
     # Distance matrices
     recycler_distances: Path
@@ -91,6 +92,7 @@ class DataPathsConfig(BaseModel):
             baseline_module_mass=pvice / "baselines" / "baseline_modules_mass_US.csv",
             baseline_module_energy=pvice / "baselines" / "baseline_modules_energy.csv",
             pvice_pca_merged_dir=pvice / "TEMP" / "PCA_merged",
+            pvice_pca_dataout_dir=pvice / "TEMP" / "PCA",
             recycler_distances=temp / "site_recycler_distances.csv",
             landfill_distances=temp / "site_landfill_distances.csv",
             hazardous_landfill_distances=temp / "hazardous_site_landfill_distances.csv",

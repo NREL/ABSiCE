@@ -12,7 +12,6 @@ import pandas as pd
 from dataclasses import dataclass
 from utils import GeneratorSize
 from typing import Optional
-import os
     
 @dataclass
 class GeneratorSizeThreshold:
@@ -46,11 +45,14 @@ class GeneratorSizeThreshold:
 class Regulators(Agent):
     """
     A regulator agent that sets the regulations for PV waste management.
-    It requires the following input files:
-    - policy_by_state.csv: Contains the base regulatory policies applicable to each state.
-    - generator_threshold.csv: Contains the thresholds for different generator sizes.
-    - policy_schedule.yaml (optional): Configures dynamic activation/deactivation of policies
-      by state and simulation year.
+    It uses the following pre-loaded datasets (loaded once centrally by
+    DataLoader and shared via self.model.loaded_data):
+    - regulator_policy_by_state: base regulatory policies applicable to each state.
+    - generator_thresholds: thresholds for different generator sizes.
+    - uw_generator_thresholds: universal-waste generator thresholds.
+    - policy_schedule.yaml (optional, via the policy_schedule constructor arg):
+      configures dynamic activation/deactivation of policies by state and
+      simulation year.
     Attributes:
         unique_id: int - Unique identifier for the agent.
         model: Model - The model this agent belongs to.
@@ -77,8 +79,7 @@ class Regulators(Agent):
         super().__init__(model)
         self.unique_id = unique_id
         self.regulator_state = self.model.regulator_state_map[unique_id]
-        self.regulatory_policy = pd.read_csv(
-            os.path.join(os.path.dirname(__file__), "policy_regulation", "policy_by_state.csv"))
+        self.regulatory_policy = self.model.loaded_data.regulator_policy_by_state
         # Use a copy so that in-place updates during the simulation do not
         # affect other agents sharing the same underlying DataFrame.
         self.current_regulatory_policy = (
@@ -87,7 +88,7 @@ class Regulators(Agent):
         )
         self._policy_schedule: dict[str, dict] = policy_schedule or {}
         # Initialize thresholds for different generator sizes
-        generator_threshold_df = pd.read_csv(os.path.join(os.path.dirname(__file__), "policy_regulation", "generator_threshold.csv"))
+        generator_threshold_df = self.model.loaded_data.generator_thresholds
         # Determine the applicable state for thresholds, defaulting to "FED" if not found
         threshold_state = self.regulator_state if self.regulator_state in generator_threshold_df['state'].values else "FED"
         thresholds = generator_threshold_df[generator_threshold_df['state'] == threshold_state].set_index('generator_size').to_dict(orient='index')
@@ -96,7 +97,7 @@ class Regulators(Agent):
         for size, thresh_dict in thresholds.items():
             self.thresholds[GeneratorSize(size)] = GeneratorSizeThreshold.from_dict(thresh_dict)
         # Initialize universal waste thresholds
-        universal_waste_threshold_df = pd.read_csv(os.path.join(os.path.dirname(__file__), "policy_regulation", "universal_waste_generator_threshold.csv"))
+        universal_waste_threshold_df = self.model.loaded_data.uw_generator_thresholds
         universal_waste_thresholds = universal_waste_threshold_df[universal_waste_threshold_df['state'] == threshold_state].set_index('generator_size').to_dict(orient='index')
         self.universal_waste_thresholds = {}
         for size, thresh_dict in universal_waste_thresholds.items():

@@ -1,6 +1,7 @@
 # absice/data/data_loader.py
 """Load all external datasets used by the ABSiCE model."""
 
+import re
 from pathlib import Path
 import pandas as pd
 from enum import Enum
@@ -32,6 +33,13 @@ class LoadedData(BaseModel):
     policy_schedule_by_state: dict[str, dict]
     uspvdb: pd.DataFrame | None
     reeds_data: pd.DataFrame | None
+
+    # Agent-shared data (load once centrally; agents slice/select what they need)
+    regulator_policy_by_state: pd.DataFrame
+    generator_thresholds: pd.DataFrame
+    uw_generator_thresholds: pd.DataFrame
+    pca_dataout_by_pca: dict[str, pd.DataFrame]
+    pca_datain_by_pca: dict[str, pd.DataFrame]
 
 class DataLoader:
     """Load external files using paths supplied by DataPathsConfig."""
@@ -76,6 +84,11 @@ class DataLoader:
             policy_schedule_by_state=self._load_policy_schedule(),
             uspvdb=self._load_uspvdb(model_states) if resolution == "site" else None,
             reeds_data=self._load_reeds_balancing_areas(model_states) if resolution == "site" else None,
+            regulator_policy_by_state=self._load_regulator_policy_by_state(),
+            generator_thresholds=self._load_generator_thresholds(),
+            uw_generator_thresholds=self._load_uw_generator_thresholds(),
+            pca_dataout_by_pca=self._load_pca_dataout_by_pca(),
+            pca_datain_by_pca=self._load_pca_datain_by_pca(),
         )
 
     def _load_csv(self, path: Path, **kwargs: object) -> pd.DataFrame:
@@ -172,6 +185,74 @@ class DataLoader:
                     schedule_by_state.setdefault(state, {})[policy_name] = entry_schedule
 
         return schedule_by_state
+
+    def _load_regulator_policy_by_state(self) -> pd.DataFrame:
+        """Load the full policy-by-state table used by RegulatorAgents."""
+        return self._load_csv(self._paths.policy_by_state)
+
+    def _load_generator_thresholds(self) -> pd.DataFrame:
+        """Load the generator threshold table used by RegulatorAgents."""
+        return self._load_csv(self._paths.generator_threshold)
+
+    def _load_uw_generator_thresholds(self) -> pd.DataFrame:
+        """Load the universal-waste generator threshold table used by RegulatorAgents."""
+        return self._load_csv(self._paths.uw_generator_threshold)
+
+    def _load_pca_dataout_by_pca(self) -> dict[str, pd.DataFrame]:
+        """
+        Load per-PCA dataOut files into a dict keyed by PCA id.
+
+        The DataLoader has no PCA list at load time, so the set of PCAs is
+        discovered by globbing pvice_pca_dataout_dir for filenames matching
+        dataOut_95-by-35.Adv_{pca}_.csv. Returns {} if the directory is
+        absent (mirrors the guard in _load_policy_schedule).
+        """
+        directory = self._paths.pvice_pca_dataout_dir
+
+        if not directory.exists():
+            return {}
+
+        pattern = re.compile(r"^dataOut_95-by-35\.Adv_(.+)_\.csv$")
+        result: dict[str, pd.DataFrame] = {}
+
+        for filepath in sorted(directory.glob("dataOut_95-by-35.Adv_*_.csv")):
+            match = pattern.match(filepath.name)
+
+            if not match:
+                continue
+
+            pca = match.group(1)
+            result[pca] = pd.read_csv(filepath)
+
+        return result
+
+    def _load_pca_datain_by_pca(self) -> dict[str, pd.DataFrame]:
+        """
+        Load per-PCA datain files into a dict keyed by PCA id.
+
+        Mirrors _load_pca_dataout_by_pca: the PCA set is discovered by
+        globbing pvice_pca_merged_dir for filenames matching
+        datain_95-by-35.Adv_{pca}_.csv. Returns {} if the directory is
+        absent (mirrors the guard in _load_policy_schedule).
+        """
+        directory = self._paths.pvice_pca_merged_dir
+
+        if not directory.exists():
+            return {}
+
+        pattern = re.compile(r"^datain_95-by-35\.Adv_(.+)_\.csv$")
+        result: dict[str, pd.DataFrame] = {}
+
+        for filepath in sorted(directory.glob("datain_95-by-35.Adv_*_.csv")):
+            match = pattern.match(filepath.name)
+
+            if not match:
+                continue
+
+            pca = match.group(1)
+            result[pca] = pd.read_csv(filepath)
+
+        return result
 
     @staticmethod
     def _assert_exists(path: Path) -> None:

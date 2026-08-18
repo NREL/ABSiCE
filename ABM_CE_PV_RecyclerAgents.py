@@ -9,7 +9,6 @@ Agent - Recycler
 
 from mesa import Agent
 import numpy as np
-import pandas as pd
 
 
 class Recyclers(Agent):
@@ -19,35 +18,44 @@ class Recyclers(Agent):
     Attributes:
         unique_id: agent #, also relate to the node # in the network
         model (see ABM_CE_PV_Model)
-        original_recycling_cost (a list for a triangular distribution) ($/fu) (
-            default=[0.106, 0.128, 0.117]). From EPRI 2018.
         recycling_costs_df (dataframe with recycling costs for each recycling
             facility, year, and pca category). The dataframe is used to
             update the recycling costs of recyclers. If the pca is not
             available, the recycling costs are updated using the
             original_recycling_cost.
-        init_eol_rate (dictionary with initial end-of-life (EOL) ratios),
-            (default={"repair": 0.005, "sell": 0.02, "recycle": 0.1,
-            "landfill": 0.4375, "hoard": 0.4375}). From Monteiro Lunardi
-            et al 2018 and European Commission (2015).
+
+        Config-derived values (read from the model at agent-creation time,
+        not passed as constructor args):
+        original_recycling_cost (a list for a triangular distribution) ($/fu) (
+            default=[0.106, 0.128, 0.117]). From EPRI 2018. Read from
+            self.model.original_recycling_cost (NOT self.model.config.cost.*)
+            because ABM_CE_PV_Model.recycling_process_change() overwrites this
+            model attribute for the frelp/asu/hybrid recycling_process
+            scenarios before agents are created; reading straight from config
+            would silently skip that override.
+        init_eol_rate["recycle"] (initial recycle EOL ratio), (default=0.1).
+            From Monteiro Lunardi et al 2018 and European Commission (2015).
+            (self.model.config.eol.init_eol_rate)
         recycling_learning_shape_factor, (default=-0.39). From Qiu & Suh 2019.
+            (self.model.config.cost.recycling_learning_shape_factor)
 
     """
 
-    def __init__(self, unique_id, model, original_recycling_cost,
-                 recycling_costs_df,
-                 init_eol_rate, recycling_learning_shape_factor):
+    def __init__(self, unique_id, model, recycling_costs_df):
         """
         Creation of new recycler agent
         """
         super().__init__(model)
         self.unique_id = unique_id
+        original_recycling_cost = self.model.original_recycling_cost
         self.original_recycling_cost = np.random.triangular(
             original_recycling_cost[0], original_recycling_cost[2],
             original_recycling_cost[1])
         self.recycling_costs_df = recycling_costs_df
-        self.original_fraction_recycled_waste = init_eol_rate["recycle"]
-        self.recycling_learning_shape_factor = recycling_learning_shape_factor
+        self.original_fraction_recycled_waste = \
+            self.model.config.eol.init_eol_rate["recycle"]
+        self.recycling_learning_shape_factor = \
+            self.model.config.cost.recycling_learning_shape_factor
         self.recycling_cost = self.original_recycling_cost
         self.init_recycling_cost = self.original_recycling_cost
         self.recycler_total_volume = 0
@@ -55,12 +63,10 @@ class Recyclers(Agent):
         self.repairable_volume = 0
         self.total_repairable_volume = 0
         #  Original recycling volume is based on previous years EoL volume
-        # (from 2000 to 2019)
-        yearly_waste_file = pd.read_csv("all_pca_dataOut_95-by-35.Adv.csv")
-        yearly_waste = yearly_waste_file[
-            yearly_waste_file['year'] <= 2020]
-        yearly_waste = sum(
-            yearly_waste['Yearly_Sum_Power_atEOL'].tolist())
+        # (from 2000 to 2019). Computed once in ABM_CE_PV_Model.__init__ from
+        # the valid_pcas-filtered all_pca_df_out (NOT a re-read of the
+        # all_pca_dataOut CSV, to correctly respect model_states filtering).
+        yearly_waste = self.model.original_eol_baseline_volume
         self.original_recycling_volume = \
             (1 - self.model.repairability) * \
             self.original_fraction_recycled_waste * yearly_waste
