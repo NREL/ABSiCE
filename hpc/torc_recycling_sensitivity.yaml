@@ -63,7 +63,7 @@ jobs:
       --att-std 0.1
       --n-runs 100
       --n-steps 11
-      --results-base results/RTN_Iteration_3.1
+      --results-base results/RTN_Iteration_3.2
     resource_requirements: scenario
     scheduler: cpu_nodes
 
@@ -82,7 +82,7 @@ jobs:
     #   add "--recycle-rate {recycle_rate}"
     parameters:
       landfill_set: "['all_landfills','true_landfills']"
-      cost_rate: "[0.00, 2.40, 4.81, 7.21, 9.62, 12.02, 14.43, 16.83]"
+      cost_rate: "[0.00, 2.40]" # 4.81, 7.21, 9.62, 12.02, 14.43, 16.83
       recycle_rate: "[0.10, 0.20, 0.30, 0.40, 0.50, 0.60]"
     parameter_mode: product
 

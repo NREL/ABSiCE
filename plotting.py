@@ -1199,16 +1199,16 @@ def plot_recycling_rate_sensitivity_heatmap(
             interpolation="nearest",
         )
         cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-        cbar.set_label("Recycling Rate", fontsize=10)
+        cbar.set_label("Recycling Rate", fontsize=12)
         cbar.ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
 
         ax.set_xticks(range(len(pivot.columns)))
-        ax.set_xticklabels([f"${c}" for c in pivot.columns], fontsize=10)
+        ax.set_xticklabels([f"${c}" for c in pivot.columns], fontsize=12)
         ax.set_yticks(range(len(pivot.index)))
-        ax.set_yticklabels([f"{r}%" for r in pivot.index], fontsize=10)
-        ax.set_xlabel("Recycling Cost ($/module)", fontsize=11)
-        ax.set_ylabel("Initial Recycling Rate (%)", fontsize=11)
-        ax.set_title(label, fontsize=12, fontweight="bold")
+        ax.set_yticklabels([f"{r}%" for r in pivot.index], fontsize=12)
+        ax.set_xlabel("Recycling Cost ($/module)", fontsize=13)
+        ax.set_ylabel("Initial Recycling Rate (%)", fontsize=13)
+        ax.set_title(label, fontsize=14, fontweight="bold")
 
         for row_idx in range(pivot.shape[0]):
             for col_idx in range(pivot.shape[1]):
@@ -1244,7 +1244,7 @@ def plot_recycling_rate_sensitivity_heatmap(
                             col_idx, row_idx,
                             cell_text,
                             ha="center", va="center",
-                            fontsize=7,
+                            fontsize=8,
                             linespacing=1.2,
                             color=cell_color,
                         )
@@ -1253,17 +1253,17 @@ def plot_recycling_rate_sensitivity_heatmap(
                             col_idx, row_idx,
                             f"{val:.1%}",
                             ha="center", va="center",
-                            fontsize=9,
+                            fontsize=10,
                             color=cell_color,
                         )
 
     plt.suptitle(
         "Recycling Rate Sensitivity: Cost vs. Initial Recycling Rate",
-        fontsize=14, fontweight="bold",
+        fontsize=16, fontweight="bold",
     )
     plt.tight_layout()
-    out_path: str = os.path.join(output_dir, "recycling_rate_sensitivity_heatmap.jpg")
-    plt.savefig(out_path, bbox_inches="tight", dpi=200)
+    out_path: str = os.path.join(output_dir, "recycling_rate_sensitivity_heatmap.pdf")
+    plt.savefig(out_path, bbox_inches="tight", dpi=300)
     plt.close()
     print(f"Heatmap saved to {out_path}")
 

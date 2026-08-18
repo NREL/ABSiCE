@@ -28,8 +28,8 @@ _WORKSPACE_DIR: Path = Path(__file__).parent.resolve()
 _RTN_DIR: Path = _WORKSPACE_DIR / "RTN"
 _RTN_DATA_DIR: Path = next(
     p for p in [
-        Path("/projects/pvabm/pghosh/RTN_Data/Round_3"),  # HPC (Kestrel)
-        Path("/Users/pghosh/SOLAR/RTN_Data/Round_3"),     # macOS local
+        Path("/projects/pvabm/pghosh/RTN_Data/Round_3_2"),  # HPC (Kestrel)
+        Path("/Users/pghosh/SOLAR/RTN_Data/Round_3_2"),     # macOS local
     ]
     if p.exists()
 )
