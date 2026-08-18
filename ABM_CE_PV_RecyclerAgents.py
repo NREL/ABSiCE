@@ -28,11 +28,7 @@ class Recyclers(Agent):
         not passed as constructor args):
         original_recycling_cost (a list for a triangular distribution) ($/fu) (
             default=[0.106, 0.128, 0.117]). From EPRI 2018. Read from
-            self.model.original_recycling_cost (NOT self.model.config.cost.*)
-            because ABM_CE_PV_Model.recycling_process_change() overwrites this
-            model attribute for the frelp/asu/hybrid recycling_process
-            scenarios before agents are created; reading straight from config
-            would silently skip that override.
+            self.model.original_recycling_cost (NOT self.model.config.cost.*).
         init_eol_rate["recycle"] (initial recycle EOL ratio), (default=0.1).
             From Monteiro Lunardi et al 2018 and European Commission (2015).
             (self.model.config.eol.init_eol_rate)

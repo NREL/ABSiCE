@@ -1072,9 +1072,6 @@ class ABM_CE_PV(Model):
         random.shuffle(self.list_consumer_id)
         self.list_consumer_id_seed = list(range(self.num_consumers))
         random.shuffle(self.list_consumer_id_seed)
-        # Change recovery fractions and recycling costs depending on recycling
-        # process
-        self.recycling_process_change()
         self.product_growth = product_growth
         self.growth_threshold = growth_threshold
         # Initialize Regulator parameters
@@ -1422,31 +1419,6 @@ class ABM_CE_PV(Model):
         return [j * (1 - e**(-(((self.clock + (correction_year - z)) /
                                avg_lifetime[z])**failure_rate))).real
                 for (z, j) in enumerate(num_product)]
-
-    def recycling_process_change(self):
-        """
-        Compute changes to recycling parameters according to the
-        techno-economic analysis of the FRELP, ASU and hybrid recycling
-        processes from Heath et al. unpublished techno-economic analysis.
-        """
-        if self.recycling_process["frelp"]:
-            self.recovery_fractions = {
-                "Product": np.nan, "Aluminum": 0.994, "Glass": 0.98,
-                "Copper": 0.97, "Insulated cable": 1., "Silicon": 0.97,
-                "Silver": 0.94}
-            self.original_recycling_cost = [0.068, 0.068, 0.068]
-        elif self.recycling_process["asu"]:
-            self.recovery_fractions = {
-                "Product": np.nan, "Aluminum": 0.94, "Glass": 0.99,
-                "Copper": 0.83, "Insulated cable": 1., "Silicon": 0.90,
-                "Silver": 0.74}
-            self.original_recycling_cost = [0.153, 0.153, 0.153]
-        elif self.recycling_process["hybrid"]:
-            self.recovery_fractions = {
-                "Product": np.nan, "Aluminum": 0.994, "Glass": 0.98,
-                "Copper": 0.83, "Insulated cable": 1., "Silicon": 0.97,
-                "Silver": 0.74}
-            self.original_recycling_cost = [0.055, 0.055, 0.055]
 
     def average_mass_per_function_model(self, product_as_function):
         """
