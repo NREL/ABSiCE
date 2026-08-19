@@ -1,28 +1,21 @@
 # hpc/rtn_base.yaml
 #
-# Pinned "published-run" base configuration for HPC calibration and
-# recycling-sensitivity scenarios (Phase 1). This is NOT the smoke-test
-# config/default_simulation.yaml — it uses full-scale run parameters.
+# This file is kept as close as possible to config/default_simulation.yaml.
+# ONLY the overrides REQUIRED for RTN calibration/sensitivity runs differ:
+#   - run.last_step:                  1      -> 44 (11 years x 4 quarters)
+#   - run.timestep:                   annual -> quarterly (RTN cost data is quarterly)
+#   - consumer.model_states:          null   -> [TX, AZ, NV, NM] (RTN site subset)
+#   - scenario.landfill_solar_waste_acceptance_ratio: 0.4 -> 1.0 (published-run value;
+#         < 1.0 randomly drops sites)
 #
-# Differences from config/default_simulation.yaml:
-#   - run.last_step:                  1    -> 44 (11 years x 4 quarters)
-#   - run.timestep:                   annual -> quarterly
-#   - consumer.model_states:          null -> [TX, AZ, NV, NM]
-#   - scenario.landfill_solar_waste_acceptance_ratio: 0.4 -> 1.0
+# Everything else is intentionally identical to config/default_simulation.yaml,
+# including network.num_consumers (inert under consumer.resolution: site, where
+# ABM_CE_PV.get_num_consumers() uses uspvdb.shape[0]).
 #
-# NOTE: network.num_consumers is intentionally NOT overridden. With
-# consumer.resolution: site, ABM_CE_PV.get_num_consumers() ignores this value
-# and uses uspvdb.shape[0] (one consumer agent per USPVDB site, after the
-# model_states / PCA filter), so the agent count is data-driven, not config-driven.
-#
-# data_source.rtn stays false here; hpc/scenario_runner.py flips it to True
-# per-scenario when RTN mode is requested. eol.init_eol_rate (recycle=0.10)
-# and tpb.att_distrib_param_eol ([0.515, 0.1]) already match the required
-# baseline values in config/default_simulation.yaml and are left unchanged
-# so they can be overridden per-scenario by hpc/scenario_runner.py.
-#
-# Every other field is intentionally identical to
-# config/default_simulation.yaml.
+# data_source.rtn stays false here; hpc/scenario_runner.py flips it to True and
+# sets the RTN cost filenames (Recycling data / RTN landfill data) per-scenario.
+# eol.init_eol_rate (recycle=0.10) and tpb.att_distrib_param_eol ([0.515, 0.1])
+# already match default_simulation.yaml and are overridden per-scenario.
 run:
   seed: null
   last_step: 44
@@ -34,6 +27,7 @@ calibration:
   calibration_n_sensitivity_4: 1.0
   calibration_n_sensitivity_5: 1.0
 network:
+  num_consumers: 20
   consumers_node_degree: 10
   consumers_network_type: small-world
   rewiring_prob: 0.1
@@ -435,11 +429,3 @@ legacy_data:
     Hazardous PCA-landfill distances: pca_landfills_distances_SA.csv
     Site-landfill distances: site_landfills_distances.csv
     Recycler data: Recyclers_data.csv
-    # RTN-mode file selections (R5). hpc/scenario_runner.py overrides both
-    # per-scenario when data_source.rtn is true (recycling_data may be
-    # rescaled; rtn_landfill_data is always the unscaled base file for the
-    # requested landfill_set). Listed explicitly here for parity/clarity
-    # with the other legacy_data.file_name keys, matching the schema
-    # defaults in absice/schemas/simulation_config.py::FileNameConfig.
-    Recycling data: RecyclingCostsbyYearAllLandfills.csv
-    RTN landfill data: LandfillCostsbyYearAllLandfills.csv
