@@ -85,13 +85,12 @@ def ratio_from_cost_rate(
     baseline_rate: float = BASELINE_RECYCLING_RATE_PER_KG,
 ) -> float:
     """
-    Convert an absolute RTN recycling cost rate ($/kg) into a scale ratio.
+    Convert an absolute recycling cost rate ($/kg) into a scale ratio.
 
-    This conversion is only meaningful for RTN mode, where shipment costs
-    are computed from a $/kg rate. In non-RTN mode the recycling lever is a
-    triangular cost distribution in $/functional-unit, so a $/kg-derived
-    ratio must NOT be applied blindly — callers targeting non-RTN mode
-    should supply ``ratio`` directly instead of converting a cost rate.
+    The result is a dimensionless multiplier (cost_rate / baseline_rate) that
+    applies in BOTH modes: in RTN mode it scales the shipment cost CSV; in
+    non-RTN mode the same ratio scales original_recycling_cost ($/metric ton,
+    where the 400 $/t baseline equals the 0.40 $/kg anchor: 400 = 0.40 x 1000).
 
     Parameters
     ----------

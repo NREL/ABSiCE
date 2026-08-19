@@ -108,9 +108,11 @@ def _parse_args() -> argparse.Namespace:
         type=float,
         metavar="RATE",
         help=(
-            "Absolute RTN recycling cost rate in $/kg (e.g. 0.40 for "
+            "Absolute recycling cost rate in $/kg (e.g. 0.40 for "
             f"baseline, {cost_scaling.BASELINE_RECYCLING_RATE_PER_KG} "
-            "is the anchor). RTN-specific: requires --rtn. Converted to a "
+            "is the anchor). Works in both modes (scales the RTN shipment "
+            "cost, or original_recycling_cost in $/metric ton when non-RTN). "
+            "Converted to a "
             "ratio via hpc.cost_scaling.ratio_from_cost_rate."
         ),
     )
@@ -245,25 +247,18 @@ def main() -> None:
         rtn = args.rtn
 
     # Resolve ratio — convert absolute cost rate if provided.
-    # --cost-rate is $/kg and only meaningful for RTN mode (Gate A R4):
-    # reject it outright when rtn is disabled, convert it when rtn is
-    # enabled.
+    # --cost-rate is an absolute recycling cost in $/kg. It maps to a
+    # dimensionless scale ratio (cost_rate / 0.40 baseline) that applies in
+    # BOTH modes: in RTN mode it scales the RTN shipment cost CSV; in non-RTN
+    # mode the same ratio scales original_recycling_cost ($/metric ton, where
+    # the 400 $/t baseline equals the 0.40 $/kg anchor). Only transport is
+    # unsupported as a single rate.
     if args.cost_rate is not None:
         if args.cost_component == "transport":
             print(
                 "Error: --cost-rate is only valid with --cost-component "
                 "recycling. Transport cost varies per route and cannot be "
                 "specified as a single rate.",
-                file=sys.stderr,
-                flush=True,
-            )
-            sys.exit(1)
-        if not rtn:
-            print(
-                "Error: --cost-rate is RTN-specific ($/kg shipment cost) "
-                "and is not meaningful in non-RTN mode, where recycling "
-                "cost is a triangular $/functional-unit distribution. "
-                "Pass --ratio instead, or add --rtn to run in RTN mode.",
                 file=sys.stderr,
                 flush=True,
             )
