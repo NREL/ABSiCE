@@ -7,6 +7,7 @@ gis_centroids: PV_ICE/baselines/SupportingMaterial/gis_centroid_n.csv
 baseline_module_mass: PV_ICE/baselines/baseline_modules_mass_US.csv
 baseline_module_energy: PV_ICE/baselines/baseline_modules_energy.csv
 pvice_pca_merged_dir: PV_ICE/TEMP/PCA_merged
+pvice_pca_dataout_dir: PV_ICE/TEMP/PCA
 
 recycler_distances: TEMP/site_recycler_distances.csv
 landfill_distances: TEMP/site_landfill_distances.csv

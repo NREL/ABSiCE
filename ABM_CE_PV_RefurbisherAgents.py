@@ -12,7 +12,6 @@ import numpy as np
 from ABM_CE_PV_RecyclerAgents import Recyclers
 import operator
 from scipy.stats import truncnorm
-import pandas as pd
 
 
 class Refurbishers(Agent):
@@ -24,25 +23,31 @@ class Refurbishers(Agent):
         unique_id: agent #, also relate to the node # in the network
         model (see ABM_CE_PV_Model)
         original_repairing_cost (a list for a triangular distribution) ($/fu),
-            (default=[0.1, 0.45, 0.28]). From Tsanakas et al. 2019.
-        init_eol_rate (dictionary with initial end-of-life (EOL) ratios),
-            (default={"repair": 0.005, "sell": 0.02, "recycle": 0.1,
-            "landfill": 0.4375, "hoard": 0.4375}). From Monteiro Lunardi
-            et al 2018 and European Commission (2015).
+            (default=[0.1, 0.45, 0.28]). From Tsanakas et al. 2019. Passed in
+            because the model adds a transportation-cost term to it before
+            agent creation (see ABM_CE_PV_Model.__init__).
+
+        Config-derived values (read from self.model.config, not passed as
+        constructor args):
+        init_eol_rate["repair"] / ["sell"] (initial EOL ratios), (default=
+            0.005 / 0.02). From Monteiro Lunardi et al 2018 and European
+            Commission (2015). (self.model.config.eol.init_eol_rate)
         repairing_learning_shape_factor, (default=-0.31). Estimated with data
             on repairing costs at different scales from JRC 2019.
+            (self.model.config.cost.repairing_learning_shape_factor)
         scndhand_mkt_pric_rate (a list for a triangular distribution) (ratio),
             (default=[0.4, 1, 0.7]). From unpublished study Wang et al.
+            (self.model.config.cost.scndhand_mkt_pric_rate)
         refurbisher_margin (ratio), (default=[0.03, 0.45, 0.24]). From Duvan
             & Aykaç 2008 and www.investopedia.com (accessed 03/2020).
+            (self.model.config.cost.refurbisher_margin)
         max_storage (a list for a triangular distribution) (years), (default=
             [1, 8, 4]). From Wilson et al. 2017.
+            (self.model.config.product.max_storage)
 
     """
 
-    def __init__(self, unique_id, model, original_repairing_cost,
-                 init_eol_rate, repairing_learning_shape_factor,
-                 scndhand_mkt_pric_rate, refurbisher_margin, max_storage):
+    def __init__(self, unique_id, model, original_repairing_cost):
         """
         Creation of new refurbisher agent
         """
@@ -55,23 +60,24 @@ class Refurbishers(Agent):
         # original_reused_volumes = [x / model.num_refurbishers * 1E6 for x  # UNUSED: computed but never referenced
         #                            in model.original_num_prod]
         #  Original repairing volume is based on previous years EoL volume
-        # (from 2000 to 2019)
-        yearly_waste_file = pd.read_csv("all_pca_dataOut_95-by-35.Adv.csv")
-        yearly_waste = yearly_waste_file[
-            yearly_waste_file['year'] <= 2020]
-        yearly_waste = sum(
-            yearly_waste['Yearly_Sum_Power_atEOL'].tolist())
+        # (from 2000 to 2019). Computed once in ABM_CE_PV_Model.__init__ from
+        # the valid_pcas-filtered all_pca_df_out (NOT a re-read of the
+        # all_pca_dataOut CSV, to correctly respect model_states filtering).
+        init_eol_rate = self.model.config.eol.init_eol_rate
+        yearly_waste = self.model.original_eol_baseline_volume
         self.original_repairing_volume = \
             self.model.repairability * (
                     init_eol_rate["repair"] + init_eol_rate["sell"]) * \
             yearly_waste
         self.repairing_cost = self.original_repairing_cost
         self.refurbished_volume = 0
-        self.repairing_shape_factor = repairing_learning_shape_factor
+        self.repairing_shape_factor = \
+            self.model.config.cost.repairing_learning_shape_factor
         # self.scndhand_mkt_pric_rate = \
         #   np.random.triangular(scndhand_mkt_pric_rate[0],
         #                       scndhand_mkt_pric_rate[2],
         #                      scndhand_mkt_pric_rate[1])
+        scndhand_mkt_pric_rate = self.model.config.cost.scndhand_mkt_pric_rate
         self.scndhand_mkt_pric_rate = \
             float(truncnorm((0.11 - scndhand_mkt_pric_rate[0]) /
                             scndhand_mkt_pric_rate[1],
@@ -80,6 +86,7 @@ class Refurbishers(Agent):
                             scndhand_mkt_pric_rate[0],
                             scndhand_mkt_pric_rate[1]).rvs(1)[0])
         # attitude_level = float(distribution.rvs(1))
+        refurbisher_margin = self.model.config.cost.refurbisher_margin
         self.refurbisher_margin = np.random.triangular(
             refurbisher_margin[0], refurbisher_margin[2],
             refurbisher_margin[1])
@@ -90,6 +97,7 @@ class Refurbishers(Agent):
         # self.storage_decision = False  # UNUSED: initialized but never read or modified anywhere
         self.storage_yr = 0
         self.storage_yr_recycle = 0
+        max_storage = self.model.config.product.max_storage
         self.max_storage_ref = np.random.triangular(
             max_storage[0], max_storage[2], max_storage[1])
         self.hoarded_waste = 0

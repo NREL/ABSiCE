@@ -763,6 +763,16 @@ class FileNameConfig(ConfigBaseModel):
         alias="Recycler data",
     )
 
+    recycling_data: str = Field(
+        default="RecyclingCostsbyYearAllLandfills.csv",
+        alias="Recycling data",
+    )
+
+    rtn_landfill_data: str = Field(
+        default="LandfillCostsbyYearAllLandfills.csv",
+        alias="RTN landfill data",
+    )
+
 
 class LegacyDataConfig(ConfigBaseModel):
     """Temporary home for legacy file and column metadata."""

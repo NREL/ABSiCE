@@ -152,8 +152,8 @@ class ABM_CE_PV(Model):
         # Consumer configuration
         consumer_agent_resolution = config.consumer.resolution
         model_states = config.consumer.model_states
-        consumers_distribution = config.consumer.consumers_distribution
-        product_distribution = config.consumer.product_distribution
+        # consumers_distribution / product_distribution are read directly by
+        # Consumers from self.model.config.consumer.*.
 
         # Product configuration
         total_number_product = config.product.total_number_product
@@ -173,32 +173,25 @@ class ABM_CE_PV(Model):
 
         # Theory of Planned Behavior configuration
         theory_of_planned_behavior = config.tpb.theory_of_planned_behavior
-        w_sn_eol = config.tpb.w_sn_eol
-        w_pbc_eol = config.tpb.w_pbc_eol
-        w_a_eol = config.tpb.w_a_eol
-        w_sn_reuse = config.tpb.w_sn_reuse
-        w_pbc_reuse = config.tpb.w_pbc_reuse
-        w_a_reuse = config.tpb.w_a_reuse
-        att_distrib_param_eol = config.tpb.att_distrib_param_eol
-        att_distrib_param_reuse = config.tpb.att_distrib_param_reuse
+        # w_sn_eol/w_pbc_eol/w_a_eol/w_sn_reuse/w_pbc_reuse/w_a_reuse and
+        # att_distrib_param_eol/att_distrib_param_reuse are read directly by
+        # Consumers from self.model.config.tpb.*.
         extended_tpb = config.tpb.extended_tpb.model_dump(by_alias=True)
 
         # Cost configuration
-        hoarding_cost = config.cost.hoarding_cost
         landfill_cost = config.cost.landfill_cost.copy()
         hazardous_waste_management_cost = config.cost.hazardous_waste_management_cost.copy()
         original_recycling_cost = config.cost.original_recycling_cost.copy()
-        recycling_learning_shape_factor = config.cost.recycling_learning_shape_factor
         repairability = config.cost.repairability
         original_repairing_cost = config.cost.original_repairing_cost.copy()
-        repairing_learning_shape_factor = config.cost.repairing_learning_shape_factor
-        scndhand_mkt_pric_rate = config.cost.scndhand_mkt_pric_rate
         fsthand_mkt_pric = config.cost.fsthand_mkt_pric
         fsthand_mkt_pric_reg_param = config.cost.fsthand_mkt_pric_reg_param
-        refurbisher_margin = config.cost.refurbisher_margin
         transportation_cost = config.cost.transportation_cost
         hazardous_transportation_cost = config.cost.hazardous_transportation_cost
-        used_product_substitution_rate = config.cost.used_product_substitution_rate
+        # hoarding_cost, used_product_substitution_rate,
+        # recycling_learning_shape_factor, repairing_learning_shape_factor,
+        # scndhand_mkt_pric_rate, and refurbisher_margin are read directly by
+        # the relevant agents from self.model.config.cost.*.
         imperfect_substitution = config.cost.imperfect_substitution
         sa_landfill_costs = config.cost.sa_landfill_costs
 
@@ -775,7 +768,20 @@ class ABM_CE_PV(Model):
         else:
             self.recycling_costs_df = pd.DataFrame()
 
-        if self.solar_cycle:
+        if self.rtn:
+            # RTN landfill cost data is RTN-shaped (case_id/date/Landfill Name/Cost)
+            # and lives in the RTN/ directory, parallel to the recycling data above.
+            self.landfill_cost_df = pd.read_csv(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "RTN",
+                    self.file_names["RTN landfill data"],
+                )
+            )
+            self.landfill_cost_df = add_date_from_temporal_columns(
+                self.landfill_cost_df, self.timestep
+            )
+        elif self.solar_cycle:
             # Solar Cycle data remains a temporary legacy input.
             self.landfill_cost_df = pd.read_csv(
                 os.path.join(
@@ -874,6 +880,14 @@ class ABM_CE_PV(Model):
             subset_df_init_cap_out['pca'] = pca
             all_pca_df_out = pd.concat([all_pca_df_out,
                                         subset_df_init_cap_out])
+        # Shared pre-2020 EoL waste baseline used by Recyclers and
+        # Refurbishers (original_recycling_volume / original_repairing_volume).
+        # Computed here from the in-memory, valid_pcas-filtered all_pca_df_out
+        # (NOT from a re-read of the all_pca_dataOut CSV) so that model_states
+        # filtering is respected.
+        _baseline_yearly_waste = all_pca_df_out[all_pca_df_out['year'] <= 2020]
+        self.original_eol_baseline_volume = float(
+            sum(_baseline_yearly_waste['Yearly_Sum_Power_atEOL'].tolist()))
         all_pca_df_in.to_csv('all_pca_datain_95-by-35.Adv.csv')
         all_pca_df_out.to_csv('all_pca_dataOut_95-by-35.Adv.csv')
 
@@ -1071,9 +1085,6 @@ class ABM_CE_PV(Model):
         random.shuffle(self.list_consumer_id)
         self.list_consumer_id_seed = list(range(self.num_consumers))
         random.shuffle(self.list_consumer_id_seed)
-        # Change recovery fractions and recycling costs depending on recycling
-        # process
-        self.recycling_process_change()
         self.product_growth = product_growth
         self.growth_threshold = growth_threshold
         # Initialize Regulator parameters
@@ -1170,22 +1181,12 @@ class ABM_CE_PV(Model):
         # Create agents, G nodes labels are equal to agents' unique_ID
         for node in self.G.nodes():
             if node < self.num_consumers:
-                a = Consumers(node, self, product_growth, failure_rate_alpha,
-                              perceived_behavioral_control, w_sn_eol,
-                              w_pbc_eol, w_a_eol, w_sn_reuse, w_pbc_reuse,
-                              w_a_reuse, None, hoarding_cost,
-                              used_product_substitution_rate,
-                              att_distrib_param_eol, att_distrib_param_reuse,
-                              max_storage, consumers_distribution,
-                              product_distribution)
+                a = Consumers(node, self, perceived_behavioral_control)
                 # Add the agent to the node
                 self.grid.place_agent(a, node)
                 self.agent_map[node] = a
             elif node < self.num_recyclers + self.num_consumers:
-                b = Recyclers(node, self, self.original_recycling_cost,
-                              self.recycling_costs_df,
-                              init_eol_rate,
-                              recycling_learning_shape_factor)
+                b = Recyclers(node, self, self.recycling_costs_df)
                 self.grid.place_agent(b, node)
                 self.agent_map[node] = b
             elif node < self.num_prod_n_recyc + self.num_consumers:
@@ -1194,11 +1195,7 @@ class ABM_CE_PV(Model):
                 self.agent_map[node] = c
             elif node < self.num_prod_n_recyc + self.num_consumers + \
                     self.num_refurbishers:
-                d = Refurbishers(node, self, original_repairing_cost,
-                                 init_eol_rate,
-                                 repairing_learning_shape_factor,
-                                 scndhand_mkt_pric_rate, refurbisher_margin,
-                                 max_storage)
+                d = Refurbishers(node, self, original_repairing_cost)
                 self.grid.place_agent(d, node)
                 self.agent_map[node] = d
             else:
@@ -1435,31 +1432,6 @@ class ABM_CE_PV(Model):
         return [j * (1 - e**(-(((self.clock + (correction_year - z)) /
                                avg_lifetime[z])**failure_rate))).real
                 for (z, j) in enumerate(num_product)]
-
-    def recycling_process_change(self):
-        """
-        Compute changes to recycling parameters according to the
-        techno-economic analysis of the FRELP, ASU and hybrid recycling
-        processes from Heath et al. unpublished techno-economic analysis.
-        """
-        if self.recycling_process["frelp"]:
-            self.recovery_fractions = {
-                "Product": np.nan, "Aluminum": 0.994, "Glass": 0.98,
-                "Copper": 0.97, "Insulated cable": 1., "Silicon": 0.97,
-                "Silver": 0.94}
-            self.original_recycling_cost = [0.068, 0.068, 0.068]
-        elif self.recycling_process["asu"]:
-            self.recovery_fractions = {
-                "Product": np.nan, "Aluminum": 0.94, "Glass": 0.99,
-                "Copper": 0.83, "Insulated cable": 1., "Silicon": 0.90,
-                "Silver": 0.74}
-            self.original_recycling_cost = [0.153, 0.153, 0.153]
-        elif self.recycling_process["hybrid"]:
-            self.recovery_fractions = {
-                "Product": np.nan, "Aluminum": 0.994, "Glass": 0.98,
-                "Copper": 0.83, "Insulated cable": 1., "Silicon": 0.97,
-                "Silver": 0.74}
-            self.original_recycling_cost = [0.055, 0.055, 0.055]
 
     def average_mass_per_function_model(self, product_as_function):
         """
