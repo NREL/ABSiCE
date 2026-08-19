@@ -5,11 +5,15 @@
 # config/default_simulation.yaml — it uses full-scale run parameters.
 #
 # Differences from config/default_simulation.yaml:
-#   - network.num_consumers:          20   -> 1000
 #   - run.last_step:                  1    -> 44 (11 years x 4 quarters)
 #   - run.timestep:                   annual -> quarterly
 #   - consumer.model_states:          null -> [TX, AZ, NV, NM]
 #   - scenario.landfill_solar_waste_acceptance_ratio: 0.4 -> 1.0
+#
+# NOTE: network.num_consumers is intentionally NOT overridden. With
+# consumer.resolution: site, ABM_CE_PV.get_num_consumers() ignores this value
+# and uses uspvdb.shape[0] (one consumer agent per USPVDB site, after the
+# model_states / PCA filter), so the agent count is data-driven, not config-driven.
 #
 # data_source.rtn stays false here; hpc/scenario_runner.py flips it to True
 # per-scenario when RTN mode is requested. eol.init_eol_rate (recycle=0.10)
@@ -30,6 +34,8 @@ calibration:
   calibration_n_sensitivity_4: 1.0
   calibration_n_sensitivity_5: 1.0
 network:
+  # num_consumers is ignored under resolution: site (see header note); the
+  # count is uspvdb.shape[0]. Kept at the schema default only for PCA fallback.
   num_consumers: 1000
   consumers_node_degree: 10
   consumers_network_type: small-world
