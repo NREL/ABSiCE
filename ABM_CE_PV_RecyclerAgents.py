@@ -27,8 +27,9 @@ class Recyclers(Agent):
         Config-derived values (read from the model at agent-creation time,
         not passed as constructor args):
         original_recycling_cost (a list for a triangular distribution)
-            ($/metric ton) (default≈[400, 400, 400]). Read from
-            self.model.original_recycling_cost (NOT self.model.config.cost.*).
+            ($/metric ton). Set via config (config.cost.original_recycling_cost);
+            read from self.model.original_recycling_cost (NOT
+            self.model.config.cost.*).
         init_eol_rate["recycle"] (initial recycle EOL ratio), (default=0.1).
             From Monteiro Lunardi et al 2018 and European Commission (2015).
             (self.model.config.eol.init_eol_rate)
