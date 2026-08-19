@@ -768,7 +768,20 @@ class ABM_CE_PV(Model):
         else:
             self.recycling_costs_df = pd.DataFrame()
 
-        if self.solar_cycle:
+        if self.rtn:
+            # RTN landfill cost data is RTN-shaped (case_id/date/Landfill Name/Cost)
+            # and lives in the RTN/ directory, parallel to the recycling data above.
+            self.landfill_cost_df = pd.read_csv(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "RTN",
+                    self.file_names["RTN landfill data"],
+                )
+            )
+            self.landfill_cost_df = add_date_from_temporal_columns(
+                self.landfill_cost_df, self.timestep
+            )
+        elif self.solar_cycle:
             # Solar Cycle data remains a temporary legacy input.
             self.landfill_cost_df = pd.read_csv(
                 os.path.join(
