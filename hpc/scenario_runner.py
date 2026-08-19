@@ -178,6 +178,21 @@ def run_scenario(
     assert abs(sum(new_init_eol_rate.values()) - 1.0) < 1e-9, (
         f"init_eol_rate does not sum to 1: {new_init_eol_rate}"
     )
+    # The sum==1 assertion above cannot catch an out-of-range individual
+    # rate (e.g. a large --recycle-rate driving "landfill" negative while
+    # some other pathway compensates to keep the total at 1). Guard every
+    # rate explicitly (R2).
+    out_of_range = {
+        pathway: rate
+        for pathway, rate in new_init_eol_rate.items()
+        if not (0.0 <= rate <= 1.0)
+    }
+    if out_of_range:
+        raise ValueError(
+            "init_eol_rate has pathway(s) outside [0, 1] after rebalancing "
+            f"recycle_rate={recycle_rate}: {out_of_range}. "
+            f"Full init_eol_rate: {new_init_eol_rate}"
+        )
     config.eol.init_eol_rate = new_init_eol_rate
 
     config.tpb.att_distrib_param_eol = [att_mean, att_std]
@@ -191,6 +206,14 @@ def run_scenario(
             suffix=suffix,
         )
         config.legacy_data.file_name.recycling_data = recycling_filename
+        # Landfill-cost scaling is out of scope this session, so this is
+        # always the unscaled base RTN landfill CSV for the requested
+        # landfill_set; it only needs to be set (not regenerated) so the
+        # model's RTN landfill-cost load (ABM_CE_PV_Model.py, `if self.rtn`)
+        # finds the file matching the scenario's landfill_set.
+        config.legacy_data.file_name.rtn_landfill_data = (
+            cost_scaling.LANDFILL_SETS[landfill_set]["landfill_filename"]
+        )
     else:
         config.cost.original_recycling_cost = (
             cost_scaling.scale_original_recycling_cost(

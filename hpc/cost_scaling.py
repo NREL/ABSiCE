@@ -64,11 +64,15 @@ LANDFILL_SETS: dict[str, dict[str, str]] = {
         "shipment_filename": "shipments_recycle_alllandfills.csv",
         "recycling_file_prefix": "RecyclingCostsbyYearAllLandfills",
         "results_prefix": "RTN_run_all_landfills",
+        # Unscaled RTN landfill-cost CSV for this set (landfill-cost scaling
+        # is out of scope this session; always the base file under RTN/).
+        "landfill_filename": "LandfillCostsbyYearAllLandfills.csv",
     },
     "true_landfills": {
         "shipment_filename": "shipments_recycle_truelandfills.csv",
         "recycling_file_prefix": "RecyclingCostsbyYearTrueLandfills",
         "results_prefix": "RTN_run_true_landfills",
+        "landfill_filename": "LandfillCostsbyYearTrueLandfills.csv",
     },
 }
 
@@ -194,6 +198,7 @@ def _scale_shipment_file(
     transport_col: str,
     total_col: str,
     file_suffix: str,
+    output_dir: Path,
 ) -> Path:
     """
     Scale one cost column of an RTN shipment CSV and save the result.
@@ -215,12 +220,18 @@ def _scale_shipment_file(
         Name of the total-cost column to recompute.
     file_suffix
         Suffix inserted before the file extension in the output filename.
+    output_dir
+        Directory to write the scaled CSV into. Deliberately NOT the
+        source file's own directory: ``RTN_Data`` may be a read-only,
+        externally-managed dataset on the cluster, and writing scaled
+        intermediates there also risks a cross-job race when multiple
+        scenarios share the same ``RTN_Data`` mount. Use a writable,
+        per-project directory instead (e.g. ``RTN/``).
 
     Returns
     -------
     Path
-        Path to the newly written, scaled CSV file (written next to the
-        input file).
+        Path to the newly written, scaled CSV file, under ``output_dir``.
 
     Raises
     ------
@@ -244,7 +255,8 @@ def _scale_shipment_file(
     df[cost_col] = df[cost_col] * scale
     df[total_col] = df[transport_col] + df[cost_col]
 
-    out_path: Path = file_path.with_stem(file_path.stem + file_suffix)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    out_path: Path = output_dir / (file_path.stem + file_suffix + file_path.suffix)
     df.to_csv(out_path, index=False)
     return out_path
 
@@ -338,12 +350,14 @@ def prepare_rtn_recycling_cost_file(
     # required when RTN mode is actually exercised.
     from generate_recycling_costs import generate_recycling_costs
 
-    scaled_shipment: Path = shipment_file.with_stem(
-        shipment_file.stem + suffix
-    )
+    # Write the scaled shipment intermediate under rtn_dir (writable, e.g.
+    # RTN/), NOT next to the source file in rtn_data_dir: RTN_Data may be a
+    # read-only, externally-managed mount on the cluster, and sharing it
+    # across concurrently-running scenario jobs risks a write race (R3).
+    scaled_shipment: Path = rtn_dir / (shipment_file.stem + suffix + shipment_file.suffix)
     if scaled_shipment.exists():
-        # Idempotent: avoid rewriting a file that already lives in the
-        # (potentially shared/external) RTN_Data directory.
+        # Idempotent: avoid rescaling a shipment file that a previous run
+        # (or a concurrent job for the same scenario) already produced.
         pass
     else:
         scaled_shipment = _scale_shipment_file(
@@ -353,6 +367,7 @@ def prepare_rtn_recycling_cost_file(
             transport_col="TransportCost_$",
             total_col="TotalCost_$",
             file_suffix=suffix,
+            output_dir=rtn_dir,
         )
 
     generate_recycling_costs(

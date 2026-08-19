@@ -432,3 +432,11 @@ legacy_data:
     Hazardous PCA-landfill distances: pca_landfills_distances_SA.csv
     Site-landfill distances: site_landfills_distances.csv
     Recycler data: Recyclers_data.csv
+    # RTN-mode file selections (R5). hpc/scenario_runner.py overrides both
+    # per-scenario when data_source.rtn is true (recycling_data may be
+    # rescaled; rtn_landfill_data is always the unscaled base file for the
+    # requested landfill_set). Listed explicitly here for parity/clarity
+    # with the other legacy_data.file_name keys, matching the schema
+    # defaults in absice/schemas/simulation_config.py::FileNameConfig.
+    Recycling data: RecyclingCostsbyYearAllLandfills.csv
+    RTN landfill data: LandfillCostsbyYearAllLandfills.csv

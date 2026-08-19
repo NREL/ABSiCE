@@ -1,0 +1,85 @@
+# ABSiCE att_distrib_param_eol Calibration Sweep — TORC/Slurm Workflow (RTN mode)
+#
+# Purpose: find the att_mean value that produces ~20% recycling rate at
+#   recycling cost = $25/module (cost_rate = 12.02 $/kg) and
+#   initial recycling rate = 20%.
+#
+# Setup:
+#   - 6 att_mean values × 1 landfill set = 6 jobs
+#   - 100 replicates per job, 11 simulation years each
+#   - att_std fixed at 0.1 (Saphores 2012 calibration)
+#   - Output: results/att_calibration/att_mean_X.XX/recycle_rate_20pct/...
+#
+# Submission:
+#   TORC_ACCOUNT=pvabm ./hpc/submit.sh att_calibration
+#
+# After the run completes, analyse results with:
+#   python hpc/analyze_att_calibration.py --results-base results/att_calibration
+
+name: absice_att_calibration
+description: >
+  ABSiCE att_distrib_param_eol calibration sweep (RTN mode).
+  Fixes recycling cost at $25/module (cost_rate 12.02 $/kg) and initial
+  recycling rate at 20%; sweeps attitude distribution mean via
+  hpc/run_single_scenario.py --rtn. Each job runs 100 model iterations and
+  writes results to results/att_calibration/.
+project: ABSiCE
+
+# ── Resource requirements per job ─────────────────────────────────────────────
+resource_requirements:
+  - name: scenario
+    num_cpus: 4
+    num_gpus: 0
+    num_nodes: 1
+    memory: 64g
+    runtime: PT8H
+
+slurm_schedulers:
+  - name: cpu_nodes
+    account: pvabm
+    partition: standard
+    nodes: 4
+    walltime: "48:00:00"
+    extra: "--mail-user=pghosh@nlr.gov --mail-type=BEGIN,END,FAIL"
+
+actions:
+  - trigger_type: on_workflow_start
+    action_type: schedule_nodes
+    scheduler: cpu_nodes
+    scheduler_type: slurm
+    num_allocations: 1
+
+# ── Jobs ──────────────────────────────────────────────────────────────────────
+jobs:
+  - name: att_calib_all_landfills_m{att_mean:.2f}
+    command: >-
+      module load conda &&
+      conda activate /projects/pvabm/pghosh/pv_abm &&
+      python hpc/run_single_scenario.py
+      --landfill-set all_landfills
+      --cost-rate 12.02
+      --cost-component recycling
+      --rtn
+      --recycle-rate 0.20
+      --att-mean {att_mean}
+      --att-std 0.1
+      --n-runs 100
+      --n-steps 11
+      --results-base results/att_calibration
+    resource_requirements: scenario
+    scheduler: cpu_nodes
+
+    # ── Parameter sweep ───────────────────────────────────────────────────────
+    # Finer grid between 0.60 and 0.65 (initial sweep showed 0.60 -> 8.2%,
+    # 0.65 -> 25.2%; target is 20%). 6 values.
+    parameters:
+      att_mean: "[0.60, 0.61, 0.62, 0.63, 0.64, 0.65]"
+    parameter_mode: product
+
+    failure_handler: retry_once
+
+failure_handlers:
+  - name: retry_once
+    rules:
+      - match_all_exit_codes: true
+        max_retries: 1

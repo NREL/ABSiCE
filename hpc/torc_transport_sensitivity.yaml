@@ -1,0 +1,82 @@
+# ABSiCE Transport Cost Sensitivity — TORC/Slurm Workflow
+#
+# Runs one (landfill_set × ratio) scenario per job, 100 model iterations each.
+# Total: 11 ratios × 2 landfill sets = 22 jobs.
+#
+# Submission:
+#   TORC_ACCOUNT=<your_account> ./hpc/submit.sh transport
+#
+# Customising the ratio list:
+#   Edit the `ratio` parameter list below before submitting.
+#
+# Placeholders to fill in:
+#   <ACCOUNT>   — your Slurm account (or set TORC_ACCOUNT env var in submit.sh)
+#   <PARTITION> — your Slurm partition (e.g. "normal", "compute", "short")
+
+name: absice_transport_sensitivity
+description: >
+  ABSiCE PV transport cost sensitivity analysis.
+  Each job runs 100 model iterations for one (landfill_set × transport_cost_ratio)
+  scenario and writes results to results/RTN_Iteration_3/.
+project: ABSiCE
+
+# ── Resource requirements per job ──────────────────────────────────────────────
+# Transport scaling touches both recycling and landfill shipment files; otherwise
+# resource profile is identical to recycling sensitivity.
+resource_requirements:
+  - name: scenario
+    num_cpus: 4
+    num_gpus: 0
+    num_nodes: 1
+    memory: 16g
+    runtime: PT8H
+
+# ── Slurm scheduler ────────────────────────────────────────────────────────────
+slurm_schedulers:
+  - name: cpu_nodes
+    account: <ACCOUNT>
+    partition: <PARTITION>
+    nodes: 4
+    walltime: "10:00:00"
+
+# ── Workflow action: allocate nodes when workflow starts ───────────────────────
+actions:
+  - trigger_type: on_workflow_start
+    action_type: schedule_nodes
+    scheduler: cpu_nodes
+    scheduler_type: slurm
+    num_allocations: 1
+
+# ── Jobs ───────────────────────────────────────────────────────────────────────
+jobs:
+  - name: scenario_{landfill_set}_r{ratio:.2f}
+    command: >-
+      module load conda &&
+      conda activate /projects/pvabm/pghosh/pv_abm &&
+      python hpc/run_single_scenario.py
+      --landfill-set {landfill_set}
+      --ratio {ratio}
+      --cost-component transport
+      --n-runs 100
+      --n-steps 11
+      --results-base results/RTN_Iteration_3
+    resource_requirements: scenario
+    scheduler: cpu_nodes
+
+    # ── Parameter sweep (Cartesian product) ─────────────────────────────────
+    # ratio: edit this list to customise the sweep.
+    # Default: 11 points spanning ±25% around the baseline (1.0).
+    # Note: --cost-rate is not supported for transport (cost varies per route).
+    parameters:
+      landfill_set: "['all_landfills','true_landfills']"
+      ratio: "[0.75,0.80,0.85,0.90,0.95,1.0,1.05,1.10,1.15,1.20,1.25]"
+    parameter_mode: product
+
+    # ── Retry on transient failures (e.g. I/O errors, node preemption) ───────
+    failure_handler: retry_once
+
+failure_handlers:
+  - name: retry_once
+    rules:
+      - match_all_exit_codes: true
+        max_retries: 1
