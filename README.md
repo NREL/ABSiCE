@@ -6,6 +6,8 @@
 - [Model Description](#model-description)
 - [Files](#files)
 - [Installation](#installation)
+- [Running the simulation](#running-the-simulation)
+- [Running on HPC with TORC](docs/hpc_torc.md)
 - [License](#license)
 
 ## Overview
@@ -161,6 +163,10 @@ See [docs/quickstart.md](docs/quickstart.md) for full setup instructions.
 conda activate pv_abm
 python run.py run
 ```
+
+**Running on HPC (calibration / sensitivity sweeps via TORC)**:
+See [docs/hpc_torc.md](docs/hpc_torc.md) for how to configure and submit
+ABSiCE sweeps to a Slurm cluster using TORC.
 
 ## License
 The project license is included in the repository root.

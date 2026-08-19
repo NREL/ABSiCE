@@ -41,8 +41,10 @@ done
 DB="torc.db"
 LOG_FILE="torc_server.log"
 
-# Step 1: Add torc binary to PATH
-export PATH="/scratch/dthom/torc/latest:$PATH"
+# Step 1: Add torc binary to PATH.
+# Either point this at your local torc server install, or use a shared
+# cluster path, e.g. export PATH="<TORC_BINARY_DIR>:$PATH"
+export PATH="<TORC_BINARY_DIR>:$PATH"
 
 # Step 2: Start the server in the background
 echo "Starting torc-server on port ${PORT_ARG} (0 = OS-assigned random port)..."

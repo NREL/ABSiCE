@@ -7,22 +7,22 @@
 #SBATCH --mem=64G
 #SBATCH --time=08:00:00
 #SBATCH --job-name=absice_missing
-#SBATCH --output=/projects/pvabm/pghosh/ABSiCE/torc_output/missing_scenario_%j.out
-#SBATCH --mail-user=pghosh@nlr.gov
+#SBATCH --output=<PROJECT_DIR>/torc_output/missing_scenario_%j.out
+#SBATCH --mail-user=<YOUR_EMAIL>
 #SBATCH --mail-type=BEGIN,END,FAIL
 
 set -euo pipefail
 
-cd /projects/pvabm/pghosh/ABSiCE
+cd "<PROJECT_DIR>"
 
 module load conda
-conda activate /projects/pvabm/pghosh/pv_abm
+conda activate "<CONDA_ENV_PATH>"
 
 python hpc/run_single_scenario.py \
     --landfill-set true_landfills \
     --cost-rate 4.81 \
     --cost-component recycling \
-    --rtn \
+    --rtn true \
     --recycle-rate 0.60 \
     --n-runs 100 \
     --n-steps 11 \

@@ -195,10 +195,12 @@ cost:
     recycle: 0.0
     landfill: 0.0
     hoard: 0.0
+# Original recycling cost ($/metric ton) for the triangular distribution.
+# Converted from $15 per module assuming 270 W per module and kg per W is 0.0077 (i.e., 15 / (270 * 0.0077) ≈ 7215 $/metric ton)
   original_recycling_cost:
-  - 399.999999
-  - 400.000001
-  - 400.0
+  - 7215.006
+  - 7215.008
+  - 7215.007
   recycling_learning_shape_factor: -0.01
   repairability: 0.55
   original_repairing_cost:

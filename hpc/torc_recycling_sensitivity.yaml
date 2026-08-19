@@ -39,7 +39,7 @@ slurm_schedulers:
     partition: standard
     nodes: 4
     walltime: "48:00:00"
-    extra: "--mail-user=pghosh@nlr.gov --mail-type=BEGIN,END,FAIL"
+    extra: "--mail-user=<YOUR_EMAIL> --mail-type=BEGIN,END,FAIL"
 
 actions:
   - trigger_type: on_workflow_start
@@ -53,12 +53,12 @@ jobs:
   - name: scenario_{landfill_set}_{cost_rate:.2f}_r{recycle_rate:.2f}
     command: >-
       module load conda &&
-      conda activate /projects/pvabm/pghosh/pv_abm &&
+      conda activate <CONDA_ENV_PATH> &&
       python hpc/run_single_scenario.py
       --landfill-set {landfill_set}
       --cost-rate {cost_rate}
       --cost-component recycling
-      --rtn
+      --rtn true
       --recycle-rate {recycle_rate}
       --att-mean 0.60
       --att-std 0.1

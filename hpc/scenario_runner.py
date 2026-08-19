@@ -20,9 +20,7 @@ The scenario runner works whether or not RTN is enabled
 - Non-RTN mode (``rtn=False``): ``config.cost.original_recycling_cost`` is
   scaled directly. No RTN filesystem access is required.
 
-Output layout mirrors the old kwargs-runner scheme (see
-``landfill-paper-june-2026:hpc/run_single_scenario.py`` for reference, not
-checked out on this branch):
+Output layout:
 
     results_base/
       [att_mean_X.XX/]              # only when att_mean != base default
@@ -48,7 +46,7 @@ _BASE_CONFIG_PATH: Path = _HPC_DIR / "rtn_base.yaml"
 
 
 def run_scenario(
-    landfill_set: str,
+    landfill_set: str | None,
     ratio: float,
     cost_component: str,
     n_runs: int,
@@ -68,10 +66,11 @@ def run_scenario(
     ----------
     landfill_set
         Key into :data:`hpc.cost_scaling.LANDFILL_SETS`
-        (``"all_landfills"`` or ``"true_landfills"``). Selects the
-        results-folder label prefix in every mode; in RTN mode it also
-        selects which RTN shipment file and recycling-cost CSV prefix to
-        use.
+        (``"all_landfills"`` or ``"true_landfills"``). Required in RTN mode,
+        where it selects which RTN shipment file, recycling-cost CSV, and
+        landfill-cost CSV to use, and labels the output directory. In non-RTN
+        mode it is unused and may be ``None`` (the run does not depend on it
+        and the output label omits any landfill-set component).
     ratio
         Recycling-cost scale multiplier (e.g. 1.0 for baseline, 1.25 for
         +25%). In RTN mode this scales ``RecyclingCost_$`` in the shipment
@@ -138,10 +137,10 @@ def run_scenario(
             "transport sensitivity is out of scope."
         )
 
-    if landfill_set not in cost_scaling.LANDFILL_SETS:
+    if rtn and landfill_set not in cost_scaling.LANDFILL_SETS:
         raise KeyError(
-            f"Unknown landfill_set '{landfill_set}'. "
-            f"Choose from: {list(cost_scaling.LANDFILL_SETS.keys())}"
+            f"Unknown landfill_set '{landfill_set}'. RTN mode requires one "
+            f"of: {list(cost_scaling.LANDFILL_SETS.keys())}"
         )
 
     project_root = (
@@ -200,6 +199,7 @@ def run_scenario(
     suffix = cost_scaling.build_suffix(ratio, cost_component)
 
     if rtn:
+        assert landfill_set is not None  # guaranteed by the RTN validation above
         recycling_filename = cost_scaling.prepare_rtn_recycling_cost_file(
             landfill_set=landfill_set,
             ratio=ratio,
@@ -222,18 +222,24 @@ def run_scenario(
         )
 
     # ── 3. Build the scenario output label (old kwargs-runner scheme) ────
-    set_config = cost_scaling.LANDFILL_SETS[landfill_set]
     recycle_rate_label = f"recycle_rate_{int(round(recycle_rate * 100))}pct"
+
+    # In RTN mode the landfill_set is part of the label (it selected real
+    # data). In non-RTN mode landfill_set is unused, so the label carries no
+    # landfill-set component.
+    if rtn:
+        assert landfill_set is not None  # RTN validated above
+        run_prefix = cost_scaling.LANDFILL_SETS[landfill_set]["results_prefix"]
+        run_label = f"{run_prefix}{suffix}"
+    else:
+        run_label = f"run{suffix}"
 
     if abs(att_mean - base_att_mean) > 1e-9:
         label = (
-            f"att_mean_{att_mean:.2f}/{recycle_rate_label}/"
-            f"{set_config['results_prefix']}{suffix}"
+            f"att_mean_{att_mean:.2f}/{recycle_rate_label}/{run_label}"
         )
     else:
-        label = (
-            f"{recycle_rate_label}/{set_config['results_prefix']}{suffix}"
-        )
+        label = f"{recycle_rate_label}/{run_label}"
 
     # ── 4. Write the resolved config to a per-scenario YAML ──────────────
     scenario_dir = results_base / label

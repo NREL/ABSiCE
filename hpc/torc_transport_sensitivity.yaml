@@ -52,7 +52,7 @@ jobs:
   - name: scenario_{landfill_set}_r{ratio:.2f}
     command: >-
       module load conda &&
-      conda activate /projects/pvabm/pghosh/pv_abm &&
+      conda activate <CONDA_ENV_PATH> &&
       python hpc/run_single_scenario.py
       --landfill-set {landfill_set}
       --ratio {ratio}

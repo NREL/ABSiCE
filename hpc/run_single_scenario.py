@@ -7,14 +7,14 @@ CLI flags and dispatches them to :func:`hpc.scenario_runner.run_scenario`,
 which builds the resolved config, prepares any RTN cost files, and runs
 ``n_runs`` replicate model iterations through ``absice.runner.run_batch``.
 
-The same script drives both RTN and non-RTN runs (``--rtn`` / ``--no-rtn``);
-see ``hpc/scenario_runner.py`` for the two modes' semantics.
+The same script drives both RTN and non-RTN runs via ``--rtn {true,false}``
+(omit to use the base config's ``data_source.rtn``); see
+``hpc/scenario_runner.py`` for the two modes' semantics.
 
-Usage (local smoke test, non-RTN):
+Usage (local smoke test, non-RTN — no --landfill-set needed):
     python hpc/run_single_scenario.py \\
-        --landfill-set all_landfills \\
         --ratio 1.0 \\
-        --no-rtn \\
+        --rtn false \\
         --n-runs 1 \\
         --n-steps 1 \\
         --results-base /tmp/smoke
@@ -23,7 +23,7 @@ Usage (RTN mode, absolute $/kg cost rate):
     python hpc/run_single_scenario.py \\
         --landfill-set all_landfills \\
         --cost-rate 12.02 \\
-        --rtn \\
+        --rtn true \\
         --recycle-rate 0.20 \\
         --att-mean 0.60 \\
         --n-runs 1 \\
@@ -34,7 +34,7 @@ Usage (via TORC parameter expansion):
     python hpc/run_single_scenario.py \\
         --landfill-set {landfill_set} \\
         --cost-rate {cost_rate} \\
-        --rtn \\
+        --rtn {rtn} \\
         --recycle-rate {recycle_rate} \\
         --n-runs 100
 
@@ -67,6 +67,23 @@ _ATT_MEAN_DEFAULT: float = 0.515
 _RESULTS_BASE_DEFAULT: Path = _WORKSPACE_DIR / "results" / "hpc_scenarios"
 
 
+def _parse_bool(value: str) -> bool:
+    """
+    Parse a boolean CLI value for --rtn (TORC-parameter friendly).
+
+    Accepts true/false, 1/0, yes/no, on/off (case-insensitive).
+    """
+    normalized: str = value.strip().lower()
+    if normalized in {"true", "1", "yes", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "off"}:
+        return False
+    raise argparse.ArgumentTypeError(
+        f"invalid boolean value for --rtn: {value!r} "
+        "(expected true/false)"
+    )
+
+
 def _parse_args() -> argparse.Namespace:
     """
     Parse command-line arguments for a single scenario run.
@@ -80,16 +97,18 @@ def _parse_args() -> argparse.Namespace:
         description=(
             "Run one scenario for TORC/Slurm dispatch via "
             "hpc.scenario_runner.run_scenario. Runs whether or not RTN "
-            "is enabled (--rtn / --no-rtn)."
+            "is enabled (--rtn {true,false})."
         )
     )
     parser.add_argument(
         "--landfill-set",
-        required=True,
+        default=None,
         choices=list(cost_scaling.LANDFILL_SETS.keys()),
         metavar="SET",
         help=(
-            "Landfill set to run. "
+            "Landfill set to run. REQUIRED in RTN mode (--rtn true), where it "
+            "selects the shipment / recycling / landfill cost data files. "
+            "Ignored in non-RTN mode (the run does not depend on it). "
             f"Choices: {list(cost_scaling.LANDFILL_SETS.keys())}"
         ),
     )
@@ -108,7 +127,7 @@ def _parse_args() -> argparse.Namespace:
         type=float,
         metavar="RATE",
         help=(
-            "Absolute recycling cost rate in $/kg (e.g. 0.40 for "
+            "Absolute recycling cost rate in $/kg (e.g. 7.21 for "
             f"baseline, {cost_scaling.BASELINE_RECYCLING_RATE_PER_KG} "
             "is the anchor). Works in both modes (scales the RTN shipment "
             "cost, or original_recycling_cost in $/metric ton when non-RTN). "
@@ -127,28 +146,19 @@ def _parse_args() -> argparse.Namespace:
             "by run_scenario (out of scope)."
         ),
     )
-    rtn_group = parser.add_mutually_exclusive_group()
-    rtn_group.add_argument(
+    parser.add_argument(
         "--rtn",
         dest="rtn",
-        action="store_true",
-        default=None,
+        type=_parse_bool,
+        default=False,
+        metavar="{true,false}",
         help=(
-            "Run in RTN mode (config.data_source.rtn=True): recycling-cost "
-            "(and, unscaled, landfill-cost) CSVs are read from RTN/, "
-            "requiring RTN_Data for any --ratio/--cost-rate != 1.0."
-        ),
-    )
-    rtn_group.add_argument(
-        "--no-rtn",
-        dest="rtn",
-        action="store_false",
-        default=None,
-        help=(
-            "Run in non-RTN mode (config.data_source.rtn=False): the "
-            "triangular recycling-cost lever (config.cost."
-            "original_recycling_cost) is scaled directly. No RTN_Data "
-            "filesystem access."
+            "Run in RTN mode when true (config.data_source.rtn=True): "
+            "recycling-cost (and, unscaled, landfill-cost) CSVs are read from "
+            "RTN/, requiring RTN_Data for any --ratio/--cost-rate != 1.0. "
+            "When false (default), non-RTN mode scales "
+            "config.cost.original_recycling_cost directly with no RTN_Data "
+            "access. The value form works for TORC sweeps: --rtn {rtn}."
         ),
     )
     parser.add_argument(
@@ -235,23 +245,25 @@ def main() -> None:
     """
     args: argparse.Namespace = _parse_args()
 
-    # --rtn / --no-rtn default: whatever hpc/rtn_base.yaml has
-    # (data_source.rtn) when neither flag is passed.
-    rtn: bool
-    if args.rtn is None:
-        from absice.schemas.simulation_config import SimulationConfig
-        from hpc.scenario_runner import _BASE_CONFIG_PATH
+    # --rtn defaults to False (non-RTN); pass --rtn true for RTN mode.
+    rtn: bool = args.rtn
 
-        rtn = SimulationConfig.from_yaml(_BASE_CONFIG_PATH).data_source.rtn
-    else:
-        rtn = args.rtn
+    # --landfill-set is required only in RTN mode (it selects the data files).
+    # In non-RTN mode it is unused and ignored.
+    if rtn and args.landfill_set is None:
+        print(
+            "Error: --landfill-set is required in RTN mode (--rtn true). "
+            f"Choose from: {list(cost_scaling.LANDFILL_SETS.keys())}",
+            file=sys.stderr,
+            flush=True,
+        )
+        sys.exit(1)
 
     # Resolve ratio — convert absolute cost rate if provided.
     # --cost-rate is an absolute recycling cost in $/kg. It maps to a
-    # dimensionless scale ratio (cost_rate / 0.40 baseline) that applies in
+    # dimensionless scale ratio (cost_rate / baseline) that applies in
     # BOTH modes: in RTN mode it scales the RTN shipment cost CSV; in non-RTN
-    # mode the same ratio scales original_recycling_cost ($/metric ton, where
-    # the 400 $/t baseline equals the 0.40 $/kg anchor). Only transport is
+    # mode the same ratio scales original_recycling_cost ($/metric ton). Only transport is
     # unsupported as a single rate.
     if args.cost_rate is not None:
         if args.cost_component == "transport":

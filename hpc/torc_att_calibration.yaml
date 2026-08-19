@@ -1,14 +1,23 @@
-# ABSiCE att_distrib_param_eol Calibration Sweep — TORC/Slurm Workflow (RTN mode)
+# ABSiCE att_distrib_param_eol Calibration Sweep — TORC/Slurm Workflow
 #
-# Purpose: find the att_mean value that produces ~20% recycling rate at
-#   recycling cost = $25/module (cost_rate = 12.02 $/kg) and
-#   initial recycling rate = 20%.
+# Purpose: find the att_mean value that produces ~20% recycling rate at the
+#   baseline recycling cost (ratio 1.0) and initial recycling rate = 20%.
+#
+# RTN-optional: the `rtn` parameter sweeps both modes in a single job spec via
+#   run_single_scenario.py --rtn {rtn}. The cost lever is --ratio 1.0
+#   (baseline), which is mode-neutral — it means "baseline recycling cost" in
+#   whichever mode (RTN shipment cost, or original_recycling_cost in non-RTN).
+#   (Do NOT use --cost-rate here: it is an RTN-anchored $/kg value and would
+#   scale the non-RTN $/metric-ton lever incorrectly.)
 #
 # Setup:
-#   - 6 att_mean values × 1 landfill set = 6 jobs
+#   - 6 att_mean values × 2 rtn modes × 1 landfill set = 12 jobs
 #   - 100 replicates per job, 11 simulation years each
 #   - att_std fixed at 0.1 (Saphores 2012 calibration)
-#   - Output: results/att_calibration/att_mean_X.XX/recycle_rate_20pct/...
+#   - Output: results/att_calibration/[rtn|nortn]/att_mean_X.XX/recycle_rate_20pct/...
+#
+# To calibrate a SINGLE mode only, set the `rtn` parameter list to just
+# "['true']" (RTN) or "['false']" (non-RTN).
 #
 # Submission:
 #   TORC_ACCOUNT=pvabm ./hpc/submit.sh att_calibration
@@ -18,11 +27,11 @@
 
 name: absice_att_calibration
 description: >
-  ABSiCE att_distrib_param_eol calibration sweep (RTN mode).
-  Fixes recycling cost at $25/module (cost_rate 12.02 $/kg) and initial
-  recycling rate at 20%; sweeps attitude distribution mean via
-  hpc/run_single_scenario.py --rtn. Each job runs 100 model iterations and
-  writes results to results/att_calibration/.
+  ABSiCE att_distrib_param_eol calibration sweep (RTN-optional).
+  Fixes recycling cost at baseline (ratio 1.0) and initial recycling rate at
+  20%; sweeps the attitude distribution mean across both RTN and non-RTN modes
+  via hpc/run_single_scenario.py. Each job runs 100 model iterations and writes
+  results to results/att_calibration/.
 project: ABSiCE
 
 # ── Resource requirements per job ─────────────────────────────────────────────
@@ -40,7 +49,7 @@ slurm_schedulers:
     partition: standard
     nodes: 4
     walltime: "48:00:00"
-    extra: "--mail-user=pghosh@nlr.gov --mail-type=BEGIN,END,FAIL"
+    extra: "--mail-user=<YOUR_EMAIL> --mail-type=BEGIN,END,FAIL"
 
 actions:
   - trigger_type: on_workflow_start
@@ -51,15 +60,19 @@ actions:
 
 # ── Jobs ──────────────────────────────────────────────────────────────────────
 jobs:
-  - name: att_calib_all_landfills_m{att_mean:.2f}
+  # --landfill-set all_landfills below is only used by RTN jobs (--rtn true);
+  # non-RTN jobs in this sweep ignore it (it does not affect the run or the
+  # output label). It is kept in the shared command because a single job spec
+  # cannot omit a flag per swept rtn value.
+  - name: att_calib_all_landfills_rtn{rtn}_m{att_mean:.2f}
     command: >-
       module load conda &&
-      conda activate /projects/pvabm/pghosh/pv_abm &&
+      conda activate <CONDA_ENV_PATH> &&
       python hpc/run_single_scenario.py
       --landfill-set all_landfills
-      --cost-rate 12.02
+      --ratio 1.0
       --cost-component recycling
-      --rtn
+      --rtn {rtn}
       --recycle-rate 0.20
       --att-mean {att_mean}
       --att-std 0.1
@@ -69,11 +82,13 @@ jobs:
     resource_requirements: scenario
     scheduler: cpu_nodes
 
-    # ── Parameter sweep ───────────────────────────────────────────────────────
+    # ── Parameter sweep (Cartesian product: att_mean × rtn) ───────────────────
     # Finer grid between 0.60 and 0.65 (initial sweep showed 0.60 -> 8.2%,
-    # 0.65 -> 25.2%; target is 20%). 6 values.
+    # 0.65 -> 25.2%; target is 20%). 6 att_mean × 2 rtn = 12 jobs.
+    # Set rtn to "['true']" or "['false']" to calibrate a single mode.
     parameters:
-      att_mean: "[0.60, 0.61, 0.62, 0.63, 0.64, 0.65]"
+      att_mean: "[0.60,0.61,0.62,0.63,0.64,0.65]"
+      rtn: "['true','false']"
     parameter_mode: product
 
     failure_handler: retry_once

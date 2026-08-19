@@ -15,16 +15,6 @@ independent modes:
 - Non-RTN mode (``rtn=False``): returns a scaled copy of
   ``config.cost.original_recycling_cost``. This mode performs no filesystem
   access and has no dependency on ``RTN_Data``.
-
-Transport-cost scaling and the landfill-cost CSV are intentionally out of
-scope for this module (transport sensitivity is out of scope this session).
-
-Ported and adapted from (not checked out locally, referenced via
-``git show``):
-    landfill-paper-june-2026:run_rtn_scenarios.py  (_build_suffix, _LANDFILL_SETS,
-        _prepare_cost_files — recycling branch only)
-    landfill-paper-june-2026:scale_recycling_cost.py (_scale_file)
-and the current-branch ``generate_recycling_costs.py``.
 """
 
 from pathlib import Path
@@ -39,7 +29,7 @@ import pandas as pd
 # RecyclingCost_$ = Shipped_kg x BASELINE_RECYCLING_RATE_PER_KG.
 # Used only to convert an absolute cost rate ($/kg) into a scale ratio for
 # RTN mode; it has no meaning for the non-RTN triangular-cost lever.
-BASELINE_RECYCLING_RATE_PER_KG: float = 0.40
+BASELINE_RECYCLING_RATE_PER_KG: float = 7.21
 
 _HPC_DIR: Path = Path(__file__).parent.resolve()
 _WORKSPACE_DIR: Path = _HPC_DIR.parent
@@ -49,10 +39,12 @@ _USPVDB_FILE: Path = (
 )
 
 # Candidate locations for the raw RTN shipment data. Only resolved (and only
-# required to exist) when RTN mode is actually used.
+# required to exist) when RTN mode is actually used. Replace the placeholders
+# with the actual RTN_Data/Round_3 locations on your systems (e.g. an HPC
+# project path and a local checkout path).
 _RTN_DATA_CANDIDATES: list[Path] = [
-    Path("/projects/pvabm/pghosh/RTN_Data/Round_3"),  # HPC (Kestrel)
-    Path("/Users/pghosh/SOLAR/RTN_Data/Round_3"),      # macOS local
+    Path("<HPC_RTN_DATA_DIR>/RTN_Data/Round_3"),    # HPC (e.g. Kestrel)
+    Path("<LOCAL_RTN_DATA_DIR>/RTN_Data/Round_3"),  # local checkout
 ]
 
 # Recycling-only view of the landfill-set file mapping. Keys select which
@@ -89,8 +81,7 @@ def ratio_from_cost_rate(
 
     The result is a dimensionless multiplier (cost_rate / baseline_rate) that
     applies in BOTH modes: in RTN mode it scales the shipment cost CSV; in
-    non-RTN mode the same ratio scales original_recycling_cost ($/metric ton,
-    where the 400 $/t baseline equals the 0.40 $/kg anchor: 400 = 0.40 x 1000).
+    non-RTN mode the same ratio scales original_recycling_cost ($/metric ton).
 
     Parameters
     ----------
@@ -201,9 +192,6 @@ def _scale_shipment_file(
 ) -> Path:
     """
     Scale one cost column of an RTN shipment CSV and save the result.
-
-    Ported from ``landfill-paper-june-2026:scale_recycling_cost.py``
-    (``_scale_file``).
 
     Parameters
     ----------
