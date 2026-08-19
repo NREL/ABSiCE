@@ -34,9 +34,6 @@ calibration:
   calibration_n_sensitivity_4: 1.0
   calibration_n_sensitivity_5: 1.0
 network:
-  # num_consumers is ignored under resolution: site (see header note); the
-  # count is uspvdb.shape[0]. Kept at the schema default only for PCA fallback.
-  num_consumers: 1000
   consumers_node_degree: 10
   consumers_network_type: small-world
   rewiring_prob: 0.1
