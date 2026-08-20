@@ -70,8 +70,8 @@ eol:
   init_eol_rate:
     repair: 0.005
     sell: 0.01
-    recycle: 0.1
-    landfill: 0.885
+    recycle: 0.2
+    landfill: 0.785
     hoard: 0.0
   all_eol_pathways:
     repair: true
