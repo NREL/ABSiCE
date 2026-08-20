@@ -1,7 +1,25 @@
+# hpc/rtn_base.yaml
+#
+# This file is kept as close as possible to config/default_simulation.yaml.
+# ONLY the overrides REQUIRED for RTN calibration/sensitivity runs differ:
+#   - run.last_step:                  1      -> 44 (11 years x 4 quarters)
+#   - run.timestep:                   annual -> quarterly (RTN cost data is quarterly)
+#   - consumer.model_states:          null   -> [TX, AZ, NV, NM] (RTN site subset)
+#   - scenario.landfill_solar_waste_acceptance_ratio: 0.4 -> 1.0 (published-run value;
+#         < 1.0 randomly drops sites)
+#
+# Everything else is intentionally identical to config/default_simulation.yaml,
+# including network.num_consumers (inert under consumer.resolution: site, where
+# ABM_CE_PV.get_num_consumers() uses uspvdb.shape[0]).
+#
+# data_source.rtn stays false here; hpc/scenario_runner.py flips it to True and
+# sets the RTN cost filenames (Recycling data / RTN landfill data) per-scenario.
+# eol.init_eol_rate (recycle=0.10) and tpb.att_distrib_param_eol ([0.515, 0.1])
+# already match default_simulation.yaml and are overridden per-scenario.
 run:
   seed: null
-  last_step: 1
-  timestep: annual
+  last_step: 44
+  timestep: quarterly
 calibration:
   calibration_n_sensitivity: 1.0
   calibration_n_sensitivity_2: 1.0
@@ -20,7 +38,11 @@ network:
   prod_n_recyc_network_type: small-world
 consumer:
   resolution: site
-  model_states: null
+  model_states:
+  - TX
+  - AZ
+  - NV
+  - NM
   consumers_distribution:
     residential: 1.0
     commercial: 0.0
@@ -70,8 +92,8 @@ eol:
   init_eol_rate:
     repair: 0.005
     sell: 0.01
-    recycle: 0.2
-    landfill: 0.785
+    recycle: 0.1
+    landfill: 0.885
     hoard: 0.0
   all_eol_pathways:
     repair: true
@@ -173,9 +195,7 @@ cost:
     recycle: 0.0
     landfill: 0.0
     hoard: 0.0
-# Original recycling cost ($/metric ton) for the triangular distribution,
-# ordered [left, right, mode] as consumed by np.random.triangular(list[0],
-# list[2], list[1]) in ABM_CE_PV_RecyclerAgents (mode must be <= right).
+# Original recycling cost ($/metric ton) for the triangular distribution.
 # Converted from $15 per module assuming 270 W per module and kg per W is 0.0077 (i.e., 15 / (270 * 0.0077) ≈ 7215 $/metric ton)
   original_recycling_cost:
   - 7215.006
@@ -332,7 +352,7 @@ scenario:
     number_seed: 50
     discount: 0.35
   hazardous_waste_regulation_enabled: false
-  landfill_solar_waste_acceptance_ratio: 0.4
+  landfill_solar_waste_acceptance_ratio: 1.0
 tclp:
   bsf_mean: 2.18
   bsf_std: 0.86

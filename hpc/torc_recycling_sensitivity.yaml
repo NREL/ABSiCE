@@ -1,0 +1,90 @@
+# ABSiCE Recycling Cost Sensitivity — TORC/Slurm Workflow (RTN mode)
+#
+# Runs one (landfill_set × cost_rate × recycle_rate) scenario per job via
+# hpc/run_single_scenario.py --rtn, 100 model iterations each.
+#
+# Grid: landfill_set (2) × cost_rate (2) × recycle_rate (6) = 24 jobs.
+# (Recompute this comment whenever the parameter lists below change.)
+#
+# Submission:
+#   TORC_ACCOUNT=pvabm ./hpc/submit.sh recycling
+#
+# Customising the sweep:
+#   Edit the `cost_rate` / `recycle_rate` / `landfill_set` parameter lists
+#   below before submitting.
+
+name: absice_recycling_sensitivity
+description: >
+  ABSiCE PV recycling cost sensitivity analysis (RTN mode).
+  Each job runs 100 model iterations for one
+  (landfill_set × cost_rate × recycle_rate) scenario via
+  hpc/run_single_scenario.py --rtn and writes results to
+  results/recycling_sensitivity/.
+project: ABSiCE
+
+# ── Resource requirements per job ──────────────────────────────────────────────
+# The ABM is single-threaded; 4 CPUs gives headroom for OS and subprocesses.
+# 100 runs × ~3-4 min each ≈ 5-7 hrs → PT8H gives a safe buffer.
+resource_requirements:
+  - name: scenario
+    num_cpus: 4
+    num_gpus: 0
+    num_nodes: 1
+    memory: 64g
+    runtime: PT8H
+
+slurm_schedulers:
+  - name: cpu_nodes
+    account: pvabm
+    partition: standard
+    nodes: 4
+    walltime: "48:00:00"
+    extra: "--mail-user=<YOUR_EMAIL> --mail-type=BEGIN,END,FAIL"
+
+actions:
+  - trigger_type: on_workflow_start
+    action_type: schedule_nodes
+    scheduler: cpu_nodes
+    scheduler_type: slurm
+    num_allocations: 1
+
+# ── Jobs ───────────────────────────────────────────────────────────────────────
+jobs:
+  - name: scenario_{landfill_set}_{cost_rate:.2f}_r{recycle_rate:.2f}
+    command: >-
+      module load conda &&
+      conda activate <CONDA_ENV_PATH> &&
+      python hpc/run_single_scenario.py
+      --landfill-set {landfill_set}
+      --cost-rate {cost_rate}
+      --cost-component recycling
+      --rtn true
+      --recycle-rate {recycle_rate}
+      --att-mean 0.60
+      --att-std 0.1
+      --n-runs 100
+      --n-steps 11
+      --results-base results/recycling_sensitivity
+    resource_requirements: scenario
+    scheduler: cpu_nodes
+
+    # ── Parameter sweep (Cartesian product) ─────────────────────────────────
+    # Absolute recycling cost in $/kg (RTN mode). Baseline is $0.40/kg
+    # (hpc.cost_scaling.BASELINE_RECYCLING_RATE_PER_KG); --cost-rate is
+    # converted to a scale ratio internally by run_single_scenario.py.
+    # Extend the cost_rate list to widen the sweep, e.g.:
+    #   "[0.00,2.40,4.81,7.21,9.62,12.02,14.43,16.83]"
+    parameters:
+      landfill_set: "['all_landfills','true_landfills']"
+      cost_rate: "[0.00,2.40]"
+      recycle_rate: "[0.10,0.20,0.30,0.40,0.50,0.60]"
+    parameter_mode: product
+
+    # ── Retry on transient failures (e.g. I/O errors, node preemption) ───────
+    failure_handler: retry_once
+
+failure_handlers:
+  - name: retry_once
+    rules:
+      - match_all_exit_codes: true
+        max_retries: 1
