@@ -131,7 +131,7 @@ class ABM_CE_PV(Model):
                  consumers_distribution={"residential": 1,
                                          "commercial": 0., "utility": 0.},
                  init_eol_rate={"repair": 0.005, "sell": 0.01,
-                                "recycle": 0.1, "landfill": 0.885,
+                                "recycle": 0.2, "landfill": 0.785,
                                 "hoard": 0},
                  init_purchase_choice={"new": 0.9995, "used": 0.0005,
                                        "certified": 0},
@@ -171,7 +171,7 @@ class ABM_CE_PV(Model):
                  max_storage=[1, 8, 4],
                  att_distrib_param_eol= [0.515, 0.1], # [0.805, 0.09],
                  att_distrib_param_reuse=[0.01, 0.185], # [0.223, 0.262],
-                 original_recycling_cost=[400-1E-6, 400+1E-6, 400],  # 0.4 $/Kg → $/ton
+                 original_recycling_cost=[7215.006, 7215.008, 7215.007],  # $15 per module → $/ton
                  recycling_learning_shape_factor=-0.01, # -0.3,
                  repairability=0.55,
                  original_repairing_cost=[12987, 58442, 29870],  # [0.1, 0.45, 0.23] $/W → $/ton

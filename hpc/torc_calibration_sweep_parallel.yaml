@@ -1,0 +1,84 @@
+# ABSiCE Calibration Sweep (No RTN, Constant Costs)
+#
+# Purpose: Run parameter sweeps over attitude distribution mean (att_mean)
+#   without RTN or cost scaling. Each parameter combination runs as a separate
+#   TORC job on its own node for maximum parallelization.
+#   Attitude std dev is fixed at 0.1.
+#
+# Setup:
+#   - att_mean values: 0.50 to 0.95 in 0.05 steps (10 values)
+#   - att_std fixed at 0.1 (Saphores 2012 calibration)
+#   - Total jobs: 10 independent jobs (one per att_mean value)
+#   - 100 replicates per job, 11 simulation years each
+#   - Each job runs on its own node with 4 CPUs for internal parallelization
+#   - Output: results/calibration/att_mean_X.XX/...
+#
+# Submission:
+#   TORC_ACCOUNT=<your_account> ./hpc/submit.sh calibration_sweep_parallel
+#
+# The scheduler will run up to N jobs in parallel (limited by available nodes).
+# After all jobs complete, analyze results with:
+#   python hpc/analyze_calibration_sweep.py
+
+name: absice_calibration_sweep_parallel
+description: >
+  ABSiCE calibration parameter sweep (no RTN, constant costs).
+  Each att_mean value runs as a separate independent job.
+  Sweeps att_mean (0.50-0.95). Attitude std dev fixed at 0.1.
+  Each job runs 100 model iterations on its own node.
+  Results written to results/calibration/.
+project: ABSiCE
+
+# ── Resource requirements per job ─────────────────────────────────────────────
+resource_requirements:
+  - name: scenario
+    num_cpus: 4
+    num_gpus: 0
+    num_nodes: 1
+    memory: 64g
+    runtime: PT8H
+
+slurm_schedulers:
+  - name: cpu_nodes
+    account: pvabm
+    partition: standard
+    nodes: 4
+    walltime: "48:00:00"
+    extra: "--mail-user=pghosh@nlr.gov --mail-type=BEGIN,END,FAIL"
+
+actions:
+  - trigger_type: on_workflow_start
+    action_type: schedule_nodes
+    scheduler: cpu_nodes
+    scheduler_type: slurm
+    num_allocations: 1
+
+# ── Jobs ──────────────────────────────────────────────────────────────────────
+jobs:
+  - name: calibration_sweep_m{att_mean:.2f}
+    command: >-
+      module load conda &&
+      conda activate /projects/pvabm/pghosh/pv_abm &&
+      python run_calibration_sweep.py
+      --att-means {att_mean}
+      --n-runs 100
+      --n-steps 11
+      --max-workers 4
+      --results-base results/calibration_no_rtn_solarcycle
+    resource_requirements: scenario
+    scheduler: cpu_nodes
+
+    # ── Parameter sweep (creates 10 independent jobs) ───────────────────────
+    # Each job is independent and runs on its own node.
+    # TORC will dispatch them to available nodes in parallel.
+    parameters:
+      att_mean: "[0.4, 0.41, 0.42, 0.43, 0.44, 0.45, 0.46, 0.47, 0.48, 0.49, 0.5, 0.51, 0.52, 0.53, 0.54, 0.55, 0.56, 0.57, 0.58, 0.59, 0.6]"
+    parameter_mode: product
+
+    failure_handler: retry_once
+
+failure_handlers:
+  - name: retry_once
+    rules:
+      - match_all_exit_codes: true
+        max_retries: 1

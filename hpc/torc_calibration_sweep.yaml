@@ -1,0 +1,74 @@
+# ABSiCE Calibration Sweep (No RTN, Constant Costs)
+#
+# Purpose: Run parameter sweeps over attitude distribution mean (att_mean)
+#   without RTN or cost scaling. All costs and recycling rates are constant
+#   as defined in ABM_CE_PV_Model.py. Attitude std dev is fixed at 0.1.
+#
+# Setup:
+#   - att_mean values: 0.50 to 0.95 in 0.05 steps (10 values)
+#   - att_std fixed at 0.1 (Saphores 2012 calibration)
+#   - Total scenarios: 10 parameter combinations
+#   - 100 replicates per scenario, 11 simulation years each
+#   - Output: results/calibration/att_mean_X.XX/...
+#
+# Submission:
+#   TORC_ACCOUNT=<your_account> ./hpc/submit.sh calibration_sweep
+#
+# After the run completes, analyze results with:
+#   python hpc/analyze_calibration_sweep.py
+
+name: absice_calibration_sweep
+description: >
+  ABSiCE calibration parameter sweep (no RTN, constant costs).
+  Sweeps attitude distribution mean (0.50-0.95).
+  Attitude std dev fixed at 0.1.
+  Each parameter combination runs 100 model iterations.
+  Results written to results/calibration/.
+project: ABSiCE
+
+# ── Resource requirements per job ─────────────────────────────────────────────
+resource_requirements:
+  - name: scenario
+    num_cpus: 16
+    num_gpus: 0
+    num_nodes: 1
+    memory: 128g
+    runtime: PT24H
+
+slurm_schedulers:
+  - name: cpu_nodes
+    account: pvabm
+    partition: standard
+    nodes: 2
+    walltime: "48:00:00"
+    extra: "--mail-user=pghosh@nlr.gov --mail-type=BEGIN,END,FAIL"
+
+actions:
+  - trigger_type: on_workflow_start
+    action_type: schedule_nodes
+    scheduler: cpu_nodes
+    scheduler_type: slurm
+    num_allocations: 1
+
+# ── Jobs ──────────────────────────────────────────────────────────────────────
+jobs:
+  - name: calibration_sweep_full
+    command: >-
+      module load conda &&
+      conda activate /projects/pvabm/pghosh/pv_abm &&
+      python run_calibration_sweep.py
+      --att-means 0.50 0.55 0.60 0.65 0.70 0.75 0.80 0.85 0.90 0.95
+      --n-runs 100
+      --n-steps 11
+      --max-workers 16
+      --results-base results/calibration
+    resource_requirements: scenario
+    scheduler: cpu_nodes
+
+    failure_handler: retry_once
+
+failure_handlers:
+  - name: retry_once
+    rules:
+      - match_all_exit_codes: true
+        max_retries: 1
