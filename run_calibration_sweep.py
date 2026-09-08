@@ -57,7 +57,7 @@ _HAZARDOUS_LANDFILL_FILE: str = "Landfills_data_SA.csv"
 
 # Default baseline EoL rates
 _DEFAULT_INIT_EOL_RATE: dict = {
-    "repair": 0.005, "sell": 0.01, "recycle": 0.1, "landfill": 0.885, "hoard": 0.0
+    "repair": 0.005, "sell": 0.01, "recycle": 0.2, "landfill": 0.785, "hoard": 0.0
 }
 
 
@@ -146,11 +146,12 @@ def _run_scenario(
             calculate_distances=False,
             model_states=["TX", "AZ", "NV", "NM"],
             solar_cycle=True,
+            filter_landfills_not_accepting_pv=True,
             rtn=False,  # No RTN — use model defaults
             init_eol_rate=init_eol_rate,
             att_distrib_param_eol=[att_mean, att_std],
             landfill_data_params = {
-                    "landfill_volume_column": "Waste Business Journal Costs ($/metric tons)",
+                    "landfill_volume_column": "Solar Cycle Costs ($/metric tons)",
                     "landfill_name_column": "Landfill Name"
             },
             # file_name={
@@ -263,13 +264,13 @@ def main() -> None:
     results_base: Path = Path(args.results_base).resolve()
 
     for att_mean in args.att_means:
-        att_label: str = f"att_mean_{att_mean:.2f}"
+        att_label: str = f"att_mean_{att_mean:.3f}"
         output_dir: str = str(results_base / att_label)
         scenarios.append(
             {
                 "output_dir": output_dir,
                 "att_mean": att_mean,
-                "label": f"att_mean={att_mean:.2f}",
+                "label": f"att_mean={att_mean:.3f}",
             }
         )
     # ── Dispatch workers ─────────────────────────────────────────────────────

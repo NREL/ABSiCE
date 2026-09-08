@@ -49,16 +49,18 @@ def run_model(number_run, number_steps, timestep=TIMESTEP.ANNUAL):
                 landfill_solar_waste_acceptance_ratio=1.0,
                 calculate_distances=False,
                 model_states=['TX', 'AZ', 'NV', 'NM'],
-                solar_cycle=False,
-                rtn=True,
-                # landfill_data_params = {
-                #     "landfill_volume_column": "Waste Business Journal Costs ($/metric tons)",
-                #     "landfill_name_column": "Landfill Name"},
-                file_name={
-                    'Landfill data': "LandfillCostsbyYearAllLandfills_3.csv",
-                    'Recycling data': "RecyclingCostsbyYearAllLandfills_3.csv",
-                    'Hazardous landfill data': "Landfills_data_SA.csv"
-                    },
+                solar_cycle=True,
+                filter_landfills_not_accepting_pv=True,
+                rtn=False,  # No RTN — use model defaults
+                landfill_data_params = {
+                        "landfill_volume_column": "Solar Cycle Costs ($/metric tons)",
+                        "landfill_name_column": "Landfill Name"
+                },
+                # file_name={
+                #     'Landfill data': "LandfillCostsbyYearAllLandfills_3.csv",
+                #     'Recycling data': "RecyclingCostsbyYearAllLandfills_3.csv",
+                #     'Hazardous landfill data': "Landfills_data_SA.csv"
+                #     },
                 timestep=timestep,
                 )  # baseline
         elif j < 20:

@@ -169,7 +169,7 @@ class ABM_CE_PV(Model):
                                    "recycle": True, "landfill": True,
                                    "hoard": False},
                  max_storage=[1, 8, 4],
-                 att_distrib_param_eol= [0.515, 0.1], # [0.805, 0.09],
+                 att_distrib_param_eol= [0.579, 0.1], # [0.805, 0.09],
                  att_distrib_param_reuse=[0.01, 0.185], # [0.223, 0.262],
                  original_recycling_cost=[7215.006, 7215.008, 7215.007],  # $15 per module → $/ton
                  recycling_learning_shape_factor=-0.01, # -0.3,
@@ -270,6 +270,7 @@ class ABM_CE_PV(Model):
                  calculate_distances=False,
                  rtn = False,
                  solar_cycle =False,
+                 filter_landfills_not_accepting_pv=False,
                  landfill_data_params = {
                         "landfill_volume_column": "$/metric ton",
                         "landfill_name_column": "Facility Name"},
@@ -506,6 +507,7 @@ class ABM_CE_PV(Model):
         self.timestep = timestep
         self.rtn = rtn
         self.solar_cycle = solar_cycle
+        self.filter_landfills_not_accepting_pv = filter_landfills_not_accepting_pv
         self.landfill_data_params = landfill_data_params
         self.model_states = model_states
 
@@ -875,6 +877,8 @@ class ABM_CE_PV(Model):
                     os.path.dirname(__file__),
                     "SolarCycle", "wbj_solar_cycle_combined.csv"),
                     index_col=0)
+                if self.filter_landfills_not_accepting_pv:
+                    landfills_data = landfills_data[landfills_data['Accept PV waste?'] == 'Yes']
                 
             else:
                 landfills_data = pd.read_csv("../../../TEMP/" +
@@ -1067,6 +1071,9 @@ class ABM_CE_PV(Model):
                     os.path.dirname(__file__),
                     "SolarCycle", "wbj_solar_cycle_combined.csv"),
                     index_col=0)
+                if self.filter_landfills_not_accepting_pv:
+                    self.landfill_cost_df = self.landfill_cost_df[self.landfill_cost_df['Accept PV waste?'] == 'Yes']
+                    self.landfill_distance_df = self.landfill_distance_df[self.landfill_distance_df['Landfill Name'].isin(self.landfill_cost_df['Landfill Name'])]
             else:
                 self.landfill_cost_df = pd.read_csv(
                 '../../../TEMP/' + self.file_names['Landfill data'])

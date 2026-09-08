@@ -47,7 +47,7 @@ from utils import TIMESTEP  # noqa: E402
 # Default attitude mean — matches ABM_CE_PV_Model.py model default.
 # Runs that do not pass --att-mean use this value and the output path
 # is unchanged (no att_mean_X.XX subdirectory inserted).
-_ATT_MEAN_DEFAULT: float = 0.515
+_ATT_MEAN_DEFAULT: float = 0.581
 
 
 def _parse_args() -> argparse.Namespace:
@@ -129,7 +129,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--recycle-rate",
         type=float,
-        default=0.10,
+        default=0.20,
         metavar="RATE",
         help=(
             "Initial recycling EoL rate (0.0–1.0). The delta vs the baseline "
@@ -211,7 +211,7 @@ def main() -> None:
     if abs(att_mean - _ATT_MEAN_DEFAULT) > 1e-9:
         output_dir: Path = (
             results_base
-            / f"att_mean_{att_mean:.2f}"
+            / f"att_mean_{att_mean:.3f}"
             / recycle_rate_label
             / f"{set_config['results_prefix']}{suffix}"
         )

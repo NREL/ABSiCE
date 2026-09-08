@@ -172,7 +172,7 @@ def main() -> None:
     for _, row in summary.iterrows():
         delta: float = row["mean_recycling_rate"] - args.target_rate
         print(
-            f"  {row['att_mean']:.2f}    |  {row['n_runs']:4.0f}  "
+            f"  {row['att_mean']:.3f}    |  {row['n_runs']:4.0f}  "
             f"| {row['mean_recycling_rate']:9.4f} | {row['std_recycling_rate']:8.4f} "
             f"| {delta:+.4f}"
         )
@@ -181,13 +181,13 @@ def main() -> None:
     best_idx: int = (summary["mean_recycling_rate"] - args.target_rate).abs().idxmin()
     best_row = summary.loc[best_idx]
     print(
-        f"\nBest att_mean = {best_row['att_mean']:.2f}  "
+        f"\nBest att_mean = {best_row['att_mean']:.3f}  "
         f"(mean recycling rate = {best_row['mean_recycling_rate']:.4f}, "
         f"target = {args.target_rate:.2f})"
     )
     print(
         f"\nTo apply: update ABM_CE_PV_Model.py line ~172:\n"
-        f"    att_distrib_param_eol=[{best_row['att_mean']:.2f}, 0.1]"
+        f"    att_distrib_param_eol=[{best_row['att_mean']:.3f}, 0.1]"
     )
 
     if not args.plot:
@@ -222,7 +222,7 @@ def main() -> None:
         color="green",
         linestyle=":",
         linewidth=1.2,
-        label=f"Best att_mean = {best_row['att_mean']:.2f}",
+        label=f"Best att_mean = {best_row['att_mean']:.3f}",
     )
 
     ax.set_xlabel("att_distrib_param_eol mean")
