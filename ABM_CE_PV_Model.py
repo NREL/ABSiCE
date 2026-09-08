@@ -143,16 +143,13 @@ class ABM_CE_PV(Model):
                  product_growth=[0.166, 0.045],
                  growth_threshold=10,
                  failure_rate_alpha=[2.4928, 5.3759, 3.93495],
-                 hoarding_cost=[0, 130, 65],  # [0, 0.001, 0.0005] $/W → $/ton
-                 landfill_cost=[  # $/ton (converted from $/W × 129,870)
-                     1156, 961, 922, 896, 727, 558,
-                     870, 1429, 1104, 1065, 1026, 961, 896,
-                     883, 883, 675, 675, 662, 961, 805,
-                     636, 636, 610, 416, 636, 844, 831,
-                     805, 675, 623, 623, 571, 545, 506,
-                     506, 584, 714, 649, 636, 571, 571,
-                     506, 429, 390, 533, 649, 520, 520,
-                     494, 429],
+                 hoarding_cost=[0, 0.27, 0.135],  # $ per module
+                 landfill_cost=[2.403, 1.998, 1.917, 1.863, 1.512, 1.161, 1.809,  # $ per module
+                                2.97, 2.295, 2.214, 2.133, 1.998, 1.863, 1.836, 1.836,
+                                1.404, 1.404, 1.377, 1.998, 1.674, 1.323, 1.323, 1.269,
+                                0.864, 1.323, 1.755, 1.728, 1.674, 1.404, 1.296, 1.296,
+                                1.188, 1.134, 1.053, 1.053, 1.215, 1.485, 1.35, 1.323,
+                                1.188, 1.188, 1.053, 0.891, 0.81, 1.107, 1.35, 1.08, 1.08, 1.026, 0.81],
                  hazardous_waste_management_cost={"repair": 0.0, "sell": 0.0,
                                                     "recycle": 0.0, "landfill": 0.0,
                                                     "hoard": 0.0}, # $/ton
@@ -171,13 +168,13 @@ class ABM_CE_PV(Model):
                  max_storage=[1, 8, 4],
                  att_distrib_param_eol= [0.579, 0.1], # [0.805, 0.09],
                  att_distrib_param_reuse=[0.01, 0.185], # [0.223, 0.262],
-                 original_recycling_cost=[7215.006, 7215.008, 7215.007],  # $15 per module → $/ton
-                 recycling_learning_shape_factor=-0.01, # -0.3,
+                 original_recycling_cost=[13.49, 13.51, 13.50],  # $13.5 per module
+                 recycling_learning_shape_factor=-0.074, # Hanes et al., 2021 
                  repairability=0.55,
-                 original_repairing_cost=[12987, 58442, 29870],  # [0.1, 0.45, 0.23] $/W → $/ton
+                 original_repairing_cost=[27, 122, 62],  # $ per module
                  repairing_learning_shape_factor=-0.31,
                  scndhand_mkt_pric_rate=[0.4, 0.2],
-                 fsthand_mkt_pric=58442,  # 0.45 $/W → $/ton
+                 fsthand_mkt_pric=122,  # $ per module
                  fsthand_mkt_pric_reg_param=[1, 0.04],
                  refurbisher_margin=[0.4, 0.6, 0.5],
                  purchase_choices={"new": True, "used": True,
@@ -277,7 +274,7 @@ class ABM_CE_PV(Model):
                  hazardous_waste_regulation_enabled=False,
                  landfill_solar_waste_acceptance_ratio=0.4,
                  last_step=31,
-                 sa_landfill_costs=(False, 481),  # 0.0037 $/W → $/ton
+                 sa_landfill_costs=(False, 0.999),  # $/module
                  file_name={'Landfill data': "Landfills_data_2023.csv",
                             'PCA-landfill distances':
                                 "pca_landfills_distances.csv",
@@ -394,7 +391,7 @@ class ABM_CE_PV(Model):
             att_distrib_param_reuse (list, optional): parameters used to
                 distribute attitude values regarding purchase options within
                 the population. Defaults to [0.223, 0.262].
-            original_recycling_cost (list, optional): parameters used to
+             (list, optional): parameters used to
                 distribute recycling costs at the start of the simulation.
                 Defaults to [0.106, 0.128, 0.117].
             recycling_learning_shape_factor (float, optional): learning effect
@@ -492,8 +489,8 @@ class ABM_CE_PV(Model):
         # Set up variables
         # att_distrib_param_eol[0] = calibration_n_sensitivity
         # att_distrib_param_reuse[0] = calibration_n_sensitivity_2
-        # original_recycling_cost = [x * calibration_n_sensitivity_3 for x in
-        #                          original_recycling_cost]
+        #  = [x * calibration_n_sensitivity_3 for x in
+        #                          ]
         # landfill_cost = [x * calibration_n_sensitivity_4 for x in
         #                landfill_cost]
         # att_distrib_param_eol[1] = att_distrib_param_eol[1] * \
@@ -1229,7 +1226,7 @@ class ABM_CE_PV(Model):
         self.original_num_prod = self.total_number_product
         self.avg_lifetime = product_lifetime
         self.fsthand_mkt_pric = fsthand_mkt_pric
-        self.fsthand_mkt_pric_reg_param = fsthand_mkt_pric_reg_param
+        self.fsthand_mkt_pric_reg_param = cost_conversion_dollar_module_to_dollar_metric_ton(fsthand_mkt_pric_reg_param)
         self.repairability = repairability
         self.total_waste = 0
         self.total_yearly_new_products = 0
@@ -1297,7 +1294,7 @@ class ABM_CE_PV(Model):
         self.product_lifetime = product_lifetime
         self.d_product_lifetimes = []
         self.update_dynamic_lifetime()
-        self.original_recycling_cost = original_recycling_cost
+        self.original_recycling_cost = self.cost_conversion_dollar_module_to_dollar_metric_ton(original_recycling_cost)
         self.recycling_process = recycling_process
         self.list_consumer_id = list(range(self.num_consumers))
         random.shuffle(self.list_consumer_id)
@@ -1392,6 +1389,7 @@ class ABM_CE_PV(Model):
 
         # ! we keep the assumption that repairing costs is the mean distance
         # ! within states
+        original_repairing_cost = cost_conversion_dollar_module_to_dollar_metric_ton(original_repairing_cost)
         original_repairing_cost = [x + self.transportation_cost_rpr_ldf for
                                    x in original_repairing_cost]
         # Create agents, G nodes labels are equal to agents' unique_ID
@@ -1481,6 +1479,10 @@ class ABM_CE_PV(Model):
             agenttype_reporters=ABM_CE_PV_agenttype_reporters
         )
 
+    def cost_conversion_dollar_module_to_dollar_metric_ton(cost_dollar_module):
+        cost_dollar_mton = cost_dollar_module * 52.9  # 1_module/270_W * 1_W/0.07_kg * 1000_kg/1_ton =  52.9 module/ton
+        return cost_dollar_mton
+    
     # ## New edits
     def pv_ice_waste_calculation(self, clock, pv_ice_outputs):
         self.clock = clock
