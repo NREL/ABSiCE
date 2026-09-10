@@ -20,7 +20,7 @@ conda activate /projects/pvabm/pghosh/pv_abm
 
 python hpc/run_single_scenario.py \
     --landfill-set true_landfills \
-    --cost-rate 4.81 \
+    --cost-rate 0.53 \
     --cost-component recycling \
     --recycle-rate 0.60 \
     --n-runs 100 \

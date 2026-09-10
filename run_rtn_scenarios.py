@@ -220,7 +220,7 @@ def _prepare_cost_files(
 # ── Worker function (runs in subprocess) ─────────────────────────────────────
 
 _DEFAULT_INIT_EOL_RATE: dict = {
-    "repair": 0.005, "sell": 0.01, "recycle": 0.1, "landfill": 0.885, "hoard": 0.0
+    "repair": 0.005, "sell": 0.01, "recycle": 0.2, "landfill": 0.785, "hoard": 0.0
 }
 
 
@@ -257,7 +257,7 @@ def _run_scenario(
     if init_eol_rate is None:
         init_eol_rate = _DEFAULT_INIT_EOL_RATE
     if att_distrib_param_eol is None:
-        att_distrib_param_eol = [0.515, 0.1]
+        att_distrib_param_eol = [0.565, 0.1]
     # Defer imports to subprocess — avoids triggering module-level code in the
     # main process and keeps each worker self-contained.
     from ABM_CE_PV_Model import ABM_CE_PV

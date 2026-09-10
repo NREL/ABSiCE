@@ -64,7 +64,7 @@ jobs:
       --n-runs 100
       --n-steps 11
       --max-workers 4
-      --results-base results/calibration_no_rtn_solarcycle_fine_true
+      --results-base results/calibration_no_rtn_solarcycle_12.5
     resource_requirements: scenario
     scheduler: cpu_nodes
 
@@ -72,7 +72,7 @@ jobs:
     # Each job is independent and runs on its own node.
     # TORC will dispatch them to available nodes in parallel.
     parameters:
-      att_mean: "[0.579]"
+      att_mean: "[0.561, 0.562, 0.563, 0.564, 0.565, 0.566, 0.567, 0.568, 0.569]"
     parameter_mode: product
 
     failure_handler: retry_once

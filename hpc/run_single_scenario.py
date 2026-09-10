@@ -47,7 +47,7 @@ from utils import TIMESTEP  # noqa: E402
 # Default attitude mean — matches ABM_CE_PV_Model.py model default.
 # Runs that do not pass --att-mean use this value and the output path
 # is unchanged (no att_mean_X.XX subdirectory inserted).
-_ATT_MEAN_DEFAULT: float = 0.581
+_ATT_MEAN_DEFAULT: float = 0.565
 
 
 def _parse_args() -> argparse.Namespace:

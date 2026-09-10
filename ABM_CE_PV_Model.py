@@ -166,9 +166,9 @@ class ABM_CE_PV(Model):
                                    "recycle": True, "landfill": True,
                                    "hoard": False},
                  max_storage=[1, 8, 4],
-                 att_distrib_param_eol= [0.579, 0.1], # [0.805, 0.09],
+                 att_distrib_param_eol= [0.565, 0.1], # [0.805, 0.09],
                  att_distrib_param_reuse=[0.01, 0.185], # [0.223, 0.262],
-                 original_recycling_cost=[12.49, 12.51, 12.50],  # $13.5 per module
+                 original_recycling_cost=[12.49, 12.51, 12.50],  # $12.5 per module
                  recycling_learning_shape_factor=-0.074, # Hanes et al., 2021 
                  repairability=0.55,
                  original_repairing_cost=[27, 122, 62],  # $ per module
@@ -1096,7 +1096,11 @@ class ABM_CE_PV(Model):
         self.init_purchase_choice = init_purchase_choice
         self.clock = 0
         self.last_step = last_step
-        self.sa_landfill_costs = sa_landfill_costs
+        # sa_landfill_costs[1] is read directly as $/ton by agents.
+        self.sa_landfill_costs = (
+            sa_landfill_costs[0],
+            self.cost_conversion_dollar_module_to_dollar_metric_ton(
+                sa_landfill_costs[1]))
         self.hazardous_waste_management_cost = hazardous_waste_management_cost
         self.hazardous_waste_regulation_enabled = hazardous_waste_regulation_enabled
         # prune the list of landfills to those accepting solar waste using the acceptance ratio
@@ -1225,8 +1229,8 @@ class ABM_CE_PV(Model):
         # ! PV_ICE based)
         self.original_num_prod = self.total_number_product
         self.avg_lifetime = product_lifetime
-        self.fsthand_mkt_pric = fsthand_mkt_pric
-        self.fsthand_mkt_pric_reg_param = cost_conversion_dollar_module_to_dollar_metric_ton(fsthand_mkt_pric_reg_param)
+        self.fsthand_mkt_pric = self.cost_conversion_dollar_module_to_dollar_metric_ton(fsthand_mkt_pric)
+        self.fsthand_mkt_pric_reg_param = self.cost_conversion_dollar_module_to_dollar_metric_ton(fsthand_mkt_pric_reg_param)
         self.repairability = repairability
         self.total_waste = 0
         self.total_yearly_new_products = 0
@@ -1389,9 +1393,11 @@ class ABM_CE_PV(Model):
 
         # ! we keep the assumption that repairing costs is the mean distance
         # ! within states
-        original_repairing_cost = cost_conversion_dollar_module_to_dollar_metric_ton(original_repairing_cost)
+        original_repairing_cost = self.cost_conversion_dollar_module_to_dollar_metric_ton(original_repairing_cost)
         original_repairing_cost = [x + self.transportation_cost_rpr_ldf for
                                    x in original_repairing_cost]
+        # hoarding_cost is read directly as $/ton by agents (get_hoarding_cost).
+        hoarding_cost = self.cost_conversion_dollar_module_to_dollar_metric_ton(hoarding_cost)
         # Create agents, G nodes labels are equal to agents' unique_ID
         for node in self.G.nodes():
             if node < self.num_consumers:
@@ -1479,9 +1485,13 @@ class ABM_CE_PV(Model):
             agenttype_reporters=ABM_CE_PV_agenttype_reporters
         )
 
+    @staticmethod
     def cost_conversion_dollar_module_to_dollar_metric_ton(cost_dollar_module):
-        cost_dollar_mton = cost_dollar_module * 52.9  # 1_module/270_W * 1_W/0.07_kg * 1000_kg/1_ton =  52.9 module/ton
-        return cost_dollar_mton
+        # 1_module/270_W * 1_W/0.07_kg * 1000_kg/1_ton = 52.9 module/ton
+        conversion_factor = 52.9
+        if isinstance(cost_dollar_module, (list, tuple)):
+            return [x * conversion_factor for x in cost_dollar_module]
+        return cost_dollar_module * conversion_factor
     
     # ## New edits
     def pv_ice_waste_calculation(self, clock, pv_ice_outputs):

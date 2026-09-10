@@ -46,7 +46,7 @@ _FIXED_MODEL_PARAMS: dict = {
     "landfill_solar_waste_acceptance_ratio": 1.0,
     "calculate_distances": False,
     "model_states": ["TX", "AZ", "NV", "NM"],
-    "solar_cycle": False,
+    "solar_cycle": True,
     "rtn": False,  # ← No RTN for calibration
 }
 
@@ -151,7 +151,7 @@ def _run_scenario(
             init_eol_rate=init_eol_rate,
             att_distrib_param_eol=[att_mean, att_std],
             landfill_data_params = {
-                    "landfill_volume_column": "Solar Cycle Costs ($/metric tons)",
+                    "landfill_volume_column": "Waste Business Journal Costs ($/metric tons)",
                     "landfill_name_column": "Landfill Name"
             },
             # file_name={

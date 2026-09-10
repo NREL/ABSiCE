@@ -1,7 +1,8 @@
 # ABSiCE att_distrib_param_eol Calibration Sweep
 #
 # Purpose: find the att_mean value that produces ~20% recycling rate at
-#   recycling cost = $25/module (cost_rate = 12.02 $/kg) and
+#   recycling cost = $25/module (cost_rate = 1.32 $/kg, using the model's
+#   18.9 kg/module mass = 0.07 kg/W x 270 W/module) and
 #   initial recycling rate = 20%.
 #
 # Setup:
@@ -57,7 +58,7 @@ jobs:
       conda activate /projects/pvabm/pghosh/pv_abm &&
       python hpc/run_single_scenario.py
       --landfill-set all_landfills
-      --cost-rate 12.02
+      --cost-rate 1.32
       --cost-component recycling
       --recycle-rate 0.20
       --att-mean {att_mean}
